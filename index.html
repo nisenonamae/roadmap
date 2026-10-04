@@ -11,6 +11,7 @@
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" type="image/svg+xml" href="./icon.svg">
 <link rel="apple-touch-icon" href="./icon.svg">
+<script src="./engine.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap" rel="stylesheet">
@@ -174,6 +175,44 @@ details.rules p{margin:.2rem 0}
 details.rules ol,details.rules ul{margin:.2rem 0;padding-left:1.3rem}
 details.rules .note{color:var(--sub);font-size:.8rem}
 
+/* タスク */
+.tk-sum{display:flex;flex-wrap:wrap;gap:.3rem .9rem;font-size:.84rem;color:var(--sub);margin:0 0 .8rem}
+.tk-sum b{color:var(--ink);font-variant-numeric:tabular-nums}
+.tk-group{margin-bottom:1.1rem}
+.tk-group h2{font-size:.95rem;margin:0 0 .3rem;padding-bottom:.3rem;border-bottom:1px solid var(--rule);
+  display:flex;justify-content:space-between;align-items:baseline;letter-spacing:.06em}
+.tk-group h2 span{font-size:.78rem;color:var(--sub);font-weight:400}
+.tk{display:block;width:100%;text-align:left;border:none;background:none;font:inherit;color:inherit;
+  padding:.5rem 0;border-bottom:1px solid var(--rule);cursor:pointer}
+.tk:last-child{border-bottom:none}
+.tk .tn{font-weight:700;line-height:1.4;word-break:break-word}
+.tk .tm{display:flex;flex-wrap:wrap;gap:.2rem .7rem;font-size:.78rem;color:var(--sub);margin-top:.15rem;align-items:center}
+.chip{display:inline-block;font-size:.72rem;padding:0 .45rem;border-radius:3px;border:1px solid var(--rule);color:var(--ink);line-height:1.6}
+.chip.s-新規{border-color:#B07D2A;color:#8A5F12}
+.chip.s-進行中{border-color:#2F5DA8;color:#2F5DA8}
+.chip.s-定着{background:#E3EEE6;border-color:#3D8A5A;color:#2E6B45}
+.chip.s-熟達{background:#3D8A5A;border-color:#3D8A5A;color:#fff}
+.chip.s-要再設定{border-color:var(--reach);color:var(--reach)}
+.chip.s-実験,.chip.s-随時{border-style:dashed}
+.bar{display:inline-block;width:4.2rem;height:6px;background:var(--rule);border-radius:3px;overflow:hidden;vertical-align:middle}
+.bar i{display:block;height:100%;background:#2F5DA8}
+.cyc{color:var(--ink)}
+.strip{display:flex;gap:2px;margin:.4rem 0 .2rem}
+.strip span{flex:1;min-width:0;text-align:center;font-size:.72rem;padding:.2rem 0;border-radius:2px;background:var(--paper)}
+.strip span.ok{background:#3D8A5A;color:#fff}
+.strip span.ng{background:var(--reach);color:#fff}
+.strip span.ex{background:var(--rule);color:var(--sub)}
+.strip span.no{background:transparent;color:var(--rule)}
+.strip-d{display:flex;gap:2px;font-size:.62rem;color:var(--sub)}
+.strip-d span{flex:1;text-align:center}
+.tk-detail .nums{display:grid;grid-template-columns:repeat(auto-fill,minmax(6.5rem,1fr));gap:.3rem .8rem;margin:.6rem 0}
+.tk-detail .nums div{font-size:.78rem;color:var(--sub)}
+.tk-detail .nums b{display:block;font-size:1.05rem;color:var(--ink);font-variant-numeric:tabular-nums}
+.tk-detail h3{font-size:.88rem;margin:1rem 0 .3rem}
+.tk-detail textarea{width:100%;min-height:6rem;padding:.4rem .5rem;border:1px solid var(--rule);border-radius:3px;font:inherit;background:#fff}
+.tk-detail ul.gens{list-style:none;padding:0;margin:0;font-size:.84rem}
+.tk-detail ul.gens li{padding:.25rem 0;border-bottom:1px dashed var(--rule)}
+
 /* 設定 */
 .sec{margin-bottom:1.6rem}
 .sec h2{font-size:1rem;margin:0 0 .5rem;letter-spacing:.06em}
@@ -292,6 +331,17 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
     </details>
   </section>
 
+  <section class="view" id="view-tasks" hidden>
+    <header class="head">
+      <h1>タスク</h1>
+      <div class="date" id="tk-date">—</div>
+    </header>
+    <p class="notice">Notionの記録を毎朝取り込み、新しい計算で数え直して表示しています。記録はまだNotionでつけてください。</p>
+    <div id="tk-list"></div>
+    <div id="tk-detail"></div>
+    <span class="status" id="tk-status"></span>
+  </section>
+
   <section class="view" id="view-settings" hidden>
     <header class="head"><h1>設定</h1><div class="date">組み立ての材料</div></header>
 
@@ -360,6 +410,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 <nav class="tabs" role="tablist">
   <button role="tab" aria-selected="true" data-view="today">今日</button>
   <button role="tab" aria-selected="false" data-view="plan">計画</button>
+  <button role="tab" aria-selected="false" data-view="tasks">タスク</button>
   <button role="tab" aria-selected="false" data-view="settings">設定</button>
   <button role="tab" aria-selected="false" data-view="connect">接続</button>
 </nav>
@@ -374,6 +425,10 @@ const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
 const EVENTS_PATH = "roadmap/events.json";
 const PLAN_PATH = "roadmap/plan.json";
+const TASKDEFS_PATH = "roadmap/tasks/defs.json";
+const OVERLAY_PATH = "roadmap/tasks/overlay.json";     // アプリで足したもの。取り込み直しで消えない
+const TASKLOG_DIR = "roadmap/tasks/log";
+const LIVE = ["新規", "進行中", "定着", "熟達", "実験", "随時", "要再設定"];
 const PLAN_STATUS_PATH = "roadmap/plan_status.json";
 const ZOOMS = { "週": 30, "月": 9, "四半期": 3.2, "年": 1.3 };      // 1日あたりの幅(px)
 const LANE_COLORS = ["#2F5DA8","#3D8A5A","#B07D2A","#7A4FA0","#2C8C99","#A0485F","#5A5FA8","#4F7A2F","#8A6A2F","#2F6F7A"];
@@ -418,6 +473,11 @@ const state = {
   planStatus: null,
   planZoom: "月",
   planEdit: null,            // 編集中の項目 { item, isNew }
+  taskDefs: null,
+  taskLogs: {},
+  overlay: { version: 1, tasks: {} },
+  overlaySha: null,
+  taskOpen: null,
 };
 
 function clone(o){ return JSON.parse(JSON.stringify(o)); }
@@ -519,6 +579,15 @@ async function readJson(path){
     text = await raw.text();
   }
   return { data: JSON.parse(text), sha: meta.sha };
+}
+
+async function listDir(path){
+  const url = apiUrl(path) + "?ref=" + encodeURIComponent(state.conn.branch);
+  const r = await fetch(url, { headers: authHeaders(), cache: "no-store" });
+  if (r.status === 404) return [];
+  if (!r.ok) throw new Error(describeHttp(r.status, path));
+  const list = await r.json();
+  return Array.isArray(list) ? list : [];
 }
 
 async function writeJson(path, obj, sha){
@@ -925,6 +994,8 @@ function stopHtml(it, time, places){
     meta.push("<span>" + dur(c.min) + "</span>");
     if (c.mode) meta.push("<span>" + esc(c.mode) + "</span>");
     if (it.task.reach) meta.push('<span class="reach">今日やらないと落ちる</span>');
+    const tk = taskByName(it.task.name);
+    if (tk && tk.cycle) meta.push('<span class="cyc">今日は ' + esc(tk.cycle.item) + "</span>");
     if (!c.configured) meta.push('<span class="unset">未設定</span>');
   }
   const nag = it.nagara.length
@@ -1457,6 +1528,213 @@ function upsertPlanItem(it){
 }
 function removePlanItem(id){ state.plan.items = state.plan.items.filter(x => x.id !== id); }
 
+/* ───────── タスク ───────── */
+
+// 取り込んだ定義に、アプリで足したもの(サイクル、WAVEのリンク)を重ねる
+function effectiveDef(def){
+  const ov = (state.overlay.tasks || {})[def.id] || {};
+  const waves = (def.waves || []).map(w => {
+    const u = (ov.waves || {})[w.label];
+    return { label: w.label, url: u != null ? u : (w.url || "") };
+  });
+  return Object.assign({}, def, { cycle: ov.cycle || def.cycle || null, waves });
+}
+
+// タスクごとに、記録をたどって今日の状態を出す。結果は描画のあいだだけ覚えておく
+let taskCache = { key: null, list: [] };
+function taskStates(){
+  const defs = state.taskDefs;
+  if (!defs || !window.TaskEngine) return [];
+  const today = todayJST();
+  const key = today + "|" + (state.overlaySha || "") + "|" + JSON.stringify(Object.keys(state.taskLogs)) +
+              "|" + defs.importedUntil + "|" + JSON.stringify(state.overlay).length;
+  if (taskCache.key === key) return taskCache.list;
+  const E = window.TaskEngine;
+  const list = defs.tasks.map(raw => {
+    const def = effectiveDef(raw);
+    const rep = E.replay(def, E.makeLogFor(state.taskLogs, def.id), today);
+    const row = rep.days.length && rep.days[rep.days.length - 1].date === today ? rep.days[rep.days.length - 1] : null;
+    const gens = (def.generations || []).slice().sort((a, b) => a.from < b.from ? -1 : 1);
+    const curGen = gens.filter(g => g.from <= today).pop() || { gen: 1, target: null };
+    const s = row || rep.next;
+    return {
+      def, rep, row,
+      status: s.status,
+      gen: row ? row.gen : rep.gen,
+      genTotal: s.genTotal, total: s.total, streak: s.streak, best: s.best, miss: s.miss, lastDone: s.lastDone,
+      target: curGen.target != null ? +curGen.target : null,
+      check: row ? row.check : null,
+      cycle: E.cycleIndex(def.cycle, rep.days, today),
+    };
+  });
+  taskCache = { key, list };
+  return list;
+}
+
+// 行軍表の今日のタブから、名前でタスクを引く(改名前の名前でも引ける)
+function taskByName(name){
+  const n = (name || "").trim();
+  return taskStates().find(t => t.def.name === n || (t.def.aliases || []).includes(n)) || null;
+}
+
+const CHECK_MARK = { "完了": ["ok", "✓"], "超過完了": ["ok", "★"], "不完全な完了": ["ok", "△"],
+                     "不実行": ["ng", "✕"], "未着手": ["ng", "・"], "今日は該当しない": ["ex", "ー"],
+                     "進行中": ["ex", "…"], "まとめて実行待ち": ["ex", "…"] };
+
+function renderTasks(){
+  const box = document.getElementById("tk-list");
+  if (!box) return;
+  const defs = state.taskDefs;
+  document.getElementById("tk-date").textContent = defs ? ("取り込み " + defs.importedUntil) : "—";
+  if (!defs) {
+    box.innerHTML = '<div class="empty">まだ取り込んでいません。notion-daily の Actions で Import tasks を動かしてください。</div>';
+    document.getElementById("tk-detail").innerHTML = "";
+    return;
+  }
+  const list = taskStates();
+  const live = list.filter(t => LIVE.includes(t.status));
+  const count = st => list.filter(t => t.status === st).length;
+  let html = '<div class="tk-sum">' + ["新規", "進行中", "定着", "熟達", "要再設定"].map(st =>
+    "<span>" + st + " <b>" + count(st) + "</b></span>").join("") + "</div>";
+
+  // 省ごとに。動いているものを上に、要再設定は下に
+  const order = { "熟達": 0, "定着": 1, "進行中": 2, "新規": 3, "実験": 4, "随時": 5, "要再設定": 6 };
+  const groups = {};
+  for (const t of live) {
+    const g = (t.def.ministries && t.def.ministries[0]) || "所属なし";
+    (groups[g] = groups[g] || []).push(t);
+  }
+  const names = laneOrder(Object.keys(groups).filter(g => g !== "所属なし")).filter(g => g !== "全体")
+    .concat(groups["所属なし"] ? ["所属なし"] : []);
+  for (const g of names) {
+    const arr = groups[g].sort((a, b) => (order[a.status] - order[b.status]) || a.def.name.localeCompare(b.def.name, "ja"));
+    const active = arr.filter(t => t.status !== "要再設定");
+    const fallen = arr.filter(t => t.status === "要再設定");
+    html += '<div class="tk-group"><h2>' + esc(g) + "<span>" + active.length + "件</span></h2>" +
+      active.map(taskRowHtml).join("") +
+      (fallen.length ? '<details class="more"><summary>要再設定　' + fallen.length + "件</summary>" +
+        fallen.map(taskRowHtml).join("") + "</details>" : "") + "</div>";
+  }
+  const rest = list.filter(t => !LIVE.includes(t.status));
+  if (rest.length) {
+    html += '<details class="more"><summary>休止中・終わったもの　' + rest.length + "件</summary>" +
+      rest.sort((a, b) => a.def.name.localeCompare(b.def.name, "ja")).map(taskRowHtml).join("") + "</details>";
+  }
+  box.innerHTML = html;
+  renderTaskDetail();
+}
+
+function taskRowHtml(t){
+  const meta = ['<span class="chip s-' + esc(t.status) + '">' + esc(t.status) + "</span>"];
+  if (t.target) {
+    const pct = Math.min(100, Math.round(t.genTotal / t.target * 100));
+    meta.push("<span>世代" + t.gen + "　" + t.genTotal + "/" + t.target + ' <span class="bar"><i style="width:' + pct + '%"></i></span></span>');
+  } else if (t.gen > 1) {
+    meta.push("<span>世代" + t.gen + "</span>");
+  }
+  meta.push("<span>連続" + t.streak + "</span>");
+  if (t.cycle) meta.push('<span class="cyc">今日は ' + esc(t.cycle.item) + "</span>");
+  return '<button type="button" class="tk" data-tid="' + esc(t.def.id) + '"><div class="tn">' + esc(t.def.name) +
+         '</div><div class="tm">' + meta.join("") + "</div></button>";
+}
+
+function renderTaskDetail(){
+  const box = document.getElementById("tk-detail");
+  const t = state.taskOpen && taskStates().find(x => x.def.id === state.taskOpen);
+  if (!t) { box.innerHTML = ""; return; }
+  const today = todayJST();
+  const E = window.TaskEngine;
+
+  // 直近14日の帯
+  const byDate = new Map(t.rep.days.map(d => [d.date, d]));
+  let strip = "", dates = "";
+  for (let i = 13; i >= 0; i--) {
+    const d = E.addDays(today, -i);
+    const row = byDate.get(d);
+    const [cls, mark] = row ? (CHECK_MARK[row.check] || ["ex", "?"]) : ["no", "　"];
+    strip += '<span class="' + cls + '" title="' + esc(d + " " + (row ? row.check : "行なし")) + '">' + mark + "</span>";
+    dates += "<span>" + (+d.slice(8)) + "</span>";
+  }
+
+  const d = t.def;
+  const waves = (d.waves || []).map((w, i) =>
+    '<div class="f" style="margin-bottom:.4rem"><label for="tw' + i + '">' + esc(w.label) + ' のページ</label>' +
+    '<input id="tw' + i + '" data-wave="' + esc(w.label) + '" type="url" placeholder="NotionのページのURL" value="' + esc(w.url || "") + '"></div>' +
+    (w.url ? '<p style="margin:-.2rem 0 .5rem;font-size:.8rem"><a href="' + esc(w.url) + '" target="_blank" rel="noopener">' + esc(w.label) + " を開く</a></p>" : "")
+  ).join("");
+  const cyc = d.cycle || { items: [] };
+  const cycItems = (cyc.items || []).join("\n");
+  const curIdx = t.cycle ? t.cycle.index : 0;
+  const cycOpts = (cyc.items || []).map((it, i) => '<option value="' + i + '"' + (i === curIdx ? " selected" : "") + ">" +
+    esc(String.fromCharCode(97 + (i % 26)) + " " + it) + "</option>").join("");
+  const gens = (d.generations || []).slice().sort((a, b) => a.from < b.from ? -1 : 1).map(g =>
+    "<li>世代" + g.gen + "　" + esc(g.from) + " から" + (g.target ? "　目標" + g.target + "回" : "") + "</li>").join("");
+
+  box.innerHTML = '<div class="peditor tk-detail">' +
+    "<h2>" + esc(d.name) + "</h2>" +
+    '<p class="now">' + esc((d.ministries || []).join("・") || "所属なし") + "　" + esc(d.slot || "") +
+      (d.aliases && d.aliases.length ? "　前の名前:" + esc(d.aliases.join("、")) : "") + "</p>" +
+    '<div class="nums">' +
+      "<div>状況<b>" + esc(t.status) + "</b></div>" +
+      "<div>世代<b>" + t.gen + "</b></div>" +
+      "<div>世代内累計<b>" + t.genTotal + (t.target ? " / " + t.target : "") + "</b></div>" +
+      "<div>累計<b>" + t.total + "</b></div>" +
+      "<div>連続<b>" + t.streak + "</b></div>" +
+      "<div>最長連続<b>" + t.best + "</b></div>" +
+      "<div>未実行連続<b>" + t.miss + "</b></div>" +
+      "<div>最終達成日<b>" + esc(t.lastDone ? t.lastDone.slice(5) : "—") + "</b></div>" +
+    "</div>" +
+    "<h3>直近2週間</h3>" + '<div class="strip">' + strip + '</div><div class="strip-d">' + dates + "</div>" +
+    "<h3>世代の歴史</h3>" + '<ul class="gens">' + gens + "</ul>" +
+    "<h3>サイクル</h3>" +
+    '<p class="note" style="font-size:.8rem;color:var(--sub);margin:.1rem 0 .4rem">回す中身を1行に1つ書く。やった日だけ次へ進む。</p>' +
+    '<textarea data-cycle-items placeholder="過去の語彙\n未来の語彙\n長文1題">' + esc(cycItems) + "</textarea>" +
+    (cycOpts ? '<div class="f" style="margin-top:.4rem"><label for="tk-cyc-now">今日はどれか</label><select id="tk-cyc-now" data-cycle-now>' + cycOpts + "</select></div>" : "") +
+    (waves ? "<h3>WAVE・STAGE</h3>" + waves : "") +
+    '<div class="row"><button type="button" class="btn" data-tk-save>保存する</button>' +
+    '<button type="button" class="btn ghost" data-tk-close>閉じる</button></div>' +
+    "</div>";
+}
+
+async function commitOverlay(mutate){
+  const status = (text, err) => {
+    const st = document.getElementById("tk-status");
+    if (!st) return;
+    st.classList.toggle("err", !!err);
+    st.textContent = text;
+  };
+  mutate();
+  taskCache.key = null;
+  renderTasks(); renderToday();
+  if (!state.conn) return false;
+  status("保存しています…");
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      state.overlaySha = await writeJson(OVERLAY_PATH, state.overlay, state.overlaySha);
+      lsSet(KEY_CACHE, cachePayload());
+      status("保存しました");
+      taskCache.key = null;
+      return true;
+    } catch (e) {
+      let err = e;
+      if ((e.status === 409 || e.status === 422) && attempt < 2) {
+        try {
+          const fresh = await readJson(OVERLAY_PATH);
+          state.overlay = (fresh.data && fresh.data.tasks) ? fresh.data : { version: 1, tasks: {} };
+          state.overlaySha = fresh.sha;
+          mutate();
+          taskCache.key = null;
+          renderTasks();
+          continue;
+        } catch (e2) { err = e2; }
+      }
+      status(err.status ? err.message : "通信できませんでした。つながったら開き直してください。", true);
+      return false;
+    }
+  }
+  return false;
+}
+
 /* ───────── 描画:設定 ───────── */
 
 function allTodayNames(){
@@ -1619,7 +1897,8 @@ async function loadAll(){
     state.dirty = false;
     lsSet(KEY_CACHE, cachePayload());
     st.textContent = "読み込みました(" + state.tasksDoc.tasks.length + "件)";
-    renderToday(); renderSettings(); renderPlan();
+    await loadTaskData();
+    renderToday(); renderSettings(); renderPlan(); renderTasks();
     if (legacy.length) {
       const date = state.tasksDoc.date;
       await commitEvents(() => legacy.forEach(n => setDone(date, n, true)));
@@ -1632,10 +1911,29 @@ async function loadAll(){
   }
 }
 
+async function loadTaskData(){
+  try {
+    const [d, o, files] = await Promise.all([readJson(TASKDEFS_PATH), readJson(OVERLAY_PATH), listDir(TASKLOG_DIR)]);
+    if (!d.data) return;
+    const logs = {};
+    const months = files.filter(f => /^\d{4}-\d{2}\.json$/.test(f.name));
+    const got = await Promise.all(months.map(f => readJson(TASKLOG_DIR + "/" + f.name)));
+    months.forEach((f, i) => { logs[f.name.slice(0, 7)] = got[i].data || {}; });
+    state.taskDefs = d.data;
+    state.taskLogs = logs;
+    state.overlay = (o.data && o.data.tasks) ? o.data : { version: 1, tasks: {} };
+    state.overlaySha = o.sha;
+  } catch (e) {
+    const st = document.getElementById("tk-status");
+    if (st) { st.classList.add("err"); st.textContent = e.message; }
+  }
+}
+
 function cachePayload(){
   return { tasksDoc: state.tasksDoc, settings: state.settings, settingsSha: state.settingsSha,
            events: state.events, eventsSha: state.eventsSha,
-           plan: state.plan, planSha: state.planSha, planStatus: state.planStatus };
+           plan: state.plan, planSha: state.planSha, planStatus: state.planStatus,
+           taskDefs: state.taskDefs, taskLogs: state.taskLogs, overlay: state.overlay, overlaySha: state.overlaySha };
 }
 
 function normalizeSettings(s){
@@ -1681,7 +1979,9 @@ async function saveSettings(){
 
 function showView(name){
   document.querySelectorAll(".view").forEach(v => v.hidden = (v.id !== "view-" + name));
+  if (name === "today") renderToday();
   if (name === "plan") renderPlan();
+  if (name === "tasks") renderTasks();
   document.querySelectorAll("nav.tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.view === name)));
   window.scrollTo(0, 0);
 }
@@ -1698,6 +1998,34 @@ function bind(){
     if (!d && !u) return;
     const name = d ? d.dataset.done : u.dataset.undo;
     commitEvents(() => setDone(doc.date, name, !!d));
+  });
+
+  // タスク
+  document.getElementById("tk-list").addEventListener("click", e => {
+    const b = e.target.closest("[data-tid]"); if (!b) return;
+    state.taskOpen = b.dataset.tid;
+    renderTaskDetail();
+    const box = document.getElementById("tk-detail");
+    if (box.scrollIntoView) box.scrollIntoView({ block: "nearest" });
+  });
+  document.getElementById("tk-detail").addEventListener("click", async e => {
+    if (e.target.closest("[data-tk-close]")) { state.taskOpen = null; renderTaskDetail(); return; }
+    if (!e.target.closest("[data-tk-save]")) return;
+    const id = state.taskOpen; if (!id) return;
+    const box = document.getElementById("tk-detail");
+    const items = box.querySelector("[data-cycle-items]").value.split("\n").map(x => x.trim()).filter(Boolean);
+    const nowSel = box.querySelector("[data-cycle-now]");
+    let idx = nowSel ? +nowSel.value : 0;
+    if (!(idx >= 0 && idx < items.length)) idx = 0;
+    const waves = {};
+    box.querySelectorAll("[data-wave]").forEach(inp => { waves[inp.dataset.wave] = inp.value.trim(); });
+    const today = todayJST();
+    await commitOverlay(() => {
+      const t = state.overlay.tasks[id] = Object.assign({}, state.overlay.tasks[id] || {});
+      // 今日どれかを選び直したら、今日を起点にする
+      t.cycle = items.length ? { items, anchorDate: today, anchorIndex: idx } : null;
+      t.waves = waves;
+    });
   });
 
   // 計画
@@ -1941,8 +2269,12 @@ function boot(){
     state.plan = normalizePlan(cache.plan);
     state.planSha = cache.planSha || null;
     state.planStatus = cache.planStatus || null;
+    state.taskDefs = cache.taskDefs || null;
+    state.taskLogs = cache.taskLogs || {};
+    state.overlay = cache.overlay || { version: 1, tasks: {} };
+    state.overlaySha = cache.overlaySha || null;
   }
-  renderToday(); renderSettings(); renderPlan();
+  renderToday(); renderSettings(); renderPlan(); renderTasks();
 
   if (conn && conn.owner && conn.token) {
     state.conn = conn;
@@ -1954,7 +2286,7 @@ function boot(){
 
 window.__roadmap = { buildPlan, cfgOf, classify, state, loadAll, saveSettings, saveEvents, eventsFor,
                      togglePreset, setPreset, removeEvent, editEventTime, setDone, getDone, commitEvents,
-                     commitPlan, normalizePlan, validatePlanItem, newItem,
+                     commitPlan, normalizePlan, validatePlanItem, newItem, taskStates, commitOverlay,
                      b64encode, b64decode, DEFAULT_SETTINGS };
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
 })();
