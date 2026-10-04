@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>行軍表</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#EEF1F0;
+  --sheet:#F8FAF9;
+  --ink:#1D2430;
+  --sub:#5F6873;
+  --rule:#CDD3D6;
+  --reach:#B3283C;
+  --focus:#2F5DA8;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper);color:var(--ink);
+  font-family:"BIZ UDPGothic","Hiragino Sans","Noto Sans JP",sans-serif;
+  font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased;
+  padding-bottom:calc(64px + env(safe-area-inset-bottom));
+}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+.wrap{max-width:640px;margin:0 auto;padding:1.1rem 1rem 2rem}
+
+/* 見出し */
+.head{display:flex;align-items:baseline;justify-content:space-between;gap:1rem;
+  padding-bottom:.7rem;border-bottom:2px solid var(--ink);margin-bottom:.9rem}
+.head h1{margin:0;font-size:1.35rem;font-weight:700;letter-spacing:.08em}
+.head .date{font-variant-numeric:tabular-nums;color:var(--sub);font-size:.88rem;text-align:right}
+.notice{background:var(--sheet);border-left:3px solid var(--sub);padding:.55rem .75rem;
+  font-size:.86rem;color:var(--sub);margin:0 0 .9rem}
+.notice.warn{border-left-color:var(--reach);color:var(--ink)}
+
+/* 枠 */
+.block{margin-bottom:1.4rem}
+.block-head{display:flex;align-items:baseline;justify-content:space-between;
+  padding:.2rem 0 .45rem;border-bottom:1px solid var(--rule)}
+.block-head h2{margin:0;font-size:1.05rem;font-weight:700;letter-spacing:.1em}
+.block-head .span{font-variant-numeric:tabular-nums;color:var(--sub);font-size:.84rem}
+.block-head .over{color:var(--reach);font-weight:700}
+
+/* 時刻表の行。左に時刻、真ん中に路線の線、右に中身 */
+.stop{display:grid;grid-template-columns:3.4rem 14px 1fr;column-gap:.6rem;align-items:stretch}
+.stop .t{font-variant-numeric:tabular-nums;font-weight:700;font-size:.95rem;padding-top:.55rem;text-align:right}
+.stop .line{position:relative}
+.stop .line::before{content:"";position:absolute;left:5px;top:0;bottom:0;width:4px;background:var(--c,#8A929C)}
+.stop .line::after{content:"";position:absolute;left:1px;top:.75rem;width:12px;height:12px;
+  border-radius:50%;background:var(--sheet);border:3px solid var(--c,#8A929C);box-sizing:border-box}
+.stop .body{padding:.45rem 0 .7rem;min-width:0}
+.stop .name{font-weight:700;font-size:1rem;line-height:1.45;word-break:break-word}
+.stop .meta{display:flex;flex-wrap:wrap;gap:.35rem .7rem;font-size:.8rem;color:var(--sub);margin-top:.15rem}
+.stop .meta .pl{color:var(--c)}
+.stop .meta .reach{color:var(--reach);font-weight:700}
+.stop .meta .unset{color:var(--sub);text-decoration:underline dotted}
+.stop .nagara{margin-top:.35rem;padding-left:.7rem;border-left:2px dotted var(--rule);font-size:.88rem}
+.stop .nagara div{line-height:1.5}
+.stop .nagara span{color:var(--sub);font-size:.78rem;margin-left:.4rem}
+.stop.done .name{text-decoration:line-through;color:var(--sub)}
+.stop button.row{all:unset;display:block;cursor:pointer;width:100%}
+.stop button.row:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+/* 乗り換え */
+.transfer{display:grid;grid-template-columns:3.4rem 14px 1fr;column-gap:.6rem;
+  font-size:.78rem;color:var(--sub)}
+.transfer .line{position:relative}
+.transfer .line::before{content:"";position:absolute;left:5px;top:0;bottom:0;width:4px;
+  background:repeating-linear-gradient(var(--rule) 0 3px,transparent 3px 6px)}
+.transfer .txt{padding:.15rem 0}
+
+/* その他の一覧 */
+.list{margin:0;padding:0;list-style:none}
+.list li{display:flex;justify-content:space-between;gap:1rem;padding:.45rem 0;border-bottom:1px solid var(--rule)}
+.list li:last-child{border-bottom:none}
+.list .r{color:var(--sub);font-size:.82rem;white-space:nowrap;font-variant-numeric:tabular-nums}
+details.more{margin-top:1rem}
+details.more summary{cursor:pointer;color:var(--sub);font-size:.88rem;padding:.3rem 0}
+.empty{color:var(--sub);font-size:.9rem;padding:1rem 0}
+
+/* 用事 */
+.evp{background:var(--sheet);border:1px solid var(--rule);border-radius:4px;padding:.7rem .8rem;margin:0 0 1.1rem}
+.evp-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.45rem}
+.evp-h h2{margin:0;font-size:.98rem;letter-spacing:.08em}
+.evp-h span{font-size:.78rem;color:var(--sub)}
+.chips{display:flex;flex-wrap:wrap;gap:.35rem}
+.chips button{border:1px solid var(--rule);background:#fff;border-radius:3px;padding:.3rem .7rem;cursor:pointer}
+.chips button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.chips button.new{border-style:dashed;color:var(--sub)}
+.ev-list{list-style:none;margin:.6rem 0 0;padding:0}
+.ev-list li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.3rem .6rem;padding:.45rem 0;border-top:1px solid var(--rule);align-items:center}
+.ev-list .en{font-weight:700;word-break:break-word}
+.ev-list .en small{font-weight:400;color:var(--sub);margin-left:.4rem}
+.ev-list .times{display:flex;align-items:center;gap:.3rem;grid-column:1/2}
+.ev-list .times input{width:6.2rem;padding:.2rem .3rem;border:1px solid var(--rule);border-radius:3px;background:#fff}
+.ev-list .del{grid-row:1/3;grid-column:2;border:1px solid var(--rule);background:#fff;border-radius:3px;padding:.3rem .6rem;cursor:pointer;color:var(--sub)}
+.ev-form{margin-top:.6rem;padding-top:.6rem;border-top:1px dashed var(--rule)}
+.ev-form[hidden]{display:none}
+.ev-form .row{display:flex;gap:.6rem;align-items:center;margin-top:.55rem;flex-wrap:wrap}
+.stop.ev .line::before{width:8px;left:3px}
+.stop.ev .line::after{border-radius:2px;background:var(--c);top:.7rem}
+.stop.ev .span-t{font-size:.8rem;color:var(--sub);font-variant-numeric:tabular-nums}
+.days{display:flex;gap:.25rem;flex-wrap:wrap;margin-top:.45rem}
+.days button{border:1px solid var(--rule);background:#fff;border-radius:3px;width:2.1rem;padding:.2rem 0;cursor:pointer}
+.days button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+/* 設定 */
+.sec{margin-bottom:1.6rem}
+.sec h2{font-size:1rem;margin:0 0 .5rem;letter-spacing:.06em}
+.sec p.hint{margin:.1rem 0 .7rem;color:var(--sub);font-size:.84rem}
+.task-edit{padding:.75rem 0;border-bottom:1px solid var(--rule)}
+.task-edit .tn{font-weight:700;margin-bottom:.45rem;word-break:break-word}
+.task-edit .tn small{font-weight:400;color:var(--sub);margin-left:.4rem}
+.grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(8.5rem,1fr));gap:.5rem .7rem}
+.f label{display:block;font-size:.75rem;color:var(--sub);margin-bottom:.15rem}
+.f input,.f select{width:100%;padding:.35rem .45rem;border:1px solid var(--rule);background:#fff;border-radius:3px}
+.organs{display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.5rem}
+.organs button{border:1px solid var(--rule);background:#fff;border-radius:3px;padding:.2rem .65rem;cursor:pointer}
+.organs button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.blocks-edit .row3{display:grid;grid-template-columns:3rem 1fr 1fr;gap:.5rem;align-items:center;margin-bottom:.4rem}
+.savebar{position:sticky;bottom:calc(64px + env(safe-area-inset-bottom));background:var(--paper);
+  padding:.6rem 0;border-top:1px solid var(--rule);display:flex;align-items:center;gap:.8rem}
+.btn{border:1px solid var(--ink);background:var(--ink);color:#fff;border-radius:3px;padding:.45rem 1rem;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--ink)}
+.btn:disabled{opacity:.45;cursor:default}
+.status{font-size:.85rem;color:var(--sub)}
+.status.err{color:var(--reach)}
+
+/* 下のタブ */
+nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--sheet);border-top:1px solid var(--rule);
+  display:flex;padding-bottom:env(safe-area-inset-bottom)}
+nav.tabs button{flex:1;border:none;background:none;padding:.8rem 0;cursor:pointer;color:var(--sub);font-weight:700}
+nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 var(--ink)}
+.view[hidden]{display:none}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <section class="view" id="view-today">
+    <header class="head">
+      <h1>行軍表</h1>
+      <div class="date" id="date">—</div>
+    </header>
+    <div id="notices"></div>
+    <div id="events-panel"></div>
+    <div id="plan"></div>
+  </section>
+
+  <section class="view" id="view-settings" hidden>
+    <header class="head"><h1>設定</h1><div class="date">組み立ての材料</div></header>
+
+    <div class="sec">
+      <h2>タスク</h2>
+      <p class="hint">所要時間・場所・使う器官を入れると、ながらの組み合わせと順番が正確になります。まだ設定していないものが上に並びます。</p>
+      <div id="task-edits"></div>
+    </div>
+
+    <div class="sec">
+      <h2>よく使う用事</h2>
+      <p class="hint">登録すると、今日の画面のボタン1つで入れられます。曜日を選ぶと、その曜日は何もしなくても自動で入ります。</p>
+      <div id="presets-edit"></div>
+      <button class="btn ghost" id="add-preset" type="button" style="margin-top:.6rem">よく使う用事を足す</button>
+    </div>
+
+    <div class="sec blocks-edit">
+      <h2>時間の枠</h2>
+      <p class="hint">朝・昼・夜のタスクはこの枠に入ります。「一日中」のタスクは枠の空きに入り、入りきらないぶんは最後に並びます。</p>
+      <div id="blocks-edit"></div>
+    </div>
+
+    <div class="sec">
+      <h2>場所</h2>
+      <p class="hint">読点かカンマで区切ります。「どこでも」は他のどの場所のタスクとも組めます。</p>
+      <div class="f"><input id="places" type="text"></div>
+    </div>
+
+    <div class="sec">
+      <h2>並べ方の重み</h2>
+      <p class="hint">大きいほど、その法則を強く効かせます。タスクの価値は 重み × 省の重要度 で、今日落とすと要再設定になるもの(リーチ)はそこに倍率が掛かります。</p>
+      <div class="grid2">
+        <div class="f"><label for="w-place">同じ場所を続ける</label><input id="w-place" type="number" step="0.5" min="0"></div>
+        <div class="f"><label for="w-mode">同じ集中の型を続ける</label><input id="w-mode" type="number" step="0.5" min="0"></div>
+        <div class="f"><label for="w-priority">タスクの価値</label><input id="w-priority" type="number" step="0.5" min="0"></div>
+        <div class="f"><label for="w-reach">リーチの倍率</label><input id="w-reach" type="number" step="0.5" min="1"></div>
+      </div>
+    </div>
+
+    <div class="savebar">
+      <button class="btn" id="save" disabled>保存する</button>
+      <span class="status" id="save-status"></span>
+    </div>
+  </section>
+
+  <section class="view" id="view-connect" hidden>
+    <header class="head"><h1>接続</h1><div class="date">GitHub</div></header>
+    <div class="sec">
+      <p class="hint">タスクと設定は非公開のリポジトリに置いてあります。トークンはこの端末にだけ保存されます。</p>
+      <div class="grid2">
+        <div class="f"><label for="c-owner">ユーザー名</label><input id="c-owner" type="text" autocomplete="off"></div>
+        <div class="f"><label for="c-repo">リポジトリ</label><input id="c-repo" type="text" autocomplete="off"></div>
+        <div class="f"><label for="c-branch">ブランチ</label><input id="c-branch" type="text" autocomplete="off"></div>
+      </div>
+      <div class="f" style="margin-top:.6rem"><label for="c-token">トークン</label><input id="c-token" type="password" autocomplete="off"></div>
+      <div style="margin-top:.9rem;display:flex;gap:.8rem;align-items:center">
+        <button class="btn" id="connect">接続して読み込む</button>
+        <span class="status" id="conn-status"></span>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<nav class="tabs" role="tablist">
+  <button role="tab" aria-selected="true" data-view="today">今日</button>
+  <button role="tab" aria-selected="false" data-view="settings">設定</button>
+  <button role="tab" aria-selected="false" data-view="connect">接続</button>
+</nav>
+
+<script>
+(function(){
+"use strict";
+
+/* ───────── 定数 ───────── */
+
+const TASKS_PATH = "roadmap/tasks.json";
+const SETTINGS_PATH = "roadmap/settings.json";
+const EVENTS_PATH = "roadmap/events.json";
+const DAYS = ["日","月","火","水","木","金","土"];
+const KEEP_EVENT_DAYS = 30;                          // 用事の記録はこの日数ぶんだけ残す
+const KEY_CONN = "roadmap-conn";
+const KEY_CACHE = "roadmap-cache";
+
+const ORGANS = ["目","耳","口","手","足"];
+const MODES = [["",""],["入門","入門"],["記銘","記銘"],["俯瞰","俯瞰"],["自在","自在"]];
+const DONE = ["完了","超過完了","不完全な完了"];
+const AUTO = ["定着","熟達"];                        // 毎朝「完了」で生成されるが、実際にはやる
+const SKIP = ["アーカイブ","実験終了","殿堂入り","休止中","達成済み"];
+const ANYWHERE = "どこでも";
+
+const PLACE_COLORS = {"机":"#2F5DA8","外":"#3D8A5A","浴室":"#2C8C99","台所":"#B07D2A","どこでも":"#8A929C"};
+const EXTRA_COLORS = ["#7A4FA0","#A0485F","#4F7A2F","#2F6F7A","#8A6A2F","#5A5FA8"];
+
+const DEFAULT_SETTINGS = {
+  version: 1,
+  blocks: { "朝": {start:"06:30", end:"08:00"}, "昼": {start:"12:30", end:"13:00"}, "夜": {start:"19:30", end:"23:00"} },
+  weights: { priority: 1, place: 3, mode: 2, reach: 3 },
+  places: ["机","外","浴室","台所","どこでも"],
+  presets: [],
+  tasks: {}
+};
+
+/* ───────── 状態 ───────── */
+
+const state = {
+  conn: null,
+  tasksDoc: null,
+  settings: clone(DEFAULT_SETTINGS),
+  settingsSha: null,
+  dirty: false,
+  events: {},
+  eventsSha: null,
+  evFormOpen: false,
+};
+
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+function todayJST(){
+  const d = new Date(Date.now() + 9*3600*1000);
+  return d.toISOString().slice(0,10);
+}
+function toMin(hhmm){
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm || "");
+  return m ? (+m[1])*60 + (+m[2]) : null;
+}
+function fmt(min){
+  const h = Math.floor(min/60), m = Math.round(min%60);
+  return String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0");
+}
+function dur(min){
+  min = Math.round(min);
+  if (min < 60) return min + "分";
+  const h = Math.floor(min/60), m = min%60;
+  return h + "時間" + (m ? m + "分" : "");
+}
+function weekdayOf(dateStr){ return new Date(dateStr + "T00:00:00Z").getUTCDay(); }
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function placeColor(place, places){
+  if (PLACE_COLORS[place]) return PLACE_COLORS[place];
+  const i = Math.max(0, (places || []).indexOf(place));
+  return EXTRA_COLORS[i % EXTRA_COLORS.length];
+}
+
+/* ───────── 端末内の保存 ───────── */
+
+function lsGet(key, fallback){
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+  catch(e){ return fallback; }
+}
+function lsSet(key, value){
+  try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+  catch(e){ return false; }
+}
+function doneKey(date){ return "roadmap-done-" + date; }
+function getDoneLocal(date){ return new Set(lsGet(doneKey(date), [])); }
+function setDoneLocal(date, set){ lsSet(doneKey(date), Array.from(set)); }
+
+/* ───────── GitHub ───────── */
+
+function b64encode(str){
+  const bytes = new TextEncoder().encode(str);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(bin);
+}
+function b64decode(b64){
+  const bin = atob(String(b64).replace(/\s/g, ""));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
+function apiUrl(path){
+  const c = state.conn;
+  return "https://api.github.com/repos/" + encodeURIComponent(c.owner) + "/" +
+         encodeURIComponent(c.repo) + "/contents/" + path;
+}
+function authHeaders(extra){
+  return Object.assign({
+    "Authorization": "Bearer " + state.conn.token,
+    "Accept": "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+  }, extra || {});
+}
+
+async function readJson(path){
+  const url = apiUrl(path) + "?ref=" + encodeURIComponent(state.conn.branch);
+  const r = await fetch(url, { headers: authHeaders(), cache: "no-store" });
+  if (r.status === 404) return { data: null, sha: null };
+  if (!r.ok) throw new Error(describeHttp(r.status, path));
+  const meta = await r.json();
+  let text;
+  if (meta.content) {
+    text = b64decode(meta.content);
+  } else {
+    // 1MBを超えるとcontentが省かれる。そのときは中身だけ取り直す
+    const raw = await fetch(url, { headers: authHeaders({ "Accept": "application/vnd.github.raw+json" }), cache: "no-store" });
+    if (!raw.ok) throw new Error(describeHttp(raw.status, path));
+    text = await raw.text();
+  }
+  return { data: JSON.parse(text), sha: meta.sha };
+}
+
+async function writeJson(path, obj, sha){
+  const body = {
+    message: "roadmap: 設定を更新",
+    content: b64encode(JSON.stringify(obj, null, 1)),
+    branch: state.conn.branch,
+  };
+  if (sha) body.sha = sha;
+  const r = await fetch(apiUrl(path), {
+    method: "PUT",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(describeHttp(r.status, path));
+  const out = await r.json();
+  return out.content && out.content.sha;
+}
+
+function describeHttp(status, path){
+  if (status === 401) return "トークンが無効です。接続タブで入れ直してください。";
+  if (status === 403) return "このトークンには書き込み権限がありません。Contents を Read and write にしてください。";
+  if (status === 404) return path + " が見つかりません。リポジトリ名とブランチを確かめてください。";
+  if (status === 409) return "別の場所で設定が更新されていました。読み込み直してから保存してください。";
+  return "GitHubとの通信に失敗しました(" + status + ")。";
+}
+
+/* ───────── タスクの設定 ───────── */
+
+function cfgOf(settings, name){
+  const c = (settings.tasks || {})[name];
+  const configured = !!c;
+  const s = c || {};
+  return {
+    min: (+s.min > 0) ? +s.min : 15,
+    place: s.place || ANYWHERE,
+    organs: (configured && Array.isArray(s.organs)) ? s.organs.slice() : ["目","手"],
+    mode: s.mode || "",
+    priority: +s.priority || 0,
+    fixed: toMin(s.fixed) !== null ? s.fixed : "",
+    configured: configured,
+  };
+}
+
+/* ───────── 組み立て ───────── */
+
+function classify(tasksDoc, doneLocal){
+  const out = { schedulable: [], done: [], reset: [], ondemand: [] };
+  for (const t of (tasksDoc && tasksDoc.tasks) || []) {
+    if (doneLocal.has(t.name)) { out.done.push(t); continue; }
+    if (t.status === "要再設定") { out.reset.push(t); continue; }
+    if (t.status === "随時") { out.ondemand.push(t); continue; }
+    if (SKIP.includes(t.status)) continue;
+    if (DONE.includes(t.check) && !AUTO.includes(t.status)) { out.done.push(t); continue; }
+    out.schedulable.push(t);
+  }
+  return out;
+}
+
+function buildPlan(tasksDoc, settings, doneLocal, events){
+  const weights = (tasksDoc && tasksDoc.weights) || {};
+  const W = Object.assign({ priority: 1, place: 3, mode: 2, reach: 3 }, settings.weights || {});
+  const groups = classify(tasksDoc, doneLocal || new Set());
+
+  // タスクの価値。国力に効く量は 重み × 省の重要度 なので、それをそのまま使う。
+  // 手で付けた優先度(-2〜+2)は 0.5〜1.5 倍の係数として掛ける。
+  function rawValue(task, c){
+    const mw = Math.max(0, ...(task.ministries || []).map(m => +weights[m] || 0));
+    const w = (+task.weight > 0) ? +task.weight : 1;
+    return w * Math.max(mw, 1) * (1 + 0.25 * c.priority);
+  }
+  // 今日の候補のうち最大を10として揃える。場所・型の加点と同じ物差しにするため
+  const maxValue = Math.max(1e-9, ...groups.schedulable.map(t => rawValue(t, cfgOf(settings, t.name))));
+  // 順位 = 価値 × (リーチなら倍率)。落としたときに失うものの大きさで並べる
+  function prio(x){
+    if (x.isEvent) return 0;
+    const v = 10 * rawValue(x.task, x.c) / maxValue;
+    return v * (x.task.reach ? Math.max(1, +W.reach || 1) : 1);
+  }
+  function score(x, prev){
+    let s = W.priority * prio(x);
+    if (prev && x.c.place === prev.c.place && x.c.place !== ANYWHERE) s += W.place;
+    if (prev && x.c.mode && x.c.mode === prev.c.mode) s += W.mode;
+    return s;
+  }
+  function pickBest(pool, prev, fits){
+    let best = null, bestScore = -Infinity;
+    for (const x of pool) {
+      if (fits && !fits(x)) continue;
+      const s = score(x, prev);
+      if (s > bestScore) { best = x; bestScore = s; }
+    }
+    return best;
+  }
+  function candidates(pools){
+    const cands = [];
+    for (const pool of pools) for (const x of pool) cands.push({ x, pool });
+    cands.sort((a, b) => prio(b.x) - prio(a.x));
+    return cands;
+  }
+  function take(x, pool){
+    const i = pool.indexOf(x);
+    if (i < 0) return false;
+    pool.splice(i, 1);
+    return true;
+  }
+
+  // 主タスクに、使う器官が重ならず場所の合うものを同時に重ねる
+  function attach(item, pools){
+    const used = new Set(item.c.organs);
+    for (const { x, pool } of candidates(pools)) {
+      if (item.nagara.length >= 2) break;
+      if (!item.c.configured || !x.c.configured) continue;
+      if (x.c.fixed) continue;
+      if (x.c.min > item.c.min) continue;
+      if (!(x.c.place === ANYWHERE || x.c.place === item.c.place)) continue;
+      if (x.c.organs.some(o => used.has(o))) continue;
+      if (!take(x, pool)) continue;
+      x.c.organs.forEach(o => used.add(o));
+      item.nagara.push(x);
+    }
+  }
+  // 用事には、空いている器官でできるタスクを順番に詰める。長い用事ほど多く乗る
+  function attachSeq(item, pools){
+    let budget = item.c.min;
+    for (const { x, pool } of candidates(pools)) {
+      if (item.nagara.length >= 4) break;
+      if (!x.c.configured || x.c.fixed) continue;
+      if (x.c.min > budget) continue;
+      if (!(x.c.place === ANYWHERE || x.c.place === item.c.place)) continue;
+      if (x.c.organs.some(o => item.c.organs.includes(o))) continue;
+      if (!take(x, pool)) continue;
+      budget -= x.c.min;
+      item.nagara.push(x);
+    }
+    item.sequential = item.nagara.length > 1;
+  }
+
+  const blockNames = Object.keys(settings.blocks || {});
+  const byBlock = {}; blockNames.forEach(n => byBlock[n] = []);
+  const flex = [];
+  for (const t of groups.schedulable) {
+    const x = { task: t, c: cfgOf(settings, t.name) };
+    if (byBlock[t.slot]) byBlock[t.slot].push(x); else flex.push(x);
+  }
+
+  const ordered = blockNames
+    .map(n => ({ name: n, start: toMin(settings.blocks[n].start), end: toMin(settings.blocks[n].end) }))
+    .filter(b => b.start !== null && b.end !== null)
+    .sort((a, b) => a.start - b.start);
+
+  // 用事は動かせない区間。時刻が重なる枠に入れ、どの枠にも重ならなければ単独で置く
+  const evInBlock = {}; ordered.forEach(b => evInBlock[b.name] = []);
+  const evAlone = [];
+  for (const e of (events || [])) {
+    const a = toMin(e.start), z = toMin(e.end);
+    if (a === null || z === null || z <= a) continue;
+    const x = {
+      isEvent: true, ev: e,
+      task: { name: e.name, ministries: [], reach: false },
+      c: { min: z - a, place: e.place || ANYWHERE,
+           organs: Array.isArray(e.organs) ? e.organs.slice() : ORGANS.slice(),
+           mode: "", priority: 0, fixed: e.start, configured: true },
+    };
+    const b = ordered.find(b => a < b.end && z > b.start);
+    if (b) evInBlock[b.name].push(x); else evAlone.push(x);
+  }
+
+  function mkItem(x, at){
+    const s = x.isEvent ? toMin(x.ev.start) : at;
+    const e = x.isEvent ? toMin(x.ev.end) : at + x.c.min;
+    return { task: x.task, c: x.c, start: s, end: e, nagara: [], transferFrom: null,
+             isEvent: !!x.isEvent, ev: x.ev || null, sequential: false };
+  }
+  function transfer(prev, x){
+    return (prev && prev.c.place !== x.c.place && prev.c.place !== ANYWHERE && x.c.place !== ANYWHERE)
+      ? prev.c.place : null;
+  }
+
+  // 枠の外の用事を先に処理する。通学のような空き時間に、一日中のタスクを乗せるため
+  const alone = evAlone.sort((p, q) => toMin(p.ev.start) - toMin(q.ev.start)).map(x => {
+    const it = mkItem(x);
+    attachSeq(it, [flex]);
+    return it;
+  });
+
+  const blocks = [];
+  for (const b of ordered) {
+    const pool = byBlock[b.name] || [];
+    let fixed = pool.filter(x => x.c.fixed).concat(evInBlock[b.name])
+      .sort((p, q) => toMin(p.c.fixed) - toMin(q.c.fixed));
+    const rest = pool.filter(x => !x.c.fixed);
+    const items = [];
+    let cursor = b.start, prev = null;
+
+    const place = (x, at) => {
+      const it = mkItem(x, at);
+      it.transferFrom = transfer(prev, x);
+      if (x.isEvent) attachSeq(it, [rest, flex]); else attach(it, [rest, flex]);
+      items.push(it);
+      prev = x;
+      cursor = Math.max(cursor, it.end);
+    };
+
+    // 枠のタスクを並べる。固定時刻のものと用事は、その時刻に差し込む
+    while (rest.length || fixed.length) {
+      const nf = fixed[0];
+      const fAt = nf ? toMin(nf.c.fixed) : Infinity;
+      if (nf && fAt <= cursor) { fixed.shift(); place(nf, Math.max(cursor, fAt)); continue; }
+      const gap = fAt - cursor;
+      const pick = pickBest(rest, prev, x => x.c.min <= gap);
+      if (!pick) {
+        if (nf) { fixed.shift(); place(nf, fAt); continue; }
+        break;
+      }
+      rest.splice(rest.indexOf(pick), 1);
+      place(pick, cursor);
+    }
+    // 枠に空きがあれば「一日中」のタスクで埋める
+    while (true) {
+      const room = b.end - cursor;
+      const pick = pickBest(flex, prev, x => !x.c.fixed && x.c.min <= room);
+      if (!pick) break;
+      flex.splice(flex.indexOf(pick), 1);
+      place(pick, cursor);
+    }
+
+    blocks.push({ name: b.name, start: b.start, end: b.end, items,
+                  used: cursor - b.start, overflow: Math.max(0, cursor - b.end) });
+  }
+
+  // 入りきらなかった「一日中」は、場所と型がつながる順に並べる
+  const leftover = [];
+  let prev = null;
+  while (flex.length) {
+    const pick = pickBest(flex, prev);
+    flex.splice(flex.indexOf(pick), 1);
+    const it = { task: pick.task, c: pick.c, nagara: [], transferFrom: transfer(prev, pick) };
+    attach(it, [flex]);
+    leftover.push(it);
+    prev = pick;
+  }
+
+  // 枠と単独の用事を、時刻順に一本の流れにする
+  const sections = blocks.filter(b => b.items.length).map(b => ({ type: "block", start: b.start, block: b }))
+    .concat(alone.map(it => ({ type: "event", start: it.start, item: it })))
+    .sort((p, q) => p.start - q.start);
+
+  const unconfigured = groups.schedulable.filter(t => !(settings.tasks || {})[t.name]).length;
+  return { blocks, alone, sections, leftover, done: groups.done, reset: groups.reset,
+           ondemand: groups.ondemand, unconfigured };
+}
+
+/* ───────── 描画:今日 ───────── */
+
+function renderToday(){
+  const doc = state.tasksDoc;
+  const dateEl = document.getElementById("date");
+  const notices = document.getElementById("notices");
+  const planEl = document.getElementById("plan");
+  notices.innerHTML = "";
+
+  if (!doc) {
+    dateEl.textContent = "—";
+    document.getElementById("events-panel").innerHTML = "";
+    planEl.innerHTML = '<div class="empty">接続タブでリポジトリとトークンを入れると、今日の行軍表が出ます。</div>';
+    return;
+  }
+
+  dateEl.innerHTML = esc(doc.date) + "(" + DAYS[weekdayOf(doc.date)] + ")<br><small>" + esc(doc.generated_at || "") + " 時点</small>";
+  if (doc.date !== todayJST()) {
+    notices.insertAdjacentHTML("beforeend",
+      '<p class="notice">これは ' + esc(doc.date) + ' のタスクです。今日のぶんはまだ届いていません。</p>');
+  }
+
+  const events = eventsFor(doc.date);
+  renderEventsPanel(events);
+
+  const done = getDoneLocal(doc.date);
+  const plan = buildPlan(doc, state.settings, done, events);
+  const places = state.settings.places || [];
+
+  const over = plan.blocks.filter(b => b.overflow > 0);
+  if (over.length) {
+    notices.insertAdjacentHTML("beforeend", '<p class="notice warn">' +
+      over.map(b => esc(b.name) + "は" + dur(b.overflow) + "あふれています").join("。") +
+      "。枠を広げるか、タスクを減らしてください。</p>");
+  }
+  if (plan.unconfigured > 0) {
+    notices.insertAdjacentHTML("beforeend", '<p class="notice">まだ設定していないタスクが' +
+      plan.unconfigured + "件あります。設定タブで所要時間と場所を入れると、組み立てが正確になります。</p>");
+  }
+
+  let html = "";
+  for (const sec of plan.sections) {
+    if (sec.type === "event") {
+      html += '<div class="block">' + stopHtml(sec.item, fmt(sec.item.start), places) + "</div>";
+      continue;
+    }
+    const b = sec.block;
+    html += '<div class="block"><div class="block-head"><h2>' + esc(b.name) + '</h2>' +
+            '<span class="span">' + fmt(b.start) + "–" + fmt(b.end) + "　" +
+            (b.overflow > 0 ? '<span class="over">' + dur(b.used) + " / " + dur(b.end - b.start) + "</span>"
+                            : dur(b.used) + " / " + dur(b.end - b.start)) +
+            "</span></div>";
+    for (const it of b.items) html += stopHtml(it, fmt(it.start), places);
+    html += "</div>";
+  }
+  if (plan.leftover.length) {
+    const total = plan.leftover.reduce((s, it) => s + it.c.min, 0);
+    html += '<div class="block"><div class="block-head"><h2>空いた時間に</h2>' +
+            '<span class="span">' + dur(total) + "</span></div>";
+    for (const it of plan.leftover) html += stopHtml(it, "", places);
+    html += "</div>";
+  }
+  if (!html) html = '<div class="empty">今日やることは残っていません。</div>';
+
+  const extra = [];
+  if (plan.ondemand.length) extra.push(['随時(条件が来たら)', plan.ondemand]);
+  if (plan.reset.length) extra.push(['要再設定', plan.reset]);
+  if (plan.done.length) extra.push(['済み', plan.done]);
+  for (const [label, arr] of extra) {
+    html += '<details class="more"><summary>' + esc(label) + "　" + arr.length + "件</summary><ul class=\"list\">" +
+      arr.map(t => '<li><span>' + esc(t.name) + '</span><span class="r">' +
+        (label === "済み" ? '<button class="btn ghost" data-undo="' + esc(t.name) + '" style="padding:.1rem .6rem">戻す</button>' : esc(t.slot || "")) +
+        "</span></li>").join("") + "</ul></details>";
+  }
+
+  planEl.innerHTML = html;
+}
+
+function stopHtml(it, time, places){
+  const c = it.c;
+  const color = placeColor(c.place, places);
+  let pre = "";
+  if (it.transferFrom) {
+    pre = '<div class="transfer"><span></span><span class="line"></span><span class="txt">' +
+          esc(it.transferFrom) + "から" + esc(c.place) + "へ</span></div>";
+  }
+  const meta = [];
+  meta.push('<span class="pl">' + esc(c.place) + "</span>");
+  if (it.isEvent) {
+    meta.push('<span class="span-t">' + fmt(it.start) + "–" + fmt(it.end) + "</span>");
+  } else {
+    meta.push("<span>" + dur(c.min) + "</span>");
+    if (c.mode) meta.push("<span>" + esc(c.mode) + "</span>");
+    if (it.task.reach) meta.push('<span class="reach">今日やらないと落ちる</span>');
+    if (!c.configured) meta.push('<span class="unset">未設定</span>');
+  }
+  const nag = it.nagara.length
+    ? '<div class="nagara">' + it.nagara.map(n => "<div>＋ " + esc(n.task.name) + "<span>" + dur(n.c.min) + "</span></div>").join("") +
+      (it.sequential ? '<div><span style="margin-left:0">上から順に</span></div>' : "") + "</div>"
+    : "";
+  if (it.isEvent) {
+    return pre + '<div class="stop ev" style="--c:' + color + '">' +
+      '<span class="t">' + esc(time) + '</span><span class="line"></span>' +
+      '<div class="body"><div class="name">' + esc(it.task.name) + '</div><div class="meta">' + meta.join("") + "</div>" + nag +
+      "</div></div>";
+  }
+  return pre + '<div class="stop" style="--c:' + color + '">' +
+    '<span class="t">' + esc(time) + '</span><span class="line"></span>' +
+    '<div class="body"><button class="row" data-done="' + esc(it.task.name) + '" aria-label="' + esc(it.task.name) + 'を済みにする">' +
+    '<div class="name">' + esc(it.task.name) + '</div><div class="meta">' + meta.join("") + "</div>" + nag +
+    "</button></div></div>";
+}
+
+/* ───────── 用事 ───────── */
+
+// その日の用事。手で入れたものに、曜日で自動に入るよく使う用事を足す
+function eventsFor(date){
+  const day = state.events[date] || { items: [], dismissed: [] };
+  const items = (day.items || []).map(e => Object.assign({}, e));
+  const wd = weekdayOf(date);
+  for (const p of state.settings.presets || []) {
+    if (!(p.days || []).includes(wd)) continue;
+    if ((day.dismissed || []).includes(p.id)) continue;
+    if (items.some(e => e.preset === p.id)) continue;
+    items.push({ id: "auto-" + p.id, preset: p.id, name: p.name, start: p.start, end: p.end,
+                 place: p.place, organs: p.organs, auto: true });
+  }
+  return items.filter(e => toMin(e.start) !== null && toMin(e.end) !== null)
+              .sort((a, b) => toMin(a.start) - toMin(b.start));
+}
+
+function dayOf(date){
+  if (!state.events[date]) state.events[date] = { items: [], dismissed: [] };
+  const d = state.events[date];
+  d.items = d.items || []; d.dismissed = d.dismissed || [];
+  return d;
+}
+
+function togglePreset(date, presetId){
+  const p = (state.settings.presets || []).find(x => x.id === presetId);
+  if (!p) return;
+  const d = dayOf(date);
+  const now = eventsFor(date).find(e => e.preset === presetId);
+  if (now) {
+    removeEvent(date, now.id);
+    return;
+  }
+  d.dismissed = d.dismissed.filter(x => x !== presetId);
+  d.items.push({ id: uid(), preset: p.id, name: p.name, start: p.start, end: p.end,
+                 place: p.place, organs: (p.organs || []).slice() });
+}
+
+function removeEvent(date, id){
+  const d = dayOf(date);
+  if (id.indexOf("auto-") === 0) {
+    const pid = id.slice(5);
+    if (!d.dismissed.includes(pid)) d.dismissed.push(pid);
+    return;
+  }
+  const ev = d.items.find(e => e.id === id);
+  d.items = d.items.filter(e => e.id !== id);
+  // 曜日で自動に入るものを消したときは、その日だけ出ないようにする
+  if (ev && ev.preset && !d.dismissed.includes(ev.preset)) d.dismissed.push(ev.preset);
+}
+
+function editEventTime(date, id, key, value){
+  if (toMin(value) === null) return;
+  const d = dayOf(date);
+  let ev = d.items.find(e => e.id === id);
+  if (!ev && id.indexOf("auto-") === 0) {
+    // 自動のものを直したら、その日の用事として書き出す
+    const auto = eventsFor(date).find(e => e.id === id);
+    if (!auto) return;
+    ev = { id: uid(), preset: auto.preset, name: auto.name, start: auto.start, end: auto.end,
+           place: auto.place, organs: (auto.organs || []).slice() };
+    d.items.push(ev);
+  }
+  if (ev) ev[key] = value;
+}
+
+function pruneEvents(){
+  const keep = new Date(Date.now() + 9*3600*1000 - KEEP_EVENT_DAYS*86400*1000).toISOString().slice(0,10);
+  for (const k of Object.keys(state.events)) if (k < keep) delete state.events[k];
+}
+
+async function saveEvents(){
+  const st = document.getElementById("ev-status");
+  if (!state.conn) return false;
+  if (st) { st.classList.remove("err"); st.textContent = "保存しています…"; }
+  try {
+    pruneEvents();
+    state.eventsSha = await writeJson(EVENTS_PATH, state.events, state.eventsSha);
+    lsSet(KEY_CACHE, cachePayload());
+    if (st) st.textContent = "保存しました";
+    return true;
+  } catch (e) {
+    if (st) { st.classList.add("err"); st.textContent = e.message; }
+    return false;
+  }
+}
+
+function renderEventsPanel(events){
+  const doc = state.tasksDoc;
+  const box = document.getElementById("events-panel");
+  const presets = state.settings.presets || [];
+  const places = state.settings.places || [];
+  const chips = presets.map(p => {
+    const on = events.some(e => e.preset === p.id);
+    return '<button type="button" data-preset="' + esc(p.id) + '" aria-pressed="' + on + '">' + esc(p.name) + "</button>";
+  }).join("") + '<button type="button" class="new" data-ev-new>新しい用事</button>';
+
+  const list = events.map(e =>
+    '<li data-ev="' + esc(e.id) + '"><div class="en">' + esc(e.name) + "<small>" + esc(e.place || ANYWHERE) +
+      (e.auto ? "・曜日で自動" : "") + "</small></div>" +
+    '<div class="times"><input type="time" data-evk="start" value="' + esc(e.start) + '" aria-label="' + esc(e.name) + 'の開始">' +
+    "–" + '<input type="time" data-evk="end" value="' + esc(e.end) + '" aria-label="' + esc(e.name) + 'の終了"></div>' +
+    '<button type="button" class="del" data-ev-del="' + esc(e.id) + '" aria-label="' + esc(e.name) + 'を外す">外す</button></li>'
+  ).join("");
+
+  const placeOpts = places.map(p => '<option' + (p === "外" ? " selected" : "") + ">" + esc(p) + "</option>").join("");
+  const organs = ORGANS.map(o => '<button type="button" aria-pressed="true" data-nf-organ="' + o + '">' + o + "</button>").join("");
+
+  box.innerHTML = '<div class="evp"><div class="evp-h"><h2>用事</h2><span>押すと今日に入ります</span></div>' +
+    '<div class="chips">' + chips + "</div>" +
+    (list ? '<ul class="ev-list">' + list + "</ul>" : "") +
+    '<div class="ev-form"' + (state.evFormOpen ? "" : " hidden") + ' id="ev-form">' +
+      '<div class="grid2">' +
+        '<div class="f"><label for="nf-name">名前</label><input id="nf-name" type="text" placeholder="歯医者"></div>' +
+        '<div class="f"><label for="nf-place">場所</label><select id="nf-place">' + placeOpts + "</select></div>" +
+        '<div class="f"><label for="nf-start">開始</label><input id="nf-start" type="time" value="17:00"></div>' +
+        '<div class="f"><label for="nf-end">終了</label><input id="nf-end" type="time" value="18:00"></div>' +
+      "</div>" +
+      '<div class="f" style="margin-top:.5rem"><label>用事の間ふさがる器官</label></div>' +
+      '<div class="organs" role="group" aria-label="ふさがる器官">' + organs + "</div>" +
+      '<div class="row"><label style="font-size:.85rem"><input type="checkbox" id="nf-save"> よく使う用事に登録する</label></div>' +
+      '<div class="row"><button type="button" class="btn" data-ev-add>今日に入れる</button>' +
+      '<button type="button" class="btn ghost" data-ev-cancel>やめる</button></div>' +
+    "</div>" +
+    '<span class="status" id="ev-status"></span></div>';
+}
+
+/* ───────── 描画:設定 ───────── */
+
+function allTodayNames(){
+  const doc = state.tasksDoc;
+  if (!doc) return [];
+  return doc.tasks.filter(t => !SKIP.includes(t.status)).map(t => t);
+}
+
+function renderSettings(){
+  const s = state.settings;
+  const tasks = allTodayNames();
+  const box = document.getElementById("task-edits");
+
+  if (!tasks.length) {
+    box.innerHTML = '<div class="empty">接続すると、今日のタスクがここに並びます。</div>';
+  } else {
+    // 今日の組み立てに効く未設定 → それ以外の未設定(随時・済み) → 設定済み → 要再設定
+    const rank = t => {
+      const set = !!s.tasks[t.name];
+      if (t.status === "要再設定") return 3;
+      if (set) return 2;
+      const doneToday = DONE.includes(t.check) && !AUTO.includes(t.status);
+      return (t.status === "随時" || doneToday) ? 1 : 0;
+    };
+    const sorted = tasks.slice().sort((a, b) =>
+      (rank(a) - rank(b)) || a.name.localeCompare(b.name, "ja"));
+    const placeOpts = (s.places || []).map(p => p);
+    box.innerHTML = sorted.map((t, i) => {
+      const c = cfgOf(s, t.name);
+      const id = "t" + i;
+      const opts = (placeOpts.includes(c.place) ? placeOpts : placeOpts.concat([c.place]))
+        .map(p => '<option' + (p === c.place ? " selected" : "") + ">" + esc(p) + "</option>").join("");
+      const modeOpts = MODES.map(([v, l]) => '<option value="' + v + '"' + (v === c.mode ? " selected" : "") + ">" + (l || "なし") + "</option>").join("");
+      const prOpts = [-2,-1,0,1,2].map(v => '<option value="' + v + '"' + (v === c.priority ? " selected" : "") + ">" + (v > 0 ? "+" + v : v) + "</option>").join("");
+      const organs = ORGANS.map(o => '<button type="button" aria-pressed="' + (c.organs.includes(o)) + '" data-organ="' + o + '">' + o + "</button>").join("");
+      return '<div class="task-edit" data-name="' + esc(t.name) + '">' +
+        '<div class="tn">' + esc(t.name) + "<small>" + esc(t.slot || "時間帯なし") + (c.configured ? "" : "・未設定") + "</small></div>" +
+        '<div class="grid2">' +
+          '<div class="f"><label for="' + id + 'm">所要(分)</label><input id="' + id + 'm" data-k="min" type="number" min="1" step="1" value="' + c.min + '"></div>' +
+          '<div class="f"><label for="' + id + 'p">場所</label><select id="' + id + 'p" data-k="place">' + opts + "</select></div>" +
+          '<div class="f"><label for="' + id + 'd">集中の型</label><select id="' + id + 'd" data-k="mode">' + modeOpts + "</select></div>" +
+          '<div class="f"><label for="' + id + 'r">優先度</label><select id="' + id + 'r" data-k="priority">' + prOpts + "</select></div>" +
+          '<div class="f"><label for="' + id + 'f">固定の時刻</label><input id="' + id + 'f" data-k="fixed" type="time" value="' + esc(c.fixed) + '"></div>' +
+        "</div>" +
+        '<div class="organs" role="group" aria-label="使う器官">' + organs + "</div>" +
+      "</div>";
+    }).join("");
+  }
+
+  // 時間の枠
+  const be = document.getElementById("blocks-edit");
+  be.innerHTML = Object.keys(s.blocks).map(n =>
+    '<div class="row3" data-block="' + esc(n) + '"><strong>' + esc(n) + "</strong>" +
+    '<div class="f"><input type="time" data-bk="start" value="' + esc(s.blocks[n].start) + '" aria-label="' + esc(n) + 'の開始"></div>' +
+    '<div class="f"><input type="time" data-bk="end" value="' + esc(s.blocks[n].end) + '" aria-label="' + esc(n) + 'の終了"></div></div>'
+  ).join("");
+
+  // よく使う用事
+  const pe = document.getElementById("presets-edit");
+  const plist = s.presets || [];
+  pe.innerHTML = plist.length ? plist.map((p, i) => {
+    const id = "p" + i;
+    const opts = (s.places || []).concat((s.places || []).includes(p.place) ? [] : [p.place])
+      .map(x => '<option' + (x === p.place ? " selected" : "") + ">" + esc(x) + "</option>").join("");
+    const organs = ORGANS.map(o => '<button type="button" aria-pressed="' + (p.organs || []).includes(o) + '" data-porgan="' + o + '">' + o + "</button>").join("");
+    const days = DAYS.map((d, k) => '<button type="button" aria-pressed="' + (p.days || []).includes(k) + '" data-pday="' + k + '">' + d + "</button>").join("");
+    return '<div class="task-edit" data-preset-id="' + esc(p.id) + '">' +
+      '<div class="grid2">' +
+        '<div class="f"><label for="' + id + 'n">名前</label><input id="' + id + 'n" data-pk="name" type="text" value="' + esc(p.name) + '"></div>' +
+        '<div class="f"><label for="' + id + 'l">場所</label><select id="' + id + 'l" data-pk="place">' + opts + "</select></div>" +
+        '<div class="f"><label for="' + id + 's">開始</label><input id="' + id + 's" data-pk="start" type="time" value="' + esc(p.start) + '"></div>' +
+        '<div class="f"><label for="' + id + 'e">終了</label><input id="' + id + 'e" data-pk="end" type="time" value="' + esc(p.end) + '"></div>' +
+      "</div>" +
+      '<div class="f" style="margin-top:.5rem"><label>用事の間ふさがる器官</label></div>' +
+      '<div class="organs" role="group" aria-label="ふさがる器官">' + organs + "</div>" +
+      '<div class="f" style="margin-top:.5rem"><label>自動で入れる曜日</label></div>' +
+      '<div class="days" role="group" aria-label="自動で入れる曜日">' + days + "</div>" +
+      '<button type="button" class="btn ghost" data-pdel style="margin-top:.6rem;padding:.25rem .8rem">この用事を消す</button>' +
+    "</div>";
+  }).join("") : '<div class="empty">バイトや通学のように繰り返す用事を登録しておくと、入れるのが楽になります。</div>';
+
+  document.getElementById("places").value = (s.places || []).join("、");
+  document.getElementById("w-place").value = s.weights.place;
+  document.getElementById("w-mode").value = s.weights.mode;
+  document.getElementById("w-priority").value = s.weights.priority;
+  document.getElementById("w-reach").value = s.weights.reach;
+  updateSaveBar();
+}
+
+function ensureTask(name){
+  const s = state.settings;
+  if (!s.tasks[name]) {
+    const c = cfgOf(s, name);
+    s.tasks[name] = { min: c.min, place: c.place, organs: c.organs, mode: c.mode, priority: c.priority, fixed: c.fixed };
+  }
+  return s.tasks[name];
+}
+
+function markDirty(){
+  state.dirty = true;
+  updateSaveBar();
+  renderToday();
+}
+function updateSaveBar(){
+  const btn = document.getElementById("save");
+  btn.disabled = !state.dirty || !state.conn;
+  const st = document.getElementById("save-status");
+  if (state.dirty && !st.classList.contains("err")) st.textContent = "保存していない変更があります";
+}
+
+/* ───────── 読み込みと保存 ───────── */
+
+async function loadAll(){
+  const st = document.getElementById("conn-status");
+  st.classList.remove("err");
+  st.textContent = "読み込んでいます…";
+  try {
+    const [t, s, ev] = await Promise.all([readJson(TASKS_PATH), readJson(SETTINGS_PATH), readJson(EVENTS_PATH)]);
+    if (!t.data) throw new Error(TASKS_PATH + " がまだありません。Actions の Roadmap tasks を実行してください。");
+    state.tasksDoc = t.data;
+    state.settings = normalizeSettings(s.data);
+    state.settingsSha = s.sha;
+    state.events = (ev.data && typeof ev.data === "object") ? ev.data : {};
+    state.eventsSha = ev.sha;
+    state.dirty = false;
+    lsSet(KEY_CACHE, cachePayload());
+    st.textContent = "読み込みました(" + state.tasksDoc.tasks.length + "件)";
+    renderToday(); renderSettings();
+    return true;
+  } catch (e) {
+    st.classList.add("err");
+    st.textContent = e.message;
+    return false;
+  }
+}
+
+function cachePayload(){
+  return { tasksDoc: state.tasksDoc, settings: state.settings, settingsSha: state.settingsSha,
+           events: state.events, eventsSha: state.eventsSha };
+}
+
+function normalizeSettings(s){
+  const base = clone(DEFAULT_SETTINGS);
+  if (!s) return base;
+  return {
+    version: 1,
+    blocks: (s.blocks && Object.keys(s.blocks).length) ? s.blocks : base.blocks,
+    weights: Object.assign(base.weights, s.weights || {}),
+    places: (Array.isArray(s.places) && s.places.length) ? s.places : base.places,
+    presets: Array.isArray(s.presets) ? s.presets.filter(p => p && p.id).map(p => ({
+      id: String(p.id), name: p.name || "用事", start: p.start || "17:00", end: p.end || "18:00",
+      place: p.place || "外", organs: Array.isArray(p.organs) ? p.organs : ORGANS.slice(),
+      days: Array.isArray(p.days) ? p.days.map(Number).filter(n => n >= 0 && n <= 6) : [],
+    })) : [],
+    tasks: s.tasks || {},
+  };
+}
+
+async function saveSettings(){
+  const st = document.getElementById("save-status");
+  const btn = document.getElementById("save");
+  st.classList.remove("err");
+  st.textContent = "保存しています…";
+  btn.disabled = true;
+  try {
+    state.settingsSha = await writeJson(SETTINGS_PATH, state.settings, state.settingsSha);
+    state.dirty = false;
+    lsSet(KEY_CACHE, cachePayload());
+    st.textContent = "保存しました";
+    return true;
+  } catch (e) {
+    st.classList.add("err");
+    st.textContent = e.message;
+    btn.disabled = false;
+    return false;
+  } finally {
+    updateSaveBar();
+  }
+}
+
+/* ───────── 操作 ───────── */
+
+function showView(name){
+  document.querySelectorAll(".view").forEach(v => v.hidden = (v.id !== "view-" + name));
+  document.querySelectorAll("nav.tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.view === name)));
+  window.scrollTo(0, 0);
+}
+
+function bind(){
+  document.querySelectorAll("nav.tabs button").forEach(b =>
+    b.addEventListener("click", () => showView(b.dataset.view)));
+
+  // 今日:タップで済み/戻す
+  document.getElementById("plan").addEventListener("click", e => {
+    const doc = state.tasksDoc; if (!doc) return;
+    const d = e.target.closest("[data-done]");
+    const u = e.target.closest("[data-undo]");
+    if (!d && !u) return;
+    const set = getDoneLocal(doc.date);
+    if (d) set.add(d.dataset.done);
+    if (u) set.delete(u.dataset.undo);
+    setDoneLocal(doc.date, set);
+    renderToday();
+  });
+
+  // 今日:用事の欄
+  const evp = document.getElementById("events-panel");
+  evp.addEventListener("click", async e => {
+    const doc = state.tasksDoc; if (!doc) return;
+    const chip = e.target.closest("[data-preset]");
+    if (chip) { togglePreset(doc.date, chip.dataset.preset); renderToday(); await saveEvents(); return; }
+    if (e.target.closest("[data-ev-new]")) { state.evFormOpen = true; renderToday(); return; }
+    if (e.target.closest("[data-ev-cancel]")) { state.evFormOpen = false; renderToday(); return; }
+    const del = e.target.closest("[data-ev-del]");
+    if (del) { removeEvent(doc.date, del.dataset.evDel); renderToday(); await saveEvents(); return; }
+    const org = e.target.closest("[data-nf-organ]");
+    if (org) { org.setAttribute("aria-pressed", String(org.getAttribute("aria-pressed") !== "true")); return; }
+    if (e.target.closest("[data-ev-add]")) {
+      const name = document.getElementById("nf-name").value.trim();
+      const start = document.getElementById("nf-start").value;
+      const end = document.getElementById("nf-end").value;
+      const place = document.getElementById("nf-place").value;
+      const organs = Array.from(evp.querySelectorAll('[data-nf-organ][aria-pressed="true"]')).map(b => b.dataset.nfOrgan);
+      const st = document.getElementById("ev-status");
+      if (!name) { st.classList.add("err"); st.textContent = "名前を入れてください。"; return; }
+      if (toMin(start) === null || toMin(end) === null || toMin(end) <= toMin(start)) {
+        st.classList.add("err"); st.textContent = "終了は開始より後にしてください。"; return;
+      }
+      const register = document.getElementById("nf-save").checked;
+      const ev = { id: uid(), name, start, end, place, organs };
+      if (register) {
+        const p = { id: uid(), name, start, end, place, organs: organs.slice(), days: [] };
+        state.settings.presets = (state.settings.presets || []).concat([p]);
+        ev.preset = p.id;
+      }
+      dayOf(doc.date).items.push(ev);
+      state.evFormOpen = false;
+      renderToday(); renderSettings();
+      await saveEvents();
+      if (register) await saveSettings();
+      return;
+    }
+  });
+  evp.addEventListener("change", async e => {
+    const doc = state.tasksDoc; if (!doc) return;
+    const row = e.target.closest("[data-ev]");
+    const k = e.target.dataset.evk;
+    if (!row || !k) return;
+    editEventTime(doc.date, row.dataset.ev, k, e.target.value);
+    renderToday();
+    await saveEvents();
+  });
+
+  // 設定:よく使う用事
+  const pe = document.getElementById("presets-edit");
+  const presetOf = el => {
+    const row = el.closest("[data-preset-id]");
+    return row ? (state.settings.presets || []).find(p => p.id === row.dataset.presetId) : null;
+  };
+  pe.addEventListener("change", e => {
+    const p = presetOf(e.target); const k = e.target.dataset.pk;
+    if (!p || !k) return;
+    if ((k === "start" || k === "end") && toMin(e.target.value) === null) return;
+    p[k] = k === "name" ? (e.target.value.trim() || p.name) : e.target.value;
+    markDirty();
+  });
+  pe.addEventListener("click", e => {
+    const p = presetOf(e.target); if (!p) return;
+    const o = e.target.closest("[data-porgan]");
+    const d = e.target.closest("[data-pday]");
+    if (o) {
+      const on = o.getAttribute("aria-pressed") !== "true";
+      o.setAttribute("aria-pressed", String(on));
+      const set = new Set(p.organs || []); on ? set.add(o.dataset.porgan) : set.delete(o.dataset.porgan);
+      p.organs = ORGANS.filter(x => set.has(x));
+      markDirty(); return;
+    }
+    if (d) {
+      const on = d.getAttribute("aria-pressed") !== "true";
+      d.setAttribute("aria-pressed", String(on));
+      const k = +d.dataset.pday;
+      const set = new Set(p.days || []); on ? set.add(k) : set.delete(k);
+      p.days = Array.from(set).sort();
+      markDirty(); return;
+    }
+    if (e.target.closest("[data-pdel]")) {
+      state.settings.presets = state.settings.presets.filter(x => x !== p);
+      markDirty(); renderSettings();
+    }
+  });
+  document.getElementById("add-preset").addEventListener("click", () => {
+    state.settings.presets = (state.settings.presets || []).concat([{
+      id: uid(), name: "新しい用事", start: "17:00", end: "21:00", place: "外",
+      organs: ORGANS.slice(), days: [],
+    }]);
+    markDirty(); renderSettings();
+  });
+
+  // 設定:タスクごとの値
+  const edits = document.getElementById("task-edits");
+  edits.addEventListener("change", e => {
+    const row = e.target.closest(".task-edit"); if (!row) return;
+    const k = e.target.dataset.k; if (!k) return;
+    const t = ensureTask(row.dataset.name);
+    if (k === "min") t.min = Math.max(1, +e.target.value || 1);
+    else if (k === "priority") t.priority = +e.target.value;
+    else t[k] = e.target.value;
+    markDirty();
+  });
+  edits.addEventListener("click", e => {
+    const b = e.target.closest("[data-organ]"); if (!b) return;
+    const row = b.closest(".task-edit");
+    const t = ensureTask(row.dataset.name);
+    const o = b.dataset.organ;
+    const on = b.getAttribute("aria-pressed") !== "true";
+    b.setAttribute("aria-pressed", String(on));
+    const set = new Set(t.organs || []);
+    on ? set.add(o) : set.delete(o);
+    t.organs = ORGANS.filter(x => set.has(x));
+    markDirty();
+  });
+
+  document.getElementById("blocks-edit").addEventListener("change", e => {
+    const row = e.target.closest("[data-block]"); if (!row) return;
+    const k = e.target.dataset.bk; if (!k || toMin(e.target.value) === null) return;
+    state.settings.blocks[row.dataset.block][k] = e.target.value;
+    markDirty();
+  });
+  document.getElementById("places").addEventListener("change", e => {
+    const list = e.target.value.split(/[、,，\s]+/).map(x => x.trim()).filter(Boolean);
+    if (!list.includes(ANYWHERE)) list.push(ANYWHERE);
+    state.settings.places = Array.from(new Set(list));
+    markDirty(); renderSettings();
+  });
+  ["place","mode","priority","reach"].forEach(k => {
+    document.getElementById("w-" + k).addEventListener("change", e => {
+      const min = (k === "reach") ? 1 : 0;
+      state.settings.weights[k] = Math.max(min, +e.target.value || min);
+      markDirty();
+    });
+  });
+
+  document.getElementById("save").addEventListener("click", saveSettings);
+
+  // 接続
+  document.getElementById("connect").addEventListener("click", async () => {
+    const conn = {
+      owner: document.getElementById("c-owner").value.trim(),
+      repo: document.getElementById("c-repo").value.trim(),
+      branch: document.getElementById("c-branch").value.trim() || "main",
+      token: document.getElementById("c-token").value.trim(),
+    };
+    const st = document.getElementById("conn-status");
+    if (!conn.owner || !conn.repo || !conn.token) {
+      st.classList.add("err");
+      st.textContent = "ユーザー名・リポジトリ・トークンを入れてください。";
+      return;
+    }
+    state.conn = conn;
+    lsSet(KEY_CONN, conn);
+    if (await loadAll()) showView("today");
+  });
+}
+
+function boot(){
+  bind();
+  const conn = lsGet(KEY_CONN, null);
+  document.getElementById("c-owner").value = conn ? conn.owner : "";
+  document.getElementById("c-repo").value = conn ? conn.repo : "notion-daily";
+  document.getElementById("c-branch").value = conn ? conn.branch : "main";
+  document.getElementById("c-token").value = conn ? conn.token : "";
+
+  // 前回読み込んだぶんをまず出す。通信を待たずに見られるように
+  const cache = lsGet(KEY_CACHE, null);
+  if (cache && cache.tasksDoc) {
+    state.tasksDoc = cache.tasksDoc;
+    state.settings = normalizeSettings(cache.settings);
+    state.settingsSha = cache.settingsSha || null;
+    state.events = cache.events || {};
+    state.eventsSha = cache.eventsSha || null;
+  }
+  renderToday(); renderSettings();
+
+  if (conn && conn.owner && conn.token) {
+    state.conn = conn;
+    loadAll();
+  } else {
+    showView("connect");
+  }
+}
+
+window.__roadmap = { buildPlan, cfgOf, classify, state, loadAll, saveSettings, saveEvents, eventsFor,
+                     togglePreset, removeEvent, editEventTime, b64encode, b64decode, DEFAULT_SETTINGS };
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
+})();
+</script>
+</body>
+</html>
