@@ -256,6 +256,9 @@ details.rules .note{color:var(--sub);font-size:.8rem}
 .grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(8.5rem,1fr));gap:.5rem .7rem}
 .f label{display:block;font-size:.75rem;color:var(--sub);margin-bottom:.15rem}
 .f input,.f select{width:100%;padding:.35rem .45rem;border:1px solid var(--rule);background:#fff;border-radius:3px}
+.f input[type="checkbox"]{width:auto;padding:0;margin:0 .3rem 0 0;vertical-align:middle;accent-color:var(--ink)}
+.chk{display:flex;flex-wrap:wrap;gap:.35rem .9rem;margin-top:.2rem}
+.chk label{display:inline-flex;align-items:center;font-size:.88rem;color:var(--ink);margin:0;white-space:nowrap}
 .organs{display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.5rem}
 .organs button{border:1px solid var(--rule);background:#fff;border-radius:3px;padding:.2rem .65rem;cursor:pointer}
 .organs button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
@@ -271,7 +274,7 @@ details.rules .note{color:var(--sub);font-size:.8rem}
 /* 下のタブ */
 nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--sheet);border-top:1px solid var(--rule);
   display:flex;padding-bottom:env(safe-area-inset-bottom)}
-nav.tabs button{flex:1;border:none;background:none;padding:.8rem 0;cursor:pointer;color:var(--sub);font-weight:700}
+nav.tabs button{flex:1;border:none;background:none;padding:.8rem 0;cursor:pointer;color:var(--sub);font-weight:700;font-size:.86rem;white-space:nowrap;min-width:0}
 nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 var(--ink)}
 .view[hidden]{display:none}
 
@@ -364,13 +367,27 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
     </details>
   </section>
 
+  <section class="view" id="view-check" hidden>
+    <header class="head">
+      <h1>チェック</h1>
+      <div class="date" id="ck-date">—</div>
+    </header>
+    <div class="tk-bar">
+      <label>並べ方 <select id="ck-sort">
+        <option value="slot">時間帯</option><option value="prio">優先度順</option><option value="settle">定着度順</option>
+      </select></label>
+    </div>
+    <div id="tk-today"></div>
+    <div id="ck-detail"></div>
+    <span class="status tkst" id="ck-status"></span>
+  </section>
+
   <section class="view" id="view-tasks" hidden>
     <header class="head">
       <h1>タスク</h1>
       <div class="date" id="tk-date">—</div>
     </header>
     <div class="row" style="margin:0 0 .8rem"><button type="button" class="btn ghost" id="tk-new">タスクを足す</button></div>
-    <div id="tk-today"></div>
     <div class="tk-bar">
       <label>並べ方 <select id="tk-group"><option value="省">省ごと</option><option value="状況">状況ごと</option></select></label>
       <label>順番 <select id="tk-sort"><option value="name">名前順</option><option value="near">100%に近い順</option><option value="far">100%に遠い順</option></select></label>
@@ -378,7 +395,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
     <div id="tk-list"></div>
     <details class="more" id="tk-waves-box"><summary>WAVE・STAGEのリンク</summary><div id="tk-waves"></div></details>
     <div id="tk-detail"></div>
-    <span class="status" id="tk-status"></span>
+    <span class="status tkst" id="tk-status"></span>
   </section>
 
   <section class="view" id="view-settings" hidden>
@@ -442,6 +459,23 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
         <span class="status" id="conn-status"></span>
       </div>
     </div>
+
+    <div class="sec">
+      <h2>同期</h2>
+      <p class="hint">開いたときにも自動で読み込みます。別の端末で変えたあとや、毎朝の取り込みのあとに、すぐ見たいときに使います。</p>
+      <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center">
+        <button class="btn" id="reload-data" type="button">データを読み込み直す</button>
+        <span class="status" id="reload-status"></span>
+      </div>
+      <p class="hint" id="last-sync" style="margin-top:.5rem"></p>
+    </div>
+
+    <div class="sec">
+      <h2>アプリの版</h2>
+      <p class="hint">今開いている版:<b id="app-version"></b></p>
+      <p class="hint">GitHubに新しい index.html を置いたのに変わらないときは、ここを押すと手元に残った古い版を飛ばして開き直します。</p>
+      <button class="btn ghost" id="reload-app" type="button">アプリを最新の版にする</button>
+    </div>
   </section>
 
 </div>
@@ -450,6 +484,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 
 <nav class="tabs" role="tablist">
   <button role="tab" aria-selected="true" data-view="today">今日</button>
+  <button role="tab" aria-selected="false" data-view="check">チェック</button>
   <button role="tab" aria-selected="false" data-view="plan">計画</button>
   <button role="tab" aria-selected="false" data-view="tasks">タスク</button>
   <button role="tab" aria-selected="false" data-view="settings">設定</button>
@@ -462,6 +497,9 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 
 /* ───────── 定数 ───────── */
 
+// アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
+const APP_VERSION = "2026-10-04 r30";
+
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
 const EVENTS_PATH = "roadmap/events.json";
@@ -471,6 +509,8 @@ const OVERLAY_PATH = "roadmap/tasks/overlay.json";     // アプリで足した�
 const TASKLOG_DIR = "roadmap/tasks/log";
 const APPLOG_DIR = "roadmap/tasks/applog";          // アプリでつけた記録。取り込みでは上書きされない
 const KEY_TKVIEW = "roadmap-tkview";
+const KEY_CKVIEW = "roadmap-ckview";
+const CHECK_SLOTS = ["朝", "昼", "一日中", "夜"];
 const SLOT_ORDER = ["朝", "昼", "夜", "一日中"];
 const CHECK_OPTS = ["完了", "超過完了", "不完全な完了", "進行中", "不実行", "今日は該当しない"];
 const LIVE = ["新規", "進行中", "定着", "熟達", "実験", "随時", "要再設定"];
@@ -526,7 +566,8 @@ const state = {
   overlay: { version: 1, tasks: {}, waveUrls: {}, newTasks: [] },
   overlaySha: null,
   taskOpen: null,
-  taskMode: null,            // "record" のとき、詳しい画面に今日の記録の欄を出す
+  taskMode: null,            // "settings" で設定の欄を開いておく、"new" でタスクを足す画面
+  recordOpen: null,          // チェックのタブで開いている記録の画面
 };
 
 function clone(o){ return JSON.parse(JSON.stringify(o)); }
@@ -1685,10 +1726,21 @@ function taskStates(){
       target: curGen.target != null ? +curGen.target : null,
       check: row ? row.check : null,
       cycle: E.cycleIndex(def.cycle, rep.days, today),
+      progress: lastProgress(rep.days).value,
+      progressDate: lastProgress(rep.days).date,
     };
   });
   taskCache = { key, list };
   return list;
+}
+
+// 完了型の進捗率。最後に書いた値を、書き換えるまで引き継ぐ
+function lastProgress(days){
+  for (let i = days.length - 1; i >= 0; i--) {
+    const p = days[i].rec && days[i].rec.progress;
+    if (p !== undefined && p !== null && p !== "") return { value: +p, date: days[i].date };
+  }
+  return { value: null, date: null };
 }
 
 // その日の記録。アプリでつけたものがあれば、取り込んだものより優先する
@@ -1713,7 +1765,11 @@ const CHECK_MARK = { "完了": ["ok", "✓"], "超過完了": ["ok", "★"], "�
                      "進行中": ["ex", "…"], "まとめて実行待ち": ["ex", "…"] };
 
 function tkView(){ return Object.assign({ group: "省", sort: "name" }, lsGet(KEY_TKVIEW, {})); }
-function progressOf(t){ return t.target ? Math.min(1, t.genTotal / t.target) : null; }
+function isCompletion(t){ return t.def.kind === "完了型" || (!t.target && t.progress != null); }
+function progressOf(t){
+  if (t.target) return Math.min(1, t.genTotal / t.target);
+  return t.progress != null ? Math.min(1, t.progress / 100) : null;
+}
 
 function renderTasks(){
   const box = document.getElementById("tk-list");
@@ -1727,6 +1783,8 @@ function renderTasks(){
     document.getElementById("tk-waves").innerHTML = "";
     return;
   }
+  const ck = document.getElementById("ck-date");
+  if (ck) ck.textContent = taskDay();
   const v = tkView();
   document.getElementById("tk-group").value = v.group;
   document.getElementById("tk-sort").value = v.sort;
@@ -1780,13 +1838,30 @@ function renderTasks(){
   box.innerHTML = html;
   renderWaveLinks(list);
   renderTaskDetail();
+  renderRecordSheet();
 }
 
 // 今日の記録:今日行が立っているタスクを時間帯ごとに。○を押すだけで完了
+// 優先度。行軍表と同じ物差し:重み × 省の重要度 × 手で付けた優先度 × リーチなら倍率
+function isReach(t){ return (t.status === "新規" && t.miss >= 1) || (t.status === "進行中" && t.miss >= 2); }
+function prioScore(t){
+  const w = ((state.tasksDoc && state.tasksDoc.weights) || {});
+  const mw = Math.max(1, ...(t.def.ministries || []).map(m => +w[m] || 0));
+  const manual = +(((state.settings.tasks || {})[t.def.name] || {}).priority) || 0;
+  const R = Math.max(1, +((state.settings.weights || {}).reach) || 3);
+  return ((+t.def.weight > 0) ? +t.def.weight : 1) * mw * (1 + 0.25 * manual) * (isReach(t) ? R : 1);
+}
+// 定着度。常連ほど上に。熟達→定着→進行中→新規の順、同じ段階なら連続が長いほど上
+const SETTLE_RANK = { "熟達": 6, "定着": 5, "進行中": 4, "新規": 3, "実験": 2, "随時": 2, "要再設定": 1 };
+function settleScore(t){ return (SETTLE_RANK[t.status] || 0) * 1e6 + t.streak * 1000 + t.best; }
+
 function renderTodayRecords(list){
   const box = document.getElementById("tk-today");
+  const sortSel = document.getElementById("ck-sort");
+  const mode = Object.assign({ sort: "slot" }, lsGet(KEY_CKVIEW, {})).sort;
+  if (sortSel) sortSel.value = mode;
   const today = list.filter(t => t.row && LIVE.includes(t.status));
-  if (!today.length) { box.innerHTML = ""; return; }
+  if (!today.length) { box.innerHTML = '<div class="empty">今日のタスクはありません。</div>'; return; }
   const isDone = t => window.TaskEngine.DONE.has(t.check);
   const open = today.filter(t => !isDone(t)), fin = today.filter(isDone);
   let html = '<div class="rec-list"><h2>今日の記録　<span style="font-size:.8rem;color:var(--sub);font-weight:400">' +
@@ -1794,23 +1869,32 @@ function renderTodayRecords(list){
   const recRow = t => {
     const done = isDone(t), miss = t.check === "不実行";
     const sub = [t.check || "未着手"];
+    if (mode !== "slot") sub.push(t.def.slot || "");
+    if (mode === "prio" && isReach(t)) sub.push("今日やらないと落ちる");
+    if (mode === "settle") sub.push(t.status + " 連続" + t.streak);
+    if (isCompletion(t)) sub.push("進捗 " + Math.round(t.progress || 0) + "%");
     if (t.cycle) sub.push("今日は " + t.cycle.item);
     if (t.row && t.row.prevBooking) sub.push("予約:" + t.row.prevBooking);
-    return '<div class="rec" data-recrow="' + esc(t.def.id) + '"><div class="rn">' + esc(t.def.name) + "<small>" + esc(sub.join("　")) + "</small></div>" +
+    return '<div class="rec" data-recrow="' + esc(t.def.id) + '"><div class="rn">' + esc(t.def.name) + "<small>" + esc(sub.filter(Boolean).join("　")) + "</small></div>" +
       '<button type="button" class="q' + (done ? " on" : miss ? " ng" : "") + '" data-quick="' + esc(t.def.id) +
       '" aria-label="' + esc(t.def.name) + (done ? "の完了を取り消す" : "を完了にする") + '">' + (done ? "✓" : miss ? "✕" : "○") + "</button>" +
       '<button type="button" class="more" data-record="' + esc(t.def.id) + '">記録</button></div>';
   };
-  for (const slot of SLOT_ORDER.concat(["その他"])) {
-    const arr = open.filter(t => (SLOT_ORDER.includes(t.def.slot) ? t.def.slot : "その他") === slot)
-      .sort((a, b) => a.def.name.localeCompare(b.def.name, "ja"));
-    if (!arr.length) continue;
-    html += '<div class="rec-slot">' + slot + "</div>" + arr.map(recRow).join("");
+  const byName = (a, b) => a.def.name.localeCompare(b.def.name, "ja");
+  if (mode === "slot") {
+    for (const slot of CHECK_SLOTS.concat(["その他"])) {
+      const arr = open.filter(t => (CHECK_SLOTS.includes(t.def.slot) ? t.def.slot : "その他") === slot).sort(byName);
+      if (!arr.length) continue;
+      html += '<div class="rec-slot">' + slot + "</div>" + arr.map(recRow).join("");
+    }
+  } else {
+    const score = mode === "prio" ? prioScore : settleScore;
+    html += open.slice().sort((a, b) => (score(b) - score(a)) || byName(a, b)).map(recRow).join("");
   }
   if (!open.length) html += '<div class="empty">今日の分はすべて済みました。</div>';
   if (fin.length) {
     html += '<details class="more done-box"><summary>済み　' + fin.length + "件</summary>" +
-      fin.sort((a, b) => a.def.name.localeCompare(b.def.name, "ja")).map(recRow).join("") + "</details>";
+      fin.sort(byName).map(recRow).join("") + "</details>";
   }
   box.innerHTML = html + "</div>";
   if (flashTargetId) {
@@ -1850,6 +1934,9 @@ function taskRowHtml(t){
   if (t.target) {
     const pct = Math.min(100, Math.round(t.genTotal / t.target * 100));
     meta.push("<span>世代" + t.gen + "　" + t.genTotal + "/" + t.target + ' <span class="bar"><i style="width:' + pct + '%"></i></span></span>');
+  } else if (isCompletion(t)) {
+    const pct = Math.max(0, Math.min(100, Math.round(t.progress || 0)));
+    meta.push("<span>進捗 " + pct + '% <span class="bar"><i style="width:' + pct + '%"></i></span></span>');
   } else if (t.gen > 1) {
     meta.push("<span>世代" + t.gen + "</span>");
   }
@@ -1857,6 +1944,45 @@ function taskRowHtml(t){
   if (t.cycle) meta.push('<span class="cyc">今日は ' + esc(t.cycle.item) + "</span>");
   return '<button type="button" class="tk" data-tid="' + esc(t.def.id) + '"><div class="tn">' + esc(t.def.name) +
          '</div><div class="tm">' + meta.join("") + "</div></button>";
+}
+
+// 記録の画面(チェックのタブ)
+function renderRecordSheet(){
+  const box = document.getElementById("ck-detail");
+  if (!box) return;
+  const t = state.recordOpen && taskStates().find(x => x.def.id === state.recordOpen);
+  if (!t || !t.row) { box.innerHTML = ""; return; }
+  const d = t.def;
+  let rec = "";
+  {
+    const r = t.row.rec || {};
+    const seen = (key, base) => {
+      const set = new Set(base);
+      for (const m of Object.values(state.taskLogs)) for (const dd of Object.values(m)) for (const x of Object.values(dd)) if (x[key]) set.add(x[key]);
+      return Array.from(set);
+    };
+    const opt = (key, values, cur) => '<div class="opts" data-opt="' + key + '">' + values.map(v =>
+      '<button type="button" data-v="' + esc(v) + '" aria-pressed="' + (v === cur) + '">' + esc(v) + "</button>").join("") + "</div>";
+    const sec = +r.seconds || 0;
+    rec = "<h3>今日の記録</h3>" +
+      '<div class="f"><label>チェック</label></div>' + opt("check", CHECK_OPTS, t.check) +
+      '<div class="f"><label>CA</label></div>' + opt("ca", seen("ca", ["未着手", "完了"]), r.ca) +
+      '<div class="f"><label>行動予約</label></div>' + opt("booking", seen("booking", ["未着手", "完了"]), r.booking) +
+      (t.row.prevBooking ? '<p class="now">前回の予約:' + esc(t.row.prevBooking) + "</p>" : "") +
+      '<div class="grid2">' +
+        '<div class="f"><label for="rc-next">次回の予約</label><input id="rc-next" data-rk="nextBooking" type="text" value="' + esc(r.nextBooking || "") + '"></div>' +
+        '<div class="f"><label>かかった時間</label><div class="dur"><input data-rk="min" type="number" min="0" placeholder="分" value="' + (sec ? Math.floor(sec / 60) : "") +
+          '">分<input data-rk="sec" type="number" min="0" max="59" placeholder="秒" value="' + (sec ? Math.round(sec % 60) : "") + '">秒</div></div>' +
+        '<div class="f"><label for="rc-q">質(1〜9)</label><select id="rc-q" data-rk="quality"><option value="">—</option>' +
+          [1,2,3,4,5,6,7,8,9].map(n => '<option' + (+r.quality === n ? " selected" : "") + ">" + n + "</option>").join("") + "</select></div>" +
+        (+d.quota > 0 ? '<div class="f"><label for="rc-did">やった量(1日' + d.quota + ')</label><input id="rc-did" data-rk="did" type="number" step="any" value="' + (r.did != null ? r.did : "") + '"></div>' : "") +
+        (isCompletion(t) ? '<div class="f"><label for="rc-pg">進捗率(%)' + (t.progressDate ? "　前回 " + esc(t.progressDate.slice(5)) : "") +
+          '</label><input id="rc-pg" data-rk="progress" type="number" min="0" max="100" step="1" value="' + (t.progress != null ? Math.round(t.progress) : "") + '"></div>' : "") +
+      "</div>" +
+      '<div class="row"><button type="button" class="btn" data-rec-save>記録を保存する</button></div>';
+  }
+  box.innerHTML = '<div class="peditor tk-detail"><h2>' + esc(d.name) + "</h2>" + rec +
+    '<div class="row"><button type="button" class="btn ghost" data-rec-close>閉じる</button></div></div>';
 }
 
 function renderTaskDetail(){
@@ -1892,42 +2018,16 @@ function renderTaskDetail(){
   const gens = (d.generations || []).slice().sort((a, b) => a.from < b.from ? -1 : 1).map(g =>
     "<li>世代" + g.gen + "　" + esc(g.from) + " から" + (g.target ? "　目標" + g.target + "回" : "") + "</li>").join("");
 
-  // 記録の欄(今日の分)
-  let rec = "";
-  if (state.taskMode === "record" && t.row) {
-    const r = t.row.rec || {};
-    const seen = (key, base) => {
-      const set = new Set(base);
-      for (const m of Object.values(state.taskLogs)) for (const dd of Object.values(m)) for (const x of Object.values(dd)) if (x[key]) set.add(x[key]);
-      return Array.from(set);
-    };
-    const opt = (key, values, cur) => '<div class="opts" data-opt="' + key + '">' + values.map(v =>
-      '<button type="button" data-v="' + esc(v) + '" aria-pressed="' + (v === cur) + '">' + esc(v) + "</button>").join("") + "</div>";
-    const sec = +r.seconds || 0;
-    rec = "<h3>今日の記録</h3>" +
-      '<div class="f"><label>チェック</label></div>' + opt("check", CHECK_OPTS, t.check) +
-      '<div class="f"><label>CA</label></div>' + opt("ca", seen("ca", ["未着手", "完了"]), r.ca) +
-      '<div class="f"><label>行動予約</label></div>' + opt("booking", seen("booking", ["未着手", "完了"]), r.booking) +
-      (t.row.prevBooking ? '<p class="now">前回の予約:' + esc(t.row.prevBooking) + "</p>" : "") +
-      '<div class="grid2">' +
-        '<div class="f"><label for="rc-next">次回の予約</label><input id="rc-next" data-rk="nextBooking" type="text" value="' + esc(r.nextBooking || "") + '"></div>' +
-        '<div class="f"><label>かかった時間</label><div class="dur"><input data-rk="min" type="number" min="0" placeholder="分" value="' + (sec ? Math.floor(sec / 60) : "") +
-          '">分<input data-rk="sec" type="number" min="0" max="59" placeholder="秒" value="' + (sec ? Math.round(sec % 60) : "") + '">秒</div></div>' +
-        '<div class="f"><label for="rc-q">質(1〜9)</label><select id="rc-q" data-rk="quality"><option value="">—</option>' +
-          [1,2,3,4,5,6,7,8,9].map(n => '<option' + (+r.quality === n ? " selected" : "") + ">" + n + "</option>").join("") + "</select></div>" +
-        (+d.quota > 0 ? '<div class="f"><label for="rc-did">やった量(1日' + d.quota + ')</label><input id="rc-did" data-rk="did" type="number" step="any" value="' + (r.did != null ? r.did : "") + '"></div>' : "") +
-      "</div>" +
-      '<div class="row"><button type="button" class="btn" data-rec-save>記録を保存する</button></div>';
-  }
-
   box.innerHTML = '<div class="peditor tk-detail">' +
-    "<h2>" + esc(d.name) + "</h2>" + rec +
+    "<h2>" + esc(d.name) + "</h2>" +
     '<p class="now">' + esc((d.ministries || []).join("・") || "所属なし") + "　" + esc(d.slot || "") +
       (d.aliases && d.aliases.length ? "　前の名前:" + esc(d.aliases.join("、")) : "") + "</p>" +
     '<div class="nums">' +
       "<div>状況<b>" + esc(t.status) + "</b></div>" +
       "<div>世代<b>" + t.gen + "</b></div>" +
-      "<div>世代内累計<b>" + t.genTotal + (t.target ? " / " + t.target : "") + "</b></div>" +
+      (isCompletion(t)
+        ? "<div>進捗率<b>" + (t.progress != null ? Math.round(t.progress) + "%" : "—") + "</b></div>"
+        : "<div>世代内累計<b>" + t.genTotal + (t.target ? " / " + t.target : "") + "</b></div>") +
       "<div>累計<b>" + t.total + "</b></div>" +
       "<div>連続<b>" + t.streak + "</b></div>" +
       "<div>最長連続<b>" + t.best + "</b></div>" +
@@ -1970,15 +2070,14 @@ function setAppRecord(day, id, patch){
   if (!Object.keys(d).length) delete month[day];
 }
 
+function tkStatus(text, err){
+  document.querySelectorAll(".tkst").forEach(st => { st.classList.toggle("err", !!err); st.textContent = text; });
+}
+
 async function commitAppLog(day, mutate){
   const m = day.slice(0, 7);
   const path = APPLOG_DIR + "/" + m + ".json";
-  const status = (text, err) => {
-    const st = document.getElementById("tk-status");
-    if (!st) return;
-    st.classList.toggle("err", !!err);
-    st.textContent = text;
-  };
+  const status = tkStatus;
   mutate();
   taskCache.bump++; taskCache.key = null;
   renderTasks(); renderToday();
@@ -2036,8 +2135,8 @@ function actionsFor(status){
 
 function taskFormHtml(v, mode){
   const mins = ministryNames();
-  const minBoxes = mins.map(m => '<label style="margin-right:.6rem;font-size:.86rem;white-space:nowrap"><input type="checkbox" data-fm-min value="' + esc(m) + '"' +
-    ((v.ministries || []).includes(m) ? " checked" : "") + "> " + esc(m) + "</label>").join("");
+  const minBoxes = mins.map(m => '<label><input type="checkbox" data-fm-min value="' + esc(m) + '"' +
+    ((v.ministries || []).includes(m) ? " checked" : "") + ">" + esc(m) + "</label>").join("");
   const sel = (k, cur, opts) => '<select data-fm="' + k + '">' + opts.map(o => '<option' + (o === cur ? " selected" : "") + ">" + esc(o) + "</option>").join("") + "</select>";
   const inp = (k, val, type, extra) => '<input data-fm="' + k + '" type="' + (type || "text") + '" value="' + esc(val == null ? "" : val) + '"' + (extra || "") + ">";
   return '<div class="grid2">' +
@@ -2051,7 +2150,7 @@ function taskFormHtml(v, mode){
       '<div class="f"><label>1日の分量</label>' + inp("quota", v.quota, "number", ' step="any" placeholder="貯金を使うとき"') + "</div>" +
     "</div>" +
     '<div class="f" style="margin-top:.5rem"><label>達成要件</label>' + inp("requirement", v.requirement) + "</div>" +
-    '<div class="f" style="margin-top:.5rem"><label>省</label><div>' + (minBoxes || '<span class="note">省一覧がまだ取り込まれていません</span>') + "</div></div>" +
+    '<div class="f" style="margin-top:.5rem"><label>省</label><div class="chk">' + (minBoxes || '<span class="note">省一覧がまだ取り込まれていません</span>') + "</div></div>" +
     '<div class="f" style="margin-top:.5rem"><label>WAVE・STAGE(読点で区切る)</label>' + inp("waves", (v.waves || []).map(w => w.label || w).join("、"), "text", ' placeholder="STAGE1-1、WAVE1-2"') + "</div>";
 }
 
@@ -2096,12 +2195,7 @@ function newTaskHtml(){
 }
 
 async function commitOverlay(mutate){
-  const status = (text, err) => {
-    const st = document.getElementById("tk-status");
-    if (!st) return;
-    st.classList.toggle("err", !!err);
-    st.textContent = text;
-  };
+  const status = tkStatus;
   mutate();
   taskCache.key = null;
   renderTasks(); renderToday();
@@ -2298,6 +2392,11 @@ async function loadAll(){
     state.dirty = false;
     lsSet(KEY_CACHE, cachePayload());
     st.textContent = "読み込みました(" + state.tasksDoc.tasks.length + "件)";
+    const ls = document.getElementById("last-sync");
+    if (ls) {
+      const n = new Date(Date.now() + 9 * 3600 * 1000).toISOString();
+      ls.textContent = "最後に読み込んだ時刻:" + n.slice(5, 10).replace("-", "/") + " " + n.slice(11, 16);
+    }
     await loadTaskData();
     renderToday(); renderSettings(); renderPlan(); renderTasks();
     if (legacy.length) {
@@ -2427,7 +2526,7 @@ function showView(name){
   document.querySelectorAll(".view").forEach(v => v.hidden = (v.id !== "view-" + name));
   if (name === "today") renderToday();
   if (name === "plan") renderPlan();
-  if (name === "tasks") renderTasks();
+  if (name === "tasks" || name === "check") renderTasks();
   document.querySelectorAll("nav.tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.view === name)));
   window.scrollTo(0, 0);
 }
@@ -2473,6 +2572,43 @@ function bind(){
     const box = document.getElementById("tk-detail");
     if (box.scrollIntoView) box.scrollIntoView({ block: "nearest" });
   });
+  // 記録の画面
+  document.getElementById("ck-detail").addEventListener("click", async e => {
+    if (e.target.closest("[data-rec-close]")) { state.recordOpen = null; renderRecordSheet(); return; }
+    const ob = e.target.closest(".opts [data-v]");
+    if (ob) {
+      const on = ob.getAttribute("aria-pressed") !== "true";
+      ob.parentElement.querySelectorAll("[data-v]").forEach(b => b.setAttribute("aria-pressed", "false"));
+      ob.setAttribute("aria-pressed", String(on));
+      return;
+    }
+    if (!e.target.closest("[data-rec-save]")) return;
+    const id = state.recordOpen; if (!id) return;
+    const box = document.getElementById("ck-detail");
+    const pick = key => { const b = box.querySelector('[data-opt="' + key + '"] [aria-pressed="true"]'); return b ? b.dataset.v : null; };
+    const val = k => { const el = box.querySelector('[data-rk="' + k + '"]'); return el ? el.value.trim() : ""; };
+    const min = +val("min") || 0, sec = +val("sec") || 0;
+    const patch = {
+      check: pick("check"), ca: pick("ca"), booking: pick("booking"),
+      nextBooking: val("nextBooking") || null,
+      seconds: (min || sec) ? min * 60 + sec : null,
+      quality: val("quality") ? +val("quality") : null,
+    };
+    if (box.querySelector('[data-rk="did"]')) patch.did = val("did") === "" ? null : +val("did");
+    if (box.querySelector('[data-rk="progress"]')) {
+      const pg = val("progress");
+      patch.progress = pg === "" ? null : Math.max(0, Math.min(100, +pg));
+    }
+    const today = taskDay();
+    await commitAppLog(today, () => setAppRecord(today, id, patch));
+  });
+
+  // チェックの並べ方
+  document.getElementById("ck-sort").addEventListener("change", e => {
+    lsSet(KEY_CKVIEW, { sort: e.target.value });
+    renderTasks();
+  });
+
   document.getElementById("tk-new").addEventListener("click", () => {
     state.taskMode = "new"; state.taskOpen = null;
     renderTaskDetail();
@@ -2513,10 +2649,9 @@ function bind(){
       return;
     }
     if (r) {
-      state.taskOpen = r.dataset.record;
-      state.taskMode = "record";
-      renderTaskDetail();
-      const box = document.getElementById("tk-detail");
+      state.recordOpen = r.dataset.record;
+      renderRecordSheet();
+      const box = document.getElementById("ck-detail");
       if (box.scrollIntoView) box.scrollIntoView({ block: "nearest" });
     }
   });
@@ -2534,13 +2669,7 @@ function bind(){
 
   document.getElementById("tk-detail").addEventListener("click", async e => {
     if (e.target.closest("[data-tk-close]")) { state.taskOpen = null; state.taskMode = null; renderTaskDetail(); return; }
-    const ob = e.target.closest(".opts [data-v]");
-    if (ob) {
-      const on = ob.getAttribute("aria-pressed") !== "true";
-      ob.parentElement.querySelectorAll("[data-v]").forEach(b => b.setAttribute("aria-pressed", "false"));
-      ob.setAttribute("aria-pressed", String(on));
-      return;
-    }
+
     // 状況の操作
     const act = e.target.closest("[data-act]");
     if (act) {
@@ -2619,23 +2748,6 @@ function bind(){
       await commitOverlay(() => {
         state.overlay.newTasks = (state.overlay.newTasks || []).filter(x => x.id !== id).concat([def]);
       });
-      return;
-    }
-    if (e.target.closest("[data-rec-save]")) {
-      const id = state.taskOpen; if (!id) return;
-      const box = document.getElementById("tk-detail");
-      const pick = key => { const b = box.querySelector('[data-opt="' + key + '"] [aria-pressed="true"]'); return b ? b.dataset.v : null; };
-      const val = k => { const el = box.querySelector('[data-rk="' + k + '"]'); return el ? el.value.trim() : ""; };
-      const min = +val("min") || 0, sec = +val("sec") || 0;
-      const patch = {
-        check: pick("check"), ca: pick("ca"), booking: pick("booking"),
-        nextBooking: val("nextBooking") || null,
-        seconds: (min || sec) ? min * 60 + sec : null,
-        quality: val("quality") ? +val("quality") : null,
-      };
-      if (box.querySelector('[data-rk="did"]')) patch.did = val("did") === "" ? null : +val("did");
-      const today = taskDay();
-      await commitAppLog(today, () => setAppRecord(today, id, patch));
       return;
     }
     if (!e.target.closest("[data-tk-save]")) return;
@@ -2862,6 +2974,22 @@ function bind(){
 
   document.getElementById("save").addEventListener("click", saveSettings);
 
+  // 同期:変更がなくても読み込み直す
+  document.getElementById("reload-data").addEventListener("click", async () => {
+    const st = document.getElementById("reload-status");
+    if (!state.conn) { st.classList.add("err"); st.textContent = "先に接続してください。"; return; }
+    st.classList.remove("err"); st.textContent = "読み込んでいます…";
+    const ok = await loadAll();
+    st.textContent = ok ? "読み込みました" : "読み込めませんでした(上の表示を見てください)";
+    if (!ok) st.classList.add("err");
+  });
+  // アプリを最新の版に:URLに時刻を付けて開き直す。手元に残った古いページを使わせないため
+  document.getElementById("reload-app").addEventListener("click", () => {
+    const u = new URL(window.location.href);
+    u.searchParams.set("v", String(Date.now()));
+    window.location.replace(u.toString());
+  });
+
   // 接続
   document.getElementById("connect").addEventListener("click", async () => {
     const conn = {
@@ -2884,6 +3012,8 @@ function bind(){
 
 function boot(){
   bind();
+  const av = document.getElementById("app-version");
+  if (av) av.textContent = APP_VERSION;
   const conn = lsGet(KEY_CONN, null);
   document.getElementById("c-owner").value = conn ? conn.owner : "";
   document.getElementById("c-repo").value = conn ? conn.repo : "notion-daily";
