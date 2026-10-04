@@ -136,9 +136,16 @@
       }
 
       // その日の行に手で入れた変更(状況・数字の直し)
+      const firstGen = gens.length ? (gens[0].gen || 1) : 1;
       for (const e of todays) {
         if (e.status) st.status = e.status;
-        if (e.set) Object.assign(st, e.set);
+        if (e.set) {
+          // 最初の世代のあいだは、世代内累計は累計と同じ。累計を直したら同じだけ動かす
+          if ("total" in e.set && !("genTotal" in e.set) && gen === firstGen) {
+            st.genTotal += (+e.set.total || 0) - st.total;
+          }
+          Object.assign(st, e.set);
+        }
       }
 
       let check = rec.check;
