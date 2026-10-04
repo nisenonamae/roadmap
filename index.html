@@ -75,7 +75,13 @@ button,input,select{font:inherit;color:inherit}
 .stop.done .name{text-decoration:line-through;text-decoration-thickness:1px;color:var(--sub)}
 .stop.done .t{color:var(--sub);font-size:.8rem;letter-spacing:.1em}
 .stop.done .line::after{background:var(--c);border-color:var(--c)}
-.stop .meta .undo-hint{color:var(--sub);font-size:.74rem}
+.stop.pending .tick{background:#3D8A5A;border-color:#3D8A5A;color:#fff}
+.stop.pending .name{text-decoration:line-through;color:var(--sub)}
+@keyframes flashrow{0%{background:#FFF1B8}100%{background:transparent}}
+.flash{animation:flashrow 2.4s ease-out}
+.done-list li{align-items:center}
+.done-list .dn{text-decoration:line-through;color:var(--sub)}
+.done-list button{border:1px solid var(--rule);background:#fff;border-radius:3px;padding:.2rem .7rem;cursor:pointer;font-size:.82rem;color:var(--ink)}
 .stop .row-in{display:flex;gap:.6rem;align-items:flex-start}
 .stop .row-in .txt{flex:1;min-width:0}
 .stop .tick{flex:0 0 auto;width:2.4rem;height:2.4rem;margin-top:.1rem;border-radius:50%;border:2px solid var(--rule);
@@ -363,6 +369,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
       <h1>タスク</h1>
       <div class="date" id="tk-date">—</div>
     </header>
+    <div class="row" style="margin:0 0 .8rem"><button type="button" class="btn ghost" id="tk-new">タスクを足す</button></div>
     <div id="tk-today"></div>
     <div class="tk-bar">
       <label>並べ方 <select id="tk-group"><option value="省">省ごと</option><option value="状況">状況ごと</option></select></label>
@@ -516,7 +523,7 @@ const state = {
   taskLogShas: {},
   appLogs: {},
   appLogShas: {},
-  overlay: { version: 1, tasks: {}, waveUrls: {} },
+  overlay: { version: 1, tasks: {}, waveUrls: {}, newTasks: [] },
   overlaySha: null,
   taskOpen: null,
   taskMode: null,            // "record" のとき、詳しい画面に今日の記録の欄を出す
@@ -985,12 +992,16 @@ function renderToday(){
   }
 
   let html = "";
+  const finished = [];
   for (const sec of plan.sections) {
     if (sec.type === "event") {
       html += '<div class="block">' + stopHtml(sec.item, fmt(sec.item.start), places) + "</div>";
       continue;
     }
-    const b = sec.block;
+    const b = Object.assign({}, sec.block);
+    finished.push(...b.items.filter(it => it.task && it.task.done));
+    b.items = b.items.filter(it => !(it.task && it.task.done));
+    if (!b.items.length) continue;
     html += '<div class="block"><div class="block-head"><h2>' + esc(b.name) + '</h2>' +
             '<span class="span">' + fmt(b.start) + "–" + fmt(b.end) + "　" +
             (b.overflow > 0 ? '<span class="over">' + dur(b.used) + " / " + dur(b.end - b.start) + "</span>"
@@ -999,6 +1010,8 @@ function renderToday(){
     for (const it of b.items) html += stopHtml(it, fmt(it.start), places);
     html += "</div>";
   }
+  finished.push(...plan.leftover.filter(it => it.task && it.task.done));
+  plan.leftover = plan.leftover.filter(it => !(it.task && it.task.done));
   if (plan.leftover.length) {
     const total = plan.leftover.reduce((s, it) => s + it.c.min, 0);
     html += '<div class="block"><div class="block-head"><h2>空いた時間に</h2>' +
@@ -1008,6 +1021,11 @@ function renderToday(){
   }
   if (!html) html = '<div class="empty">今日やることは残っていません。</div>';
 
+  if (finished.length) {
+    html += '<details class="more done-box"><summary>済み　' + finished.length + '件</summary><ul class="list done-list">' +
+      finished.map(it => '<li><span class="dn">' + esc(it.task.name) + '</span><button type="button" data-undo="' + esc(it.task.name) +
+        '">戻す</button></li>').join("") + "</ul></details>";
+  }
   const extra = [];
   if (plan.ondemand.length) extra.push(['随時(条件が来たら)', plan.ondemand]);
   if (plan.reset.length) extra.push(['要再設定', plan.reset]);
@@ -1019,6 +1037,19 @@ function renderToday(){
   }
 
   planEl.innerHTML = html;
+  flashIn(planEl, "[data-done]", "data-done", ".stop");
+}
+
+// 取り消して戻ってきた行を光らせ、そこまで画面を動かす
+let flashTarget = null;
+function flashIn(root, sel, attr, rowSel){
+  if (!flashTarget) return;
+  const el = Array.from(root.querySelectorAll(sel)).find(b => b.getAttribute(attr) === flashTarget);
+  if (!el) return;
+  const row = el.closest(rowSel) || el;
+  row.classList.add("flash");
+  if (row.scrollIntoView) row.scrollIntoView({ block: "center", behavior: "smooth" });
+  flashTarget = null;
 }
 
 function stopHtml(it, time, places){
@@ -1039,7 +1070,7 @@ function stopHtml(it, time, places){
     meta.push('<span class="span-t">' + fmt(it.start) + "–" + fmt(it.end) + "</span>");
   } else if (done) {
     meta.push("<span>" + dur(c.min) + "</span>");
-    meta.push('<span class="undo-hint">押すと戻せます</span>');
+
   } else {
     meta.push("<span>" + dur(c.min) + "</span>");
     if (c.mode) meta.push("<span>" + esc(c.mode) + "</span>");
@@ -1584,13 +1615,49 @@ function removePlanItem(id){ state.plan.items = state.plan.items.filter(x => x.i
 // STAGE・WAVEは省ごとに別物。リンクは「省|ラベル」で持つ
 function waveKey(def, label){ return (((def.ministries || [])[0]) || "所属なし") + "|" + label; }
 
-// 取り込んだ定義に、アプリで足したもの(サイクル、WAVEのリンク)を重ねる
+// 取り込んだ定義に、アプリで変えたものを重ねる。
+//   edits        中身の変更(名前、時間帯、攻守、省、実行間隔、重み、目標回数、達成要件、1日の分量)
+//   events       状況の変更(休止、再開、立て直し、アーカイブなど)。日付つきで積む
+//   generations  世代を上げた記録
+// 同じ変更が毎朝の取り込みでNotion側からも入ってくるが、2回効いても結果は同じになる
+const EDIT_KEYS = ["name", "slot", "stance", "interval", "weight", "requirement", "quota", "kind"];
 function effectiveDef(def){
   const ov = (state.overlay.tasks || {})[def.id] || {};
+  const e = ov.edits || {};
+  const out = Object.assign({}, def);
+  for (const k of EDIT_KEYS) if (e[k] !== undefined) out[k] = e[k];
+  if (Array.isArray(e.ministries)) out.ministries = e.ministries.slice();
+  if (Array.isArray(e.waves)) out.waves = e.waves.map(l => ({ label: l, url: "" }));
+  if (e.name && e.name !== def.name) out.aliases = Array.from(new Set((def.aliases || []).concat([def.name])));
+  const gens = (def.generations || []).map(g => Object.assign({}, g));
+  for (const g of ov.generations || []) if (!gens.some(x => x.gen === g.gen && x.from === g.from)) gens.push(Object.assign({}, g));
+  gens.sort((a, b) => a.from < b.from ? -1 : 1);
+  if (e.target !== undefined && e.target !== null && e.target !== "") {
+    const today = taskDay();
+    const cur = gens.filter(g => g.from <= today).pop();
+    if (cur) cur.target = +e.target; else gens.push({ gen: 1, from: def.created, target: +e.target });
+  }
+  out.generations = gens;
+  out.events = (def.events || []).concat(ov.events || []);
   const urls = state.overlay.waveUrls || {};
-  const waves = (def.waves || []).map(w => ({ label: w.label, key: waveKey(def, w.label),
-                                              url: urls[waveKey(def, w.label)] || w.url || "" }));
-  return Object.assign({}, def, { cycle: ov.cycle || def.cycle || null, waves });
+  out.waves = (out.waves || []).map(w => ({ label: w.label, key: waveKey(out, w.label), url: urls[waveKey(out, w.label)] || w.url || "" }));
+  out.cycle = ov.cycle || def.cycle || null;
+  return out;
+}
+
+// 取り込んだタスクと、アプリで足したタスク(まだNotionから戻ってきていないもの)を合わせる
+function allDefs(){
+  const defs = (state.taskDefs && state.taskDefs.tasks) || [];
+  const have = new Set(defs.map(d => d.id));
+  const extra = (state.overlay.newTasks || []).filter(t => !have.has(t.id));
+  return defs.concat(extra);
+}
+
+// タスクの番号。名前と作った日から決まる。取り込み(import_tasks.py)と同じ計算なので、
+// アプリで足したタスクがNotionを経由して戻ってきても同じ番号になる
+async function taskIdFor(name, date){
+  const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(name.trim() + "|" + date));
+  return "t" + Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 10);
 }
 
 // タスクごとに、記録をたどって今日の状態を出す。結果は描画のあいだだけ覚えておく
@@ -1599,11 +1666,11 @@ function taskStates(){
   const defs = state.taskDefs;
   if (!defs || !window.TaskEngine) return [];
   const today = taskDay();
-  const key = today + "|" + (state.overlaySha || "") + "|" + JSON.stringify(state.taskLogShas) + "|" +
+  const key = today + "|" + (state.overlaySha || "") + "|" + JSON.stringify(state.taskLogShas) + "|" + allDefs().length + "|" +
               JSON.stringify(state.appLogShas) + "|" + defs.importedUntil + "|" + taskCache.bump;
   if (taskCache.key === key) return taskCache.list;
   const E = window.TaskEngine;
-  const list = defs.tasks.map(raw => {
+  const list = allDefs().map(raw => {
     const def = effectiveDef(raw);
     const rep = E.replay(def, mergedLogFor(def.id), today);
     const row = rep.days.length && rep.days[rep.days.length - 1].date === today ? rep.days[rep.days.length - 1] : null;
@@ -1720,28 +1787,39 @@ function renderTodayRecords(list){
   const box = document.getElementById("tk-today");
   const today = list.filter(t => t.row && LIVE.includes(t.status));
   if (!today.length) { box.innerHTML = ""; return; }
-  const doneN = today.filter(t => window.TaskEngine.DONE.has(t.check)).length;
+  const isDone = t => window.TaskEngine.DONE.has(t.check);
+  const open = today.filter(t => !isDone(t)), fin = today.filter(isDone);
   let html = '<div class="rec-list"><h2>今日の記録　<span style="font-size:.8rem;color:var(--sub);font-weight:400">' +
-             doneN + " / " + today.length + "</span></h2>";
+             fin.length + " / " + today.length + "</span></h2>";
+  const recRow = t => {
+    const done = isDone(t), miss = t.check === "不実行";
+    const sub = [t.check || "未着手"];
+    if (t.cycle) sub.push("今日は " + t.cycle.item);
+    if (t.row && t.row.prevBooking) sub.push("予約:" + t.row.prevBooking);
+    return '<div class="rec" data-recrow="' + esc(t.def.id) + '"><div class="rn">' + esc(t.def.name) + "<small>" + esc(sub.join("　")) + "</small></div>" +
+      '<button type="button" class="q' + (done ? " on" : miss ? " ng" : "") + '" data-quick="' + esc(t.def.id) +
+      '" aria-label="' + esc(t.def.name) + (done ? "の完了を取り消す" : "を完了にする") + '">' + (done ? "✓" : miss ? "✕" : "○") + "</button>" +
+      '<button type="button" class="more" data-record="' + esc(t.def.id) + '">記録</button></div>';
+  };
   for (const slot of SLOT_ORDER.concat(["その他"])) {
-    const arr = today.filter(t => (SLOT_ORDER.includes(t.def.slot) ? t.def.slot : "その他") === slot)
+    const arr = open.filter(t => (SLOT_ORDER.includes(t.def.slot) ? t.def.slot : "その他") === slot)
       .sort((a, b) => a.def.name.localeCompare(b.def.name, "ja"));
     if (!arr.length) continue;
-    html += '<div class="rec-slot">' + slot + "</div>";
-    for (const t of arr) {
-      const done = window.TaskEngine.DONE.has(t.check);
-      const miss = t.check === "不実行";
-      const sub = [t.check || "未着手"];
-      if (t.cycle) sub.push("今日は " + t.cycle.item);
-      if (t.row && t.row.prevBooking) sub.push("予約:" + t.row.prevBooking);
-      html += '<div class="rec"><div class="rn">' + esc(t.def.name) + "<small>" + esc(sub.join("　")) + "</small></div>" +
-        '<button type="button" class="q' + (done ? " on" : miss ? " ng" : "") + '" data-quick="' + esc(t.def.id) +
-        '" aria-label="' + esc(t.def.name) + (done ? "の完了を取り消す" : "を完了にする") + '">' + (done ? "✓" : miss ? "✕" : "○") + "</button>" +
-        '<button type="button" class="more" data-record="' + esc(t.def.id) + '">記録</button></div>';
-    }
+    html += '<div class="rec-slot">' + slot + "</div>" + arr.map(recRow).join("");
+  }
+  if (!open.length) html += '<div class="empty">今日の分はすべて済みました。</div>';
+  if (fin.length) {
+    html += '<details class="more done-box"><summary>済み　' + fin.length + "件</summary>" +
+      fin.sort((a, b) => a.def.name.localeCompare(b.def.name, "ja")).map(recRow).join("") + "</details>";
   }
   box.innerHTML = html + "</div>";
+  if (flashTargetId) {
+    const row = box.querySelector('[data-recrow="' + flashTargetId + '"]');
+    if (row) { row.classList.add("flash"); if (row.scrollIntoView) row.scrollIntoView({ block: "center", behavior: "smooth" }); }
+    flashTargetId = null;
+  }
 }
+let flashTargetId = null;
 
 // WAVE・STAGEのリンク:同じラベルのものは1か所に入れれば全部に効く
 function renderWaveLinks(list){
@@ -1783,6 +1861,7 @@ function taskRowHtml(t){
 
 function renderTaskDetail(){
   const box = document.getElementById("tk-detail");
+  if (state.taskMode === "new") { box.innerHTML = newTaskHtml(); return; }
   const t = state.taskOpen && taskStates().find(x => x.def.id === state.taskOpen);
   if (!t) { box.innerHTML = ""; return; }
   const today = taskDay();
@@ -1864,8 +1943,19 @@ function renderTaskDetail(){
     (waves ? "<h3>WAVE・STAGE</h3>" + waves : "") +
     '<div class="row"><button type="button" class="btn" data-tk-save>保存する</button>' +
     '<button type="button" class="btn ghost" data-tk-close>閉じる</button></div>' +
+    settingsHtml(t) +
     "</div>";
 }
+
+// 完了を外すときに入れる値。アプリの記録を消すだけだと、定着・熟達の自動の完了や
+// Notionの完了に戻ってしまうので、その場合は「未着手」をはっきり記録する
+function uncheckValue(day, t){
+  const m = day.slice(0, 7);
+  const base = (((state.taskLogs[m] || {})[day] || {})[t.def.id] || {}).check;
+  const auto = !base && window.TaskEngine.AUTO_DONE.has(t.status);
+  return (auto || window.TaskEngine.DONE.has(base)) ? "未着手" : null;
+}
+const DONE_DELAY = () => (window.__roadmapDoneDelay != null ? window.__roadmapDoneDelay : 650);
 
 // アプリでつけた記録を保存する。月ごとのファイルに、日付・タスクごとに入れる
 function setAppRecord(day, id, patch){
@@ -1921,6 +2011,90 @@ async function commitAppLog(day, mutate){
   return false;
 }
 
+// 状況ごとに出す操作
+const ACTIONS = {
+  pause:    ["休止する", "休止中"],
+  resume:   ["再開する", "進行中"],
+  rebuild:  ["立て直す(新規に戻す)", "新規"],
+  trial:    ["実験にする", "実験"],
+  trialEnd: ["実験を終える", "実験終了"],
+  ondemand: ["随時にする", "随時"],
+  normal:   ["通常に戻す", "進行中"],
+  hall:     ["殿堂入りにする", "殿堂入り"],
+  achieved: ["達成済みにする", "達成済み"],
+  archive:  ["アーカイブする", "アーカイブ"],
+  revive:   ["新規として戻す", "新規"],
+};
+function actionsFor(status){
+  if (["新規", "進行中", "定着", "熟達"].includes(status)) return ["pause", "trial", "ondemand", "hall", "achieved", "archive"];
+  if (status === "要再設定") return ["rebuild", "pause", "archive"];
+  if (status === "休止中") return ["resume", "archive"];
+  if (status === "実験") return ["trialEnd", "normal", "archive"];
+  if (status === "随時") return ["normal", "pause", "archive"];
+  return ["revive"];
+}
+
+function taskFormHtml(v, mode){
+  const mins = ministryNames();
+  const minBoxes = mins.map(m => '<label style="margin-right:.6rem;font-size:.86rem;white-space:nowrap"><input type="checkbox" data-fm-min value="' + esc(m) + '"' +
+    ((v.ministries || []).includes(m) ? " checked" : "") + "> " + esc(m) + "</label>").join("");
+  const sel = (k, cur, opts) => '<select data-fm="' + k + '">' + opts.map(o => '<option' + (o === cur ? " selected" : "") + ">" + esc(o) + "</option>").join("") + "</select>";
+  const inp = (k, val, type, extra) => '<input data-fm="' + k + '" type="' + (type || "text") + '" value="' + esc(val == null ? "" : val) + '"' + (extra || "") + ">";
+  return '<div class="grid2">' +
+      '<div class="f"><label>名前</label>' + inp("name", v.name) + "</div>" +
+      '<div class="f"><label>時間帯</label>' + sel("slot", v.slot || "一日中", ["朝", "昼", "夜", "一日中"]) + "</div>" +
+      '<div class="f"><label>攻守</label>' + sel("stance", v.stance || "守", ["攻", "守", "予定"]) + "</div>" +
+      '<div class="f"><label>型</label>' + sel("kind", v.kind || "習慣型", ["習慣型", "完了型"]) + "</div>" +
+      '<div class="f"><label>目標回数</label>' + inp("target", v.target, "number", ' min="1" step="1"') + "</div>" +
+      '<div class="f"><label>実行間隔</label>' + inp("interval", v.interval, "text", ' placeholder="空欄で毎日/月水金/3日"') + "</div>" +
+      '<div class="f"><label>重み</label>' + inp("weight", v.weight, "number", ' step="any" placeholder="空欄で1"') + "</div>" +
+      '<div class="f"><label>1日の分量</label>' + inp("quota", v.quota, "number", ' step="any" placeholder="貯金を使うとき"') + "</div>" +
+    "</div>" +
+    '<div class="f" style="margin-top:.5rem"><label>達成要件</label>' + inp("requirement", v.requirement) + "</div>" +
+    '<div class="f" style="margin-top:.5rem"><label>省</label><div>' + (minBoxes || '<span class="note">省一覧がまだ取り込まれていません</span>') + "</div></div>" +
+    '<div class="f" style="margin-top:.5rem"><label>WAVE・STAGE(読点で区切る)</label>' + inp("waves", (v.waves || []).map(w => w.label || w).join("、"), "text", ' placeholder="STAGE1-1、WAVE1-2"') + "</div>";
+}
+
+function readTaskForm(box){
+  const val = k => { const el = box.querySelector('[data-fm="' + k + '"]'); return el ? el.value.trim() : ""; };
+  const num = k => val(k) === "" ? null : +val(k);
+  return {
+    name: val("name"), slot: val("slot"), stance: val("stance"), kind: val("kind"),
+    target: num("target"), interval: val("interval"), weight: num("weight"), quota: num("quota"),
+    requirement: val("requirement"),
+    ministries: Array.from(box.querySelectorAll("[data-fm-min]:checked")).map(x => x.value),
+    waves: val("waves").split(/[、,，\s]+/).map(x => x.trim()).filter(Boolean),
+  };
+}
+
+function settingsHtml(t){
+  const acts = actionsFor(t.status).map(a =>
+    '<button type="button" data-act="' + a + '">' + esc(ACTIONS[a][0]) + "</button>").join("");
+  const d = t.def;
+  return '<details class="more" style="margin-top:1rem"' + (state.taskMode === "settings" ? " open" : "") + '><summary>タスクの設定を変える</summary>' +
+    "<h3>状況(今は" + esc(t.status) + ")</h3>" +
+    '<div class="opts">' + acts + "</div>" +
+    (actionsFor(t.status).includes("pause") ? '<div class="f" style="max-width:12rem"><label for="tk-resume">休止するときの再開日(空欄なら決めない)</label><input id="tk-resume" type="date"></div>' : "") +
+    "<h3>世代(今は世代" + t.gen + ")</h3>" +
+    '<div class="dur"><input data-genup-target type="number" min="1" step="1" placeholder="目標回数" value="' + esc(t.target || "") + '">回で' +
+    '<button type="button" class="btn ghost" data-genup style="margin-left:.4rem">世代' + (t.gen + 1) + "に上げる</button></div>" +
+    '<p class="note" style="font-size:.78rem;color:var(--sub)">今日から新しい世代。世代内累計は0から数え直す。名前を変える必要はない。</p>' +
+    "<h3>中身</h3>" +
+    taskFormHtml({ name: d.name, slot: d.slot, stance: d.stance, kind: d.kind, target: t.target, interval: d.interval,
+                   weight: d.weight, quota: d.quota, requirement: d.requirement, ministries: d.ministries, waves: d.waves }, "edit") +
+    '<div class="row"><button type="button" class="btn" data-edit-save>中身を保存する</button></div>' +
+    '<p class="note" style="font-size:.78rem;color:var(--sub)">変えたことは毎朝4:40にNotionへも書き写されます。</p>' +
+    "</details>";
+}
+
+function newTaskHtml(){
+  return '<div class="peditor tk-detail"><h2>タスクを足す</h2>' +
+    taskFormHtml({ slot: "一日中", stance: "守", kind: "習慣型", target: 10 }, "new") +
+    '<div class="row"><button type="button" class="btn" data-new-save>足す</button>' +
+    '<button type="button" class="btn ghost" data-tk-close>やめる</button></div>' +
+    '<p class="note" style="font-size:.78rem;color:var(--sub)">今日から新規として始まります。毎朝4:40にNotionにも作られます。</p></div>';
+}
+
 async function commitOverlay(mutate){
   const status = (text, err) => {
     const st = document.getElementById("tk-status");
@@ -1947,6 +2121,7 @@ async function commitOverlay(mutate){
           const fresh = await readJson(OVERLAY_PATH);
           state.overlay = (fresh.data && fresh.data.tasks) ? fresh.data : { version: 1, tasks: {} };
           state.overlay.waveUrls = state.overlay.waveUrls || {};
+          state.overlay.newTasks = state.overlay.newTasks || [];
           state.overlaySha = fresh.sha;
           mutate();
           taskCache.key = null;
@@ -2161,6 +2336,7 @@ async function loadTaskData(){
     state.appLogs = apps; state.appLogShas = appShas;
     const ov = (o.data && o.data.tasks) ? o.data : { version: 1, tasks: {} };
     ov.waveUrls = ov.waveUrls || {};
+    ov.newTasks = ov.newTasks || [];
     // 前の版のリンクを「省|ラベル」へ寄せる。タスクごとに入れたものはそのタスクの省へ。
     // ラベルだけで入れたものは、そのラベルを使う省が1つだけなら移し、複数なら決められないので外す
     const byId = new Map(d.data.tasks.map(t => [t.id, t]));
@@ -2268,15 +2444,24 @@ function bind(){
     if (!d && !u) return;
     const name = d ? d.dataset.done : u.dataset.undo;
     const tk = taskByName(name);
+    const restore = () => { flashTarget = name; };
     if (tk && tk.row) {
       const today = taskDay(), id = tk.def.id;
       const before = (((state.appLogs[today.slice(0, 7)] || {})[today] || {})[id] || {}).check || null;
-      commitAppLog(today, () => setAppRecord(today, id, { check: d ? "完了" : null }));
-      if (d) showToast(name + " を完了にしました", () => commitAppLog(today, () => setAppRecord(today, id, { check: before })));
+      if (u) { restore(); commitAppLog(today, () => setAppRecord(today, id, { check: uncheckValue(today, tk) })); return; }
+      // いったん緑の✓にして一呼吸おいてから、済みの折りたたみへ移す
+      const row = d.closest(".stop"); if (row) row.classList.add("pending");
+      const timer = setTimeout(() => commitAppLog(today, () => setAppRecord(today, id, { check: "完了" })), DONE_DELAY());
+      showToast("「" + name + "」を完了にしました", () => {
+        clearTimeout(timer); restore();
+        commitAppLog(today, () => setAppRecord(today, id, { check: before }));
+      });
       return;
     }
-    commitEvents(() => setDone(doc.date, name, !!d));
-    if (d) showToast(name + " を済みにしました", () => commitEvents(() => setDone(doc.date, name, false)));
+    if (u) { restore(); commitEvents(() => setDone(doc.date, name, false)); return; }
+    const row = d.closest(".stop"); if (row) row.classList.add("pending");
+    const timer = setTimeout(() => commitEvents(() => setDone(doc.date, name, true)), DONE_DELAY());
+    showToast("「" + name + "」を済みにしました", () => { clearTimeout(timer); restore(); commitEvents(() => setDone(doc.date, name, false)); });
   });
 
   // タスク
@@ -2288,6 +2473,13 @@ function bind(){
     const box = document.getElementById("tk-detail");
     if (box.scrollIntoView) box.scrollIntoView({ block: "nearest" });
   });
+  document.getElementById("tk-new").addEventListener("click", () => {
+    state.taskMode = "new"; state.taskOpen = null;
+    renderTaskDetail();
+    const box = document.getElementById("tk-detail");
+    if (box.scrollIntoView) box.scrollIntoView({ block: "nearest" });
+  });
+
   document.getElementById("toast-undo").addEventListener("click", () => {
     const f = toastUndo; toastUndo = null;
     document.getElementById("toast").hidden = true;
@@ -2310,9 +2502,14 @@ function bind(){
       const t = taskStates().find(x => x.def.id === id);
       const on = !(t && window.TaskEngine.DONE.has(t.check));
       const before = (((state.appLogs[today.slice(0, 7)] || {})[today] || {})[id] || {}).check || null;
-      const p = commitAppLog(today, () => setAppRecord(today, id, { check: on ? "完了" : null }));
-      if (on) showToast(t.def.name + " を完了にしました", () => commitAppLog(today, () => setAppRecord(today, id, { check: before })));
-      await p;
+      if (!on) { flashTargetId = id; await commitAppLog(today, () => setAppRecord(today, id, { check: uncheckValue(today, t) })); return; }
+      // いったん✓にして一呼吸おいてから、済みの折りたたみへ移す
+      q.classList.add("on"); q.textContent = "✓";
+      const timer = setTimeout(() => commitAppLog(today, () => setAppRecord(today, id, { check: "完了" })), DONE_DELAY());
+      showToast("「" + t.def.name + "」を完了にしました", () => {
+        clearTimeout(timer); flashTargetId = id;
+        commitAppLog(today, () => setAppRecord(today, id, { check: before }));
+      });
       return;
     }
     if (r) {
@@ -2342,6 +2539,86 @@ function bind(){
       const on = ob.getAttribute("aria-pressed") !== "true";
       ob.parentElement.querySelectorAll("[data-v]").forEach(b => b.setAttribute("aria-pressed", "false"));
       ob.setAttribute("aria-pressed", String(on));
+      return;
+    }
+    // 状況の操作
+    const act = e.target.closest("[data-act]");
+    if (act) {
+      const id = state.taskOpen; if (!id) return;
+      const a = act.dataset.act, status = ACTIONS[a][1], D = taskDay();
+      const resume = a === "pause" ? (document.getElementById("tk-resume") || {}).value || "" : "";
+      if (resume && resume <= D) {
+        const st = document.getElementById("tk-status"); st.classList.add("err"); st.textContent = "再開日は明日以降にしてください。"; return;
+      }
+      state.taskMode = "settings";
+      await commitOverlay(() => {
+        const t = state.overlay.tasks[id] = Object.assign({}, state.overlay.tasks[id] || {});
+        const evs = (t.events || []).filter(x => x.date !== D && !(x.resume && x.fromPause === D));
+        const ev = { date: D, status };
+        if (a === "rebuild" || a === "revive") ev.set = { miss: 0 };
+        if (a === "resume" || a === "normal") ev.resume = true;
+        evs.push(ev);
+        if (resume) evs.push({ date: resume, status: "進行中", resume: true, fromPause: D });
+        t.events = evs;
+      });
+      return;
+    }
+    // 世代を上げる
+    if (e.target.closest("[data-genup]")) {
+      const id = state.taskOpen; if (!id) return;
+      const t = taskStates().find(x => x.def.id === id); if (!t) return;
+      const tv = document.querySelector("#tk-detail [data-genup-target]").value;
+      const D = taskDay();
+      state.taskMode = "settings";
+      await commitOverlay(() => {
+        const o = state.overlay.tasks[id] = Object.assign({}, state.overlay.tasks[id] || {});
+        const gens = (o.generations || []).filter(g => g.from !== D);
+        // 今日より前の世代を基準にする。同じ日に2回押しても1つしか上がらない
+        const before = (t.def.generations || []).filter(g => g.from < D).pop();
+        gens.push({ gen: ((before && before.gen) || 1) + 1, from: D, target: tv === "" ? null : +tv });
+        o.generations = gens;
+        if (o.edits) delete o.edits.target;          // 目標は新しい世代のほうに持たせる
+      });
+      return;
+    }
+    // 中身を保存
+    if (e.target.closest("[data-edit-save]")) {
+      const id = state.taskOpen; if (!id) return;
+      const f = readTaskForm(document.getElementById("tk-detail"));
+      if (!f.name) { const st = document.getElementById("tk-status"); st.classList.add("err"); st.textContent = "名前を入れてください。"; return; }
+      const clash = taskStates().find(x => x.def.id !== id && (x.def.name === f.name || (x.def.aliases || []).includes(f.name)));
+      if (clash) { const st = document.getElementById("tk-status"); st.classList.add("err"); st.textContent = "同じ名前のタスクがあります。"; return; }
+      state.taskMode = "settings";
+      await commitOverlay(() => {
+        const o = state.overlay.tasks[id] = Object.assign({}, state.overlay.tasks[id] || {});
+        o.edits = f;
+        // まだNotionから戻ってきていない新しいタスクは、その定義も書き換える
+        const nt = (state.overlay.newTasks || []).find(x => x.id === id);
+        if (nt) Object.assign(nt, { slot: f.slot, stance: f.stance, kind: f.kind, interval: f.interval, weight: f.weight,
+          quota: f.quota, requirement: f.requirement, ministries: f.ministries, waves: f.waves.map(l => ({ label: l, url: "" })) });
+      });
+      return;
+    }
+    // 新しいタスクを足す
+    if (e.target.closest("[data-new-save]")) {
+      const f = readTaskForm(document.getElementById("tk-detail"));
+      const st = document.getElementById("tk-status");
+      if (!f.name) { st.classList.add("err"); st.textContent = "名前を入れてください。"; return; }
+      if (taskStates().some(x => x.def.name === f.name || (x.def.aliases || []).includes(f.name))) {
+        st.classList.add("err"); st.textContent = "同じ名前のタスクがあります。別の名前にしてください。"; return;
+      }
+      const D = taskDay();
+      const id = await taskIdFor(f.name, D);
+      const def = {
+        id, name: f.name, aliases: [], ministries: f.ministries, waves: f.waves.map(l => ({ label: l, url: "" })),
+        slot: f.slot, stance: f.stance, kind: f.kind, interval: f.interval, weight: f.weight, quota: f.quota,
+        requirement: f.requirement, created: D, initial: { status: "新規" },
+        generations: [{ gen: 1, from: D, target: f.kind === "習慣型" ? f.target : null }], events: [],
+      };
+      state.taskMode = null; state.taskOpen = id;
+      await commitOverlay(() => {
+        state.overlay.newTasks = (state.overlay.newTasks || []).filter(x => x.id !== id).concat([def]);
+      });
       return;
     }
     if (e.target.closest("[data-rec-save]")) {
@@ -2645,7 +2922,7 @@ function boot(){
 window.__roadmap = { buildPlan, cfgOf, classify, state, loadAll, saveSettings, saveEvents, eventsFor,
                      togglePreset, setPreset, removeEvent, editEventTime, setDone, getDone, commitEvents,
                      commitPlan, normalizePlan, validatePlanItem, newItem, taskStates, commitOverlay,
-                     commitAppLog, setAppRecord, taskDay,
+                     commitAppLog, setAppRecord, taskDay, taskIdFor,
                      b64encode, b64decode, DEFAULT_SETTINGS };
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
 })();
