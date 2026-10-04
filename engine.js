@@ -181,6 +181,24 @@
     return { days, next: st, gen };
   }
 
+  /*
+    サイクル。決まった中身を順番に回す。やった日だけ次へ進む。
+      cycle = { items: ["過去の語彙", "未来の語彙", ...], anchorDate, anchorIndex }
+    anchorDate の日は anchorIndex 番目で、そこから完了した日の数だけ進む。
+    休んだ日は進まないので、回す中身に偏りが出ない。
+  */
+  function cycleIndex(cycle, days, today) {
+    if (!cycle || !Array.isArray(cycle.items) || !cycle.items.length) return null;
+    const n = cycle.items.length;
+    const from = cycle.anchorDate || today;
+    let done = 0;
+    for (const d of days) {
+      if (d.date >= from && d.date < today && DONE.has(d.check)) done++;
+    }
+    const i = (((+cycle.anchorIndex || 0) + done) % n + n) % n;
+    return { index: i, item: cycle.items[i], count: n };
+  }
+
   // 記録の束(月ごとのファイルを合わせたもの)から、logFor を作る
   function makeLogFor(logs, taskId) {
     return day => {
@@ -190,5 +208,5 @@
     };
   }
 
-  return { replay, makeLogFor, nextStatus, isDue, addDays, daysBetween, DONE, EXCUSED, AUTO_DONE, GENERATED, RULES };
+  return { replay, makeLogFor, cycleIndex, nextStatus, isDue, addDays, daysBetween, DONE, EXCUSED, AUTO_DONE, GENERATED, RULES };
 });
