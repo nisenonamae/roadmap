@@ -1,16 +1,20 @@
 {
+  "id": "/roadmap/",
   "name": "行軍表",
   "short_name": "行軍表",
   "description": "今日のタスクを時刻表の形に組み立てる",
-  "start_url": "./",
-  "scope": "./",
+  "start_url": "/roadmap/",
+  "scope": "/roadmap/",
   "display": "standalone",
   "background_color": "#EEF1F0",
   "theme_color": "#1D2430",
   "orientation": "portrait",
   "lang": "ja",
   "icons": [
-    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "./icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+    { "src": "/roadmap/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/roadmap/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/roadmap/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/roadmap/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/roadmap/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ]
 }
