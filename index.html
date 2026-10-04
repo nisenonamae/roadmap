@@ -315,4 +315,2751 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
       <button type="button" data-add="buffer">予備を足す</button>
     </div>
     <div id="plan-editor"></div>
-    <span clas
+    <span class="status" id="plan-status"></span>
+    <details class="rules">
+      <summary>計画の決まり</summary>
+      <div class="rb">
+        <p class="note">数字はすべて暫定値。3ヶ月の作戦会議で見直す。</p>
+
+        <h3>上から決める</h3>
+        <p>1年、四半期、月、週の順に決める。下から積み上げない。1年の期間は1つの省につき1本まで、到達点は1つだけ。2つ書きたくなったら、省を分けるか片方を捨てる。</p>
+
+        <h3>立てる順番</h3>
+        <ol>
+          <li>期日を節目として置く。本番の日、試験日、締切</li>
+          <li>逆算して節目を置く。月に1つ以上、週に2つ以上は置かない</li>
+          <li>節目に届くための作戦を置く。どのタスクをどの世代・目標回数で回すか</li>
+          <li>途中で要る達成型タスクを仕込みに置く</li>
+          <li>予備を置く</li>
+          <li>同時に走らせる上限を超えていないか確かめる</li>
+        </ol>
+        <p>調べ物(合格者の準備期間、必要な語彙数など)はClaudeと一緒にやり、根拠は作戦会議録に1行残す。</p>
+
+        <h3>書き方</h3>
+        <p>到達点も節目も、外から判定できる数字で書く。「英語ができる」ではなく「英検準1級に合格」「累計30以上」。期間の名前は短く、中身は到達点の1行だけ。</p>
+
+        <h3>予備</h3>
+        <p>1ヶ月に4日以上置く。試験と行事の前後を優先する。予備の間は新しい作戦も仕込みも始めない。予備を削って詰め込みたくなったら、計画の量が多すぎる合図。</p>
+
+        <h3>同時に走らせる上限</h3>
+        <ul>
+          <li>1つの省で、同時に走る作戦は2本まで</li>
+          <li>全体で、同時に走る作戦は5本まで</li>
+          <li>1週間に作る仕込みは2つまで</li>
+        </ul>
+        <p>新しい作戦は、同じ省で走っている作戦のタスクが定着か熟達に上がってから始める。</p>
+
+        <h3>作戦と世代</h3>
+        <p>作戦の開始日に世代を上げ、同じ日の行で世代内累計を0にする。3日前から知らせが出るので、そこで準備する。改名と世代上げは別の日にやる。目標回数は作戦の日数の7割を目安にする。</p>
+
+        <h3>節目が未達になったら</h3>
+        <p>3日以内に作戦会議で、期日を延ばす・到達点を下げる・作戦を変える、のどれかを決める。放置しない。変えたら、何をなぜ変えたかを作戦会議録に1行残す。</p>
+
+        <h3>見直しの周期</h3>
+        <ul>
+          <li>1週間の作戦会議:今週の知らせ、来週始まる作戦と仕込み</li>
+          <li>1ヶ月の作戦会議:今月の節目の結果、来月の作戦と節目を確定</li>
+          <li>3ヶ月の作戦会議:次の四半期を確定、この決まりの数字を見直す</li>
+          <li>1年の作戦会議:1年の期間を立て直す</li>
+        </ul>
+        <p>計画は作戦会議の中で立てる。思いつきで足さない。</p>
+      </div>
+    </details>
+  </section>
+
+  <section class="view" id="view-check" hidden>
+    <header class="head">
+      <h1>チェック</h1>
+      <div class="date" id="ck-date">—</div>
+    </header>
+    <div class="tk-bar">
+      <label>並べ方 <select id="ck-sort">
+        <option value="slot">時間帯</option><option value="prio">優先度順</option><option value="settle">定着度順</option>
+      </select></label>
+    </div>
+    <div id="tk-today"></div>
+    <div id="ck-detail"></div>
+    <span class="status tkst" id="ck-status"></span>
+  </section>
+
+  <section class="view" id="view-tasks" hidden>
+    <header class="head">
+      <h1>タスク</h1>
+      <div class="date" id="tk-date">—</div>
+    </header>
+    <div class="row" style="margin:0 0 .8rem"><button type="button" class="btn ghost" id="tk-new">タスクを足す</button></div>
+    <div class="tk-bar">
+      <label>並べ方 <select id="tk-group"><option value="省">省ごと</option><option value="状況">状況ごと</option></select></label>
+      <label>順番 <select id="tk-sort"><option value="name">名前順</option><option value="near">100%に近い順</option><option value="far">100%に遠い順</option></select></label>
+    </div>
+    <div id="tk-list"></div>
+    <details class="more" id="tk-waves-box"><summary>WAVE・STAGEのリンク</summary><div id="tk-waves"></div></details>
+    <div id="tk-detail"></div>
+    <span class="status tkst" id="tk-status"></span>
+  </section>
+
+  <section class="view" id="view-settings" hidden>
+    <header class="head"><h1>設定</h1><div class="date">組み立ての材料</div></header>
+
+    <div class="sec">
+      <h2>タスク</h2>
+      <p class="hint">所要時間・場所・使う器官を入れると、ながらの組み合わせと順番が正確になります。まだ設定していないものが上に並びます。<br>
+      「この後に続ける」を指定すると、2つが必ず隣り合います。軽いほうを先に置いて、重いほうへの踏み台にするときに使います。</p>
+      <div id="task-edits"></div>
+    </div>
+
+    <div class="sec">
+      <h2>よく使う用事</h2>
+      <p class="hint">登録すると、今日の画面のボタン1つで入れられます。曜日を選ぶと、その曜日は何もしなくても自動で入ります。</p>
+      <div id="presets-edit"></div>
+      <button class="btn ghost" id="add-preset" type="button" style="margin-top:.6rem">よく使う用事を足す</button>
+    </div>
+
+    <div class="sec blocks-edit">
+      <h2>時間の枠</h2>
+      <p class="hint">朝・昼・夜のタスクはこの枠に入ります。「一日中」のタスクは枠の空きに入り、入りきらないぶんは最後に並びます。</p>
+      <div id="blocks-edit"></div>
+    </div>
+
+    <div class="sec">
+      <h2>場所</h2>
+      <p class="hint">読点かカンマで区切ります。「どこでも」は他のどの場所のタスクとも組めます。</p>
+      <div class="f"><input id="places" type="text"></div>
+    </div>
+
+    <div class="sec">
+      <h2>並べ方の重み</h2>
+      <p class="hint">大きいほど、その法則を強く効かせます。タスクの価値は 重み × 省の重要度 で、今日落とすと要再設定になるもの(リーチ)はそこに倍率が掛かります。</p>
+      <div class="grid2">
+        <div class="f"><label for="w-place">同じ場所を続ける</label><input id="w-place" type="number" step="0.5" min="0"></div>
+        <div class="f"><label for="w-mode">同じ集中の型を続ける</label><input id="w-mode" type="number" step="0.5" min="0"></div>
+        <div class="f"><label for="w-priority">タスクの価値</label><input id="w-priority" type="number" step="0.5" min="0"></div>
+        <div class="f"><label for="w-reach">リーチの倍率</label><input id="w-reach" type="number" step="0.5" min="1"></div>
+      </div>
+    </div>
+
+    <div class="savebar">
+      <button class="btn" id="save" disabled>保存する</button>
+      <span class="status" id="save-status"></span>
+    </div>
+  </section>
+
+  <section class="view" id="view-connect" hidden>
+    <header class="head"><h1>接続</h1><div class="date">GitHub</div></header>
+    <div class="sec">
+      <p class="hint">タスクと設定は非公開のリポジトリに置いてあります。トークンはこの端末にだけ保存されます。</p>
+      <div class="grid2">
+        <div class="f"><label for="c-owner">ユーザー名</label><input id="c-owner" type="text" autocomplete="off"></div>
+        <div class="f"><label for="c-repo">リポジトリ</label><input id="c-repo" type="text" autocomplete="off"></div>
+        <div class="f"><label for="c-branch">ブランチ</label><input id="c-branch" type="text" autocomplete="off"></div>
+      </div>
+      <div class="f" style="margin-top:.6rem"><label for="c-token">トークン</label><input id="c-token" type="password" autocomplete="off"></div>
+      <div style="margin-top:.9rem;display:flex;gap:.8rem;align-items:center">
+        <button class="btn" id="connect">接続して読み込む</button>
+        <span class="status" id="conn-status"></span>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h2>同期</h2>
+      <p class="hint">開いたときにも自動で読み込みます。別の端末で変えたあとや、毎朝の取り込みのあとに、すぐ見たいときに使います。</p>
+      <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center">
+        <button class="btn" id="reload-data" type="button">データを読み込み直す</button>
+        <span class="status" id="reload-status"></span>
+      </div>
+      <p class="hint" id="last-sync" style="margin-top:.5rem"></p>
+    </div>
+
+    <div class="sec">
+      <h2>アプリの版</h2>
+      <p class="hint">今開いている版:<b id="app-version"></b></p>
+      <p class="hint">GitHubに新しい index.html を置いたのに変わらないときは、ここを押すと手元に残った古い版を飛ばして開き直します。</p>
+      <button class="btn ghost" id="reload-app" type="button">アプリを最新の版にする</button>
+    </div>
+  </section>
+
+</div>
+
+<div class="toast" id="toast" role="status" hidden><span id="toast-text"></span><button type="button" id="toast-undo">取り消す</button></div>
+
+<nav class="tabs" role="tablist">
+  <button role="tab" aria-selected="true" data-view="today">今日</button>
+  <button role="tab" aria-selected="false" data-view="check">チェック</button>
+  <button role="tab" aria-selected="false" data-view="plan">計画</button>
+  <button role="tab" aria-selected="false" data-view="tasks">タスク</button>
+  <button role="tab" aria-selected="false" data-view="settings">設定</button>
+  <button role="tab" aria-selected="false" data-view="connect">接続</button>
+</nav>
+
+<script>
+(function(){
+"use strict";
+
+/* ───────── 定数 ───────── */
+
+// アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
+const APP_VERSION = "2026-10-05 r32";
+
+const TASKS_PATH = "roadmap/tasks.json";
+const SETTINGS_PATH = "roadmap/settings.json";
+const EVENTS_PATH = "roadmap/events.json";
+const PLAN_PATH = "roadmap/plan.json";
+const TASKDEFS_PATH = "roadmap/tasks/defs.json";
+const OVERLAY_PATH = "roadmap/tasks/overlay.json";     // アプリで足したもの。取り込み直しで消えない
+const TASKLOG_DIR = "roadmap/tasks/log";
+const APPLOG_DIR = "roadmap/tasks/applog";          // アプリでつけた記録。取り込みでは上書きされない
+const KEY_TKVIEW = "roadmap-tkview";
+const KEY_CKVIEW = "roadmap-ckview";
+const CHECK_SLOTS = ["朝", "昼", "一日中", "夜"];
+const SLOT_ORDER = ["朝", "昼", "夜", "一日中"];
+const CHECK_OPTS = ["完了", "超過完了", "不完全な完了", "進行中", "不実行", "今日は該当しない"];
+const LIVE = ["新規", "進行中", "定着", "熟達", "実験", "随時", "要再設定"];
+const PLAN_STATUS_PATH = "roadmap/plan_status.json";
+const ZOOMS = { "週": 30, "月": 9, "四半期": 3.2, "年": 1.3 };      // 1日あたりの幅(px)
+const LANE_COLORS = ["#2F5DA8","#3D8A5A","#B07D2A","#7A4FA0","#2C8C99","#A0485F","#5A5FA8","#4F7A2F","#8A6A2F","#2F6F7A"];
+const KINDS = { period: "期間", campaign: "作戦", milestone: "節目", setup: "仕込み", buffer: "予備" };
+const DAYS = ["日","月","火","水","木","金","土"];
+const KEEP_EVENT_DAYS = 30;                          // 用事の記録はこの日数ぶんだけ残す
+const KEY_CONN = "roadmap-conn";
+const KEY_CACHE = "roadmap-cache";
+
+const ORGANS = ["目","耳","口","手","足"];
+const MODES = [["",""],["入門","入門"],["記銘","記銘"],["俯瞰","俯瞰"],["自在","自在"]];
+const DONE = ["完了","超過完了","不完全な完了"];
+const AUTO = ["定着","熟達"];                        // 毎朝「完了」で生成されるが、実際にはやる
+const SKIP = ["アーカイブ","実験終了","殿堂入り","休止中","達成済み"];
+const ANYWHERE = "どこでも";
+
+const PLACE_COLORS = {"机":"#2F5DA8","外":"#3D8A5A","浴室":"#2C8C99","台所":"#B07D2A","どこでも":"#8A929C"};
+const EXTRA_COLORS = ["#7A4FA0","#A0485F","#4F7A2F","#2F6F7A","#8A6A2F","#5A5FA8"];
+
+const DEFAULT_SETTINGS = {
+  version: 1,
+  blocks: { "朝": {start:"06:30", end:"08:00"}, "昼": {start:"12:30", end:"13:00"}, "夜": {start:"19:30", end:"23:00"} },
+  weights: { priority: 1, place: 3, mode: 2, reach: 3 },
+  places: ["机","外","浴室","台所","どこでも"],
+  presets: [],
+  tasks: {}
+};
+
+/* ───────── 状態 ───────── */
+
+const state = {
+  conn: null,
+  tasksDoc: null,
+  settings: clone(DEFAULT_SETTINGS),
+  settingsSha: null,
+  dirty: false,
+  events: {},
+  eventsSha: null,
+  evFormOpen: false,
+  plan: { version: 1, items: [] },
+  planSha: null,
+  planStatus: null,
+  planZoom: "月",
+  planEdit: null,            // 編集中の項目 { item, isNew }
+  taskDefs: null,
+  taskLogs: {},
+  taskLogShas: {},
+  appLogs: {},
+  appLogShas: {},
+  overlay: { version: 1, tasks: {}, waveUrls: {}, newTasks: [] },
+  overlaySha: null,
+  taskOpen: null,
+  taskMode: null,            // "settings" で設定の欄を開いておく、"new" でタスクを足す画面
+  recordOpen: null,          // チェックのタブで開いている記録の画面
+};
+
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+// 記録の1日は朝5時で区切る。Notionで新しい日の行ができる時刻と同じ。夜中に記録しても前日に入る
+function taskDay(){
+  return new Date(Date.now() + (9 - 5) * 3600 * 1000).toISOString().slice(0, 10);
+}
+function todayJST(){
+  const d = new Date(Date.now() + 9*3600*1000);
+  return d.toISOString().slice(0,10);
+}
+function toMin(hhmm){
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm || "");
+  return m ? (+m[1])*60 + (+m[2]) : null;
+}
+function fmt(min){
+  const h = Math.floor(min/60), m = Math.round(min%60);
+  return String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0");
+}
+function dur(min){
+  min = Math.round(min);
+  if (min < 60) return min + "分";
+  const h = Math.floor(min/60), m = min%60;
+  return h + "時間" + (m ? m + "分" : "");
+}
+function weekdayOf(dateStr){ return new Date(dateStr + "T00:00:00Z").getUTCDay(); }
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function placeColor(place, places){
+  if (PLACE_COLORS[place]) return PLACE_COLORS[place];
+  const i = Math.max(0, (places || []).indexOf(place));
+  return EXTRA_COLORS[i % EXTRA_COLORS.length];
+}
+
+/* ───────── 端末内の保存 ───────── */
+
+function lsGet(key, fallback){
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+  catch(e){ return fallback; }
+}
+function lsSet(key, value){
+  try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+  catch(e){ return false; }
+}
+function doneKey(date){ return "roadmap-done-" + date; }
+// 済みの記録は events.json に入れて、どの端末でも同じにする
+function getDone(date){
+  const d = state.events[date];
+  return new Set((d && Array.isArray(d.done)) ? d.done : []);
+}
+// 前の版で端末の中だけに残していた済みを、一度だけ同期のほうへ移す
+function takeLegacyDone(date){
+  const local = lsGet(doneKey(date), []);
+  if (!Array.isArray(local) || !local.length) return [];
+  try { localStorage.removeItem(doneKey(date)); } catch(e) {}
+  return local;
+}
+
+/* ───────── GitHub ───────── */
+
+function b64encode(str){
+  const bytes = new TextEncoder().encode(str);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(bin);
+}
+function b64decode(b64){
+  const bin = atob(String(b64).replace(/\s/g, ""));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
+function apiUrl(path){
+  const c = state.conn;
+  return "https://api.github.com/repos/" + encodeURIComponent(c.owner) + "/" +
+         encodeURIComponent(c.repo) + "/contents/" + path;
+}
+function authHeaders(extra){
+  return Object.assign({
+    "Authorization": "Bearer " + state.conn.token,
+    "Accept": "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+  }, extra || {});
+}
+
+async function readJson(path){
+  const url = apiUrl(path) + "?ref=" + encodeURIComponent(state.conn.branch);
+  const r = await fetch(url, { headers: authHeaders(), cache: "no-store" });
+  if (r.status === 404) return { data: null, sha: null };
+  if (!r.ok) throw new Error(describeHttp(r.status, path));
+  const meta = await r.json();
+  let text;
+  if (meta.content) {
+    text = b64decode(meta.content);
+  } else {
+    // 1MBを超えるとcontentが省かれる。そのときは中身だけ取り直す
+    const raw = await fetch(url, { headers: authHeaders({ "Accept": "application/vnd.github.raw+json" }), cache: "no-store" });
+    if (!raw.ok) throw new Error(describeHttp(raw.status, path));
+    text = await raw.text();
+  }
+  return { data: JSON.parse(text), sha: meta.sha };
+}
+
+async function listDir(path){
+  const url = apiUrl(path) + "?ref=" + encodeURIComponent(state.conn.branch);
+  const r = await fetch(url, { headers: authHeaders(), cache: "no-store" });
+  if (r.status === 404) return [];
+  if (!r.ok) throw new Error(describeHttp(r.status, path));
+  const list = await r.json();
+  return Array.isArray(list) ? list : [];
+}
+
+async function writeJson(path, obj, sha){
+  const body = {
+    message: "roadmap: 設定を更新",
+    content: b64encode(JSON.stringify(obj, null, 1)),
+    branch: state.conn.branch,
+  };
+  if (sha) body.sha = sha;
+  const r = await fetch(apiUrl(path), {
+    method: "PUT",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) { const err = new Error(describeHttp(r.status, path)); err.status = r.status; throw err; }
+  const out = await r.json();
+  return out.content && out.content.sha;
+}
+
+function describeHttp(status, path){
+  if (status === 401) return "トークンが無効です。接続タブで入れ直してください。";
+  if (status === 403) return "このトークンには書き込み権限がありません。Contents を Read and write にしてください。";
+  if (status === 404) return path + " が見つかりません。リポジトリ名とブランチを確かめてください。";
+  if (status === 409) return "別の場所で設定が更新されていました。読み込み直してから保存してください。";
+  return "GitHubとの通信に失敗しました(" + status + ")。";
+}
+
+/* ───────── タスクの設定 ───────── */
+
+function cfgOf(settings, name){
+  const c = (settings.tasks || {})[name];
+  const configured = !!c;
+  const s = c || {};
+  return {
+    min: (+s.min > 0) ? +s.min : 15,
+    place: s.place || ANYWHERE,
+    organs: (configured && Array.isArray(s.organs)) ? s.organs.slice() : ["目","手"],
+    mode: s.mode || "",
+    priority: +s.priority || 0,
+    fixed: toMin(s.fixed) !== null ? s.fixed : "",
+    next: s.next || "",            // この後に続けるタスク。踏み台にするときに使う
+    configured: configured,
+  };
+}
+
+/* ───────── 組み立て ───────── */
+
+function classify(tasksDoc, doneLocal){
+  const out = { schedulable: [], done: [], reset: [], ondemand: [] };
+  for (const t of (tasksDoc && tasksDoc.tasks) || []) {
+    if (t.status === "要再設定") { out.reset.push(t); continue; }
+    if (t.status === "随時") { out.ondemand.push(t); continue; }
+    if (SKIP.includes(t.status)) continue;
+    // 済みにしたものも行軍表に残す。間違えて押しても戻せるように。
+    const done = doneLocal.has(t.name) || (DONE.includes(t.check) && !AUTO.includes(t.status));
+    const task = done ? Object.assign({}, t, { done: true }) : t;
+    out.schedulable.push(task);
+    if (done) out.done.push(t);
+  }
+  return out;
+}
+
+function buildPlan(tasksDoc, settings, doneLocal, events){
+  const weights = (tasksDoc && tasksDoc.weights) || {};
+  const W = Object.assign({ priority: 1, place: 3, mode: 2, reach: 3 }, settings.weights || {});
+  const groups = classify(tasksDoc, doneLocal || new Set());
+
+  // タスクの価値。国力に効く量は 重み × 省の重要度 なので、それをそのまま使う。
+  // 手で付けた優先度(-2〜+2)は 0.5〜1.5 倍の係数として掛ける。
+  function rawValue(task, c){
+    const mw = Math.max(0, ...(task.ministries || []).map(m => +weights[m] || 0));
+    const w = (+task.weight > 0) ? +task.weight : 1;
+    return w * Math.max(mw, 1) * (1 + 0.25 * c.priority);
+  }
+  // 今日の候補のうち最大を10として揃える。場所・型の加点と同じ物差しにするため
+  const maxValue = Math.max(1e-9, ...groups.schedulable.filter(t => !t.done)
+    .map(t => rawValue(t, cfgOf(settings, t.name))));
+  // 順位 = 価値 × (リーチなら倍率)。落としたときに失うものの大きさで並べる
+  function prio(x){
+    if (x.isEvent) return 0;
+    if (x.task.done) return -1000;              // 済みは残すが、並びは最後
+    const v = 10 * rawValue(x.task, x.c) / maxValue;
+    return v * (x.task.reach ? Math.max(1, +W.reach || 1) : 1);
+  }
+  function score(x, prev){
+    let s = W.priority * prio(x);
+    if (prev && x.c.place === prev.c.place && x.c.place !== ANYWHERE) s += W.place;
+    if (prev && x.c.mode && x.c.mode === prev.c.mode) s += W.mode;
+    return s;
+  }
+  function pickBest(pool, prev, fits){
+    let best = null, bestScore = -Infinity;
+    for (const x of pool) {
+      if (fits && !fits(x)) continue;
+      const s = score(x, prev);
+      if (s > bestScore) { best = x; bestScore = s; }
+    }
+    return best;
+  }
+  function candidates(pools){
+    const cands = [];
+    for (const pool of pools) for (const x of pool) cands.push({ x, pool });
+    cands.sort((a, b) => prio(b.x) - prio(a.x));
+    return cands;
+  }
+  function take(x, pool){
+    const i = pool.indexOf(x);
+    if (i < 0) return false;
+    pool.splice(i, 1);
+    return true;
+  }
+
+  // 主タスクに、使う器官が重ならず場所の合うものを同時に重ねる
+  function attach(item, pools){
+    const used = new Set(item.c.organs);
+    for (const { x, pool } of candidates(pools)) {
+      if (item.nagara.length >= 2) break;
+      if (!item.c.configured || !x.c.configured) continue;
+      if (x.task.done || x.c.fixed || follower(x)) continue;
+      if (x.c.min > item.c.min) continue;
+      if (!(x.c.place === ANYWHERE || x.c.place === item.c.place)) continue;
+      if (x.c.organs.some(o => used.has(o))) continue;
+      if (!take(x, pool)) continue;
+      x.c.organs.forEach(o => used.add(o));
+      item.nagara.push(x);
+    }
+  }
+  // 用事には、空いている器官でできるタスクを順番に詰める。長い用事ほど多く乗る
+  function attachSeq(item, pools){
+    let budget = item.c.min;
+    for (const { x, pool } of candidates(pools)) {
+      if (item.nagara.length >= 4) break;
+      if (!x.c.configured || x.c.fixed || x.task.done || follower(x)) continue;
+      if (x.c.min > budget) continue;
+      if (!(x.c.place === ANYWHERE || x.c.place === item.c.place)) continue;
+      if (x.c.organs.some(o => item.c.organs.includes(o))) continue;
+      if (!take(x, pool)) continue;
+      budget -= x.c.min;
+      item.nagara.push(x);
+    }
+    item.sequential = item.nagara.length > 1;
+  }
+
+  const blockNames = Object.keys(settings.blocks || {});
+  const byBlock = {}; blockNames.forEach(n => byBlock[n] = []);
+  const flex = [];
+  const all = [];
+  for (const t of groups.schedulable) {
+    const x = { task: t, c: cfgOf(settings, t.name) };
+    all.push(x);
+    if (byBlock[t.slot]) byBlock[t.slot].push(x); else flex.push(x);
+  }
+
+  // 「この後に続ける」で繋いだタスクは、ひとつながりとして動かす。
+  // 軽いほうを先に踏めば、重いほうもそのまま続けられるため。
+  const byName = new Map(all.map(x => [x.task.name, x]));
+  const chained = new Set();
+  for (const x of all) {
+    const nx = x.c.next && byName.get(x.c.next);
+    if (!nx || nx === x || chained.has(nx) || nx.task.done) continue;
+    x.chain = nx;
+    nx.chainedFrom = x;
+    chained.add(nx);
+  }
+  // 輪になっていたら繋がない(たどれなくなるため)
+  for (const x of all) {
+    let seen = new Set([x]), cur = x.chain;
+    while (cur) {
+      if (seen.has(cur)) { x.chain = null; break; }
+      seen.add(cur); cur = cur.chain;
+    }
+  }
+  // 続きのタスクは単独では置かない。先頭のタスクが引き連れる
+  const follower = v => !!v.chainedFrom && v.chainedFrom.chain === v;
+  const chainLen = x => { let n = x.c.min, c = x.chain; while (c) { n += c.c.min; c = c.chain; } return n; };
+  const chainList = x => { const out = []; let c = x.chain; while (c) { out.push(c); c = c.chain; } return out; };
+  const dropFollowers = pool => { for (let i = pool.length - 1; i >= 0; i--) if (follower(pool[i])) pool.splice(i, 1); };
+  [flex].concat(Object.values(byBlock)).forEach(dropFollowers);
+
+  const ordered = blockNames
+    .map(n => ({ name: n, start: toMin(settings.blocks[n].start), end: toMin(settings.blocks[n].end) }))
+    .filter(b => b.start !== null && b.end !== null)
+    .sort((a, b) => a.start - b.start);
+
+  // 用事は動かせない区間。時刻が重なる枠に入れ、どの枠にも重ならなければ単独で置く
+  const evInBlock = {}; ordered.forEach(b => evInBlock[b.name] = []);
+  const evAlone = [];
+  for (const e of (events || [])) {
+    const a = toMin(e.start), z = toMin(e.end);
+    if (a === null || z === null || z <= a) continue;
+    const x = {
+      isEvent: true, ev: e,
+      task: { name: e.name, ministries: [], reach: false },
+      c: { min: z - a, place: e.place || ANYWHERE,
+           organs: Array.isArray(e.organs) ? e.organs.slice() : ORGANS.slice(),
+           mode: "", priority: 0, fixed: e.start, configured: true },
+    };
+    const b = ordered.find(b => a < b.end && z > b.start);
+    if (b) evInBlock[b.name].push(x); else evAlone.push(x);
+  }
+
+  function mkItem(x, at){
+    const s = x.isEvent ? toMin(x.ev.start) : at;
+    const e = x.isEvent ? toMin(x.ev.end) : at + x.c.min;
+    return { task: x.task, c: x.c, start: s, end: e, nagara: [], transferFrom: null,
+             isEvent: !!x.isEvent, ev: x.ev || null, sequential: false };
+  }
+  function transfer(prev, x){
+    return (prev && prev.c.place !== x.c.place && prev.c.place !== ANYWHERE && x.c.place !== ANYWHERE)
+      ? prev.c.place : null;
+  }
+
+  // 枠の外の用事を先に処理する。通学のような空き時間に、一日中のタスクを乗せるため
+  const alone = evAlone.sort((p, q) => toMin(p.ev.start) - toMin(q.ev.start)).map(x => {
+    const it = mkItem(x);
+    attachSeq(it, [flex]);
+    return it;
+  });
+
+  const blocks = [];
+  for (const b of ordered) {
+    const pool = byBlock[b.name] || [];
+    let fixed = pool.filter(x => x.c.fixed).concat(evInBlock[b.name])
+      .sort((p, q) => toMin(p.c.fixed) - toMin(q.c.fixed));
+    const rest = pool.filter(x => !x.c.fixed);
+    const items = [];
+    let cursor = b.start, prev = null;
+
+    const place = (x, at) => {
+      const it = mkItem(x, at);
+      it.transferFrom = transfer(prev, x);
+      if (x.isEvent) attachSeq(it, [rest, flex]); else attach(it, [rest, flex]);
+      items.push(it);
+      if (!x.task.done) { prev = x; cursor = Math.max(cursor, it.end); }
+      // 続けるタスクを、そのまま後ろに繋げる
+      for (const nx of chainList(x)) {
+        const nit = mkItem(nx, cursor);
+        nit.afterChain = true;
+        attach(nit, [rest, flex]);
+        items.push(nit);
+        if (!nx.task.done) { prev = nx; cursor = nit.end; }
+        take(nx, rest); take(nx, flex);
+      }
+    };
+
+    // 枠のタスクを並べる。固定時刻のものと用事は、その時刻に差し込む
+    while (rest.length || fixed.length) {
+      const nf = fixed[0];
+      const fAt = nf ? toMin(nf.c.fixed) : Infinity;
+      if (nf && fAt <= cursor) { fixed.shift(); place(nf, Math.max(cursor, fAt)); continue; }
+      const gap = fAt - cursor;
+      const pick = pickBest(rest, prev, x => chainLen(x) <= gap);
+      if (!pick) {
+        if (nf) { fixed.shift(); place(nf, fAt); continue; }
+        break;
+      }
+      rest.splice(rest.indexOf(pick), 1);
+      place(pick, cursor);
+    }
+    // 枠に空きがあれば「一日中」のタスクで埋める
+    while (true) {
+      const room = b.end - cursor;
+      const pick = pickBest(flex, prev, x => !x.c.fixed && chainLen(x) <= room);
+      if (!pick) break;
+      flex.splice(flex.indexOf(pick), 1);
+      place(pick, cursor);
+    }
+
+    // 済みの行はまとめて最後に置く。これからやるものが上に並ぶように
+    const live = items.filter(i => !(i.task && i.task.done));
+    const fin = items.filter(i => i.task && i.task.done);
+    fin.forEach(i => { i.transferFrom = null; i.afterChain = false; });
+    const sorted = live.concat(fin);
+    blocks.push({ name: b.name, start: b.start, end: b.end, items: sorted,
+                  used: cursor - b.start, overflow: Math.max(0, cursor - b.end) });
+  }
+
+  // 入りきらなかった「一日中」は、場所と型がつながる順に並べる
+  const leftover = [];
+  let prev = null;
+  while (flex.length) {
+    const pick = pickBest(flex, prev);
+    flex.splice(flex.indexOf(pick), 1);
+    const it = { task: pick.task, c: pick.c, nagara: [], transferFrom: transfer(prev, pick) };
+    attach(it, [flex]);
+    leftover.push(it);
+    prev = pick;
+    for (const nx of chainList(pick)) {
+      take(nx, flex);
+      const nit = { task: nx.task, c: nx.c, nagara: [], transferFrom: null, afterChain: true };
+      attach(nit, [flex]);
+      leftover.push(nit);
+      prev = nx;
+    }
+  }
+
+  // 枠と単独の用事を、時刻順に一本の流れにする
+  const sections = blocks.filter(b => b.items.length).map(b => ({ type: "block", start: b.start, block: b }))
+    .concat(alone.map(it => ({ type: "event", start: it.start, item: it })))
+    .sort((p, q) => p.start - q.start);
+
+  const unconfigured = groups.schedulable.filter(t => !t.done && !(settings.tasks || {})[t.name]).length;
+  return { blocks, alone, sections, leftover, done: groups.done, reset: groups.reset,
+           ondemand: groups.ondemand, unconfigured };
+}
+
+/* ───────── 描画:今日 ───────── */
+
+function renderToday(){
+  const doc = state.tasksDoc;
+  const dateEl = document.getElementById("date");
+  const notices = document.getElementById("notices");
+  const planEl = document.getElementById("plan");
+  notices.innerHTML = "";
+
+  if (!doc) {
+    dateEl.textContent = "—";
+    document.getElementById("events-panel").innerHTML = "";
+    planEl.innerHTML = '<div class="empty">接続タブでリポジトリとトークンを入れると、今日の行軍表が出ます。</div>';
+    return;
+  }
+
+  dateEl.innerHTML = esc(doc.date) + "(" + DAYS[weekdayOf(doc.date)] + ")<br><small>" + esc(doc.generated_at || "") + " 時点</small>";
+  if (doc.date !== todayJST()) {
+    notices.insertAdjacentHTML("beforeend",
+      '<p class="notice">これは ' + esc(doc.date) + ' のタスクです。今日のぶんはまだ届いていません。</p>');
+  }
+
+  const events = eventsFor(doc.date);
+  renderEventsPanel(events);
+
+  const done = getDone(doc.date);
+  // アプリでつけた記録で完了になっているものも、済みとして扱う
+  for (const t of taskStates()) {
+    if (t.row && window.TaskEngine.DONE.has(t.check)) { done.add(t.def.name); (t.def.aliases || []).forEach(a => done.add(a)); }
+  }
+  const plan = buildPlan(doc, state.settings, done, events);
+  const places = state.settings.places || [];
+
+  const over = plan.blocks.filter(b => b.overflow > 0);
+  if (over.length) {
+    notices.insertAdjacentHTML("beforeend", '<p class="notice warn">' +
+      over.map(b => esc(b.name) + "は" + dur(b.overflow) + "あふれています").join("。") +
+      "。枠を広げるか、タスクを減らしてください。</p>");
+  }
+  if (plan.unconfigured > 0) {
+    notices.insertAdjacentHTML("beforeend", '<p class="notice">まだ設定していないタスクが' +
+      plan.unconfigured + "件あります。設定タブで所要時間と場所を入れると、組み立てが正確になります。</p>");
+  }
+
+  let html = "";
+  const finished = [];
+  for (const sec of plan.sections) {
+    if (sec.type === "event") {
+      html += '<div class="block">' + stopHtml(sec.item, fmt(sec.item.start), places) + "</div>";
+      continue;
+    }
+    const b = Object.assign({}, sec.block);
+    finished.push(...b.items.filter(it => it.task && it.task.done));
+    b.items = b.items.filter(it => !(it.task && it.task.done));
+    if (!b.items.length) continue;
+    html += '<div class="block"><div class="block-head"><h2>' + esc(b.name) + '</h2>' +
+            '<span class="span">' + fmt(b.start) + "–" + fmt(b.end) + "　" +
+            (b.overflow > 0 ? '<span class="over">' + dur(b.used) + " / " + dur(b.end - b.start) + "</span>"
+                            : dur(b.used) + " / " + dur(b.end - b.start)) +
+            "</span></div>";
+    for (const it of b.items) html += stopHtml(it, fmt(it.start), places);
+    html += "</div>";
+  }
+  finished.push(...plan.leftover.filter(it => it.task && it.task.done));
+  plan.leftover = plan.leftover.filter(it => !(it.task && it.task.done));
+  if (plan.leftover.length) {
+    const total = plan.leftover.reduce((s, it) => s + it.c.min, 0);
+    html += '<div class="block"><div class="block-head"><h2>空いた時間に</h2>' +
+            '<span class="span">' + dur(total) + "</span></div>";
+    for (const it of plan.leftover) html += stopHtml(it, "", places);
+    html += "</div>";
+  }
+  if (!html) html = '<div class="empty">今日やることは残っていません。</div>';
+
+  if (finished.length) {
+    html += '<details class="more done-box"><summary>済み　' + finished.length + '件</summary><ul class="list done-list">' +
+      finished.map(it => '<li><span class="dn">' + esc(it.task.name) + '</span><button type="button" data-undo="' + esc(it.task.name) +
+        '">戻す</button></li>').join("") + "</ul></details>";
+  }
+  const extra = [];
+  if (plan.ondemand.length) extra.push(['随時(条件が来たら)', plan.ondemand]);
+  if (plan.reset.length) extra.push(['要再設定', plan.reset]);
+
+  for (const [label, arr] of extra) {
+    html += '<details class="more"><summary>' + esc(label) + "　" + arr.length + "件</summary><ul class=\"list\">" +
+      arr.map(t => '<li><span>' + esc(t.name) + '</span><span class="r">' + esc(t.slot || "") +
+        "</span></li>").join("") + "</ul></details>";
+  }
+
+  planEl.innerHTML = html;
+  flashIn(planEl, "[data-done]", "data-done", ".stop");
+}
+
+// 取り消して戻ってきた行を光らせ、そこまで画面を動かす
+let flashTarget = null;
+function flashIn(root, sel, attr, rowSel){
+  if (!flashTarget) return;
+  const el = Array.from(root.querySelectorAll(sel)).find(b => b.getAttribute(attr) === flashTarget);
+  if (!el) return;
+  const row = el.closest(rowSel) || el;
+  row.classList.add("flash");
+  if (row.scrollIntoView) row.scrollIntoView({ block: "center", behavior: "smooth" });
+  flashTarget = null;
+}
+
+function stopHtml(it, time, places){
+  const c = it.c;
+  const color = placeColor(c.place, places);
+  let pre = "";
+  if (it.afterChain) {
+    pre = '<div class="transfer chain" style="--c:' + color + '"><span></span><span class="line"></span>' +
+          '<span class="txt">そのまま続ける</span></div>';
+  } else if (it.transferFrom) {
+    pre = '<div class="transfer"><span></span><span class="line"></span><span class="txt">' +
+          esc(it.transferFrom) + "から" + esc(c.place) + "へ</span></div>";
+  }
+  const done = !it.isEvent && it.task.done;
+  const meta = [];
+  meta.push('<span class="pl">' + esc(c.place) + "</span>");
+  if (it.isEvent) {
+    meta.push('<span class="span-t">' + fmt(it.start) + "–" + fmt(it.end) + "</span>");
+  } else if (done) {
+    meta.push("<span>" + dur(c.min) + "</span>");
+
+  } else {
+    meta.push("<span>" + dur(c.min) + "</span>");
+    if (c.mode) meta.push("<span>" + esc(c.mode) + "</span>");
+    if (it.task.reach) meta.push('<span class="reach">今日やらないと落ちる</span>');
+    const tk = taskByName(it.task.name);
+    if (tk && tk.cycle) meta.push('<span class="cyc">今日は ' + esc(tk.cycle.item) + "</span>");
+    if (!c.configured) meta.push('<span class="unset">未設定</span>');
+  }
+  const nag = it.nagara.length
+    ? '<div class="nagara">' + it.nagara.map(n => "<div>＋ " + esc(n.task.name) + "<span>" + dur(n.c.min) + "</span></div>").join("") +
+      (it.sequential ? '<div><span style="margin-left:0">上から順に</span></div>' : "") + "</div>"
+    : "";
+  if (it.isEvent) {
+    return pre + '<div class="stop ev" style="--c:' + color + '">' +
+      '<span class="t">' + esc(time) + '</span><span class="line"></span>' +
+      '<div class="body"><div class="name">' + esc(it.task.name) + '</div><div class="meta">' + meta.join("") + "</div>" + nag +
+      "</div></div>";
+  }
+  const act = done
+    ? 'data-undo="' + esc(it.task.name) + '" aria-label="' + esc(it.task.name) + 'を戻す"'
+    : 'data-done="' + esc(it.task.name) + '" aria-label="' + esc(it.task.name) + 'を済みにする"';
+  return pre + '<div class="stop' + (done ? " done" : "") + '" style="--c:' + color + '">' +
+    '<span class="t">' + esc(done ? "済" : time) + '</span><span class="line"></span>' +
+    '<div class="body"><div class="row-in"><div class="txt">' +
+    '<div class="name">' + esc(it.task.name) + '</div><div class="meta">' + meta.join("") + "</div>" + nag +
+    '</div><button type="button" class="tick' + (done ? " on" : "") + '" ' + act + ">" + (done ? "✓" : "○") + "</button>" +
+    "</div></div></div>";
+}
+
+/* ───────── 用事 ───────── */
+
+// その日の用事。手で入れたものに、曜日で自動に入るよく使う用事を足す
+function eventsFor(date){
+  const day = state.events[date] || { items: [], dismissed: [] };
+  const items = (day.items || []).map(e => Object.assign({}, e));
+  const wd = weekdayOf(date);
+  for (const p of state.settings.presets || []) {
+    if (!(p.days || []).includes(wd)) continue;
+    if ((day.dismissed || []).includes(p.id)) continue;
+    if (items.some(e => e.preset === p.id)) continue;
+    items.push({ id: "auto-" + p.id, preset: p.id, name: p.name, start: p.start, end: p.end,
+                 place: p.place, organs: p.organs, auto: true });
+  }
+  return items.filter(e => toMin(e.start) !== null && toMin(e.end) !== null)
+              .sort((a, b) => toMin(a.start) - toMin(b.start));
+}
+
+function dayOf(date){
+  if (!state.events[date]) state.events[date] = { items: [], dismissed: [], done: [] };
+  const d = state.events[date];
+  d.items = d.items || []; d.dismissed = d.dismissed || []; d.done = d.done || [];
+  return d;
+}
+
+// 以下の操作は、どれも同じ結果になるまで何度やり直しても安全な形にしてある。
+// 別の端末で先に書き換えられていたとき、読み直して同じ操作をかけ直すため。
+
+function setDone(date, name, on){
+  const d = dayOf(date);
+  const has = d.done.includes(name);
+  if (on && !has) d.done.push(name);
+  if (!on && has) d.done = d.done.filter(x => x !== name);
+}
+
+function setPreset(date, presetId, on){
+  const p = (state.settings.presets || []).find(x => x.id === presetId);
+  if (!p) return;
+  const d = dayOf(date);
+  const now = eventsFor(date).find(e => e.preset === presetId);
+  if (on && !now) {
+    d.dismissed = d.dismissed.filter(x => x !== presetId);
+    d.items.push({ id: "p-" + presetId + "-" + date, preset: p.id, name: p.name, start: p.start, end: p.end,
+                   place: p.place, organs: (p.organs || []).slice() });
+  }
+  if (!on && now) removeEvent(date, now.id);
+}
+function togglePreset(date, presetId){
+  setPreset(date, presetId, !eventsFor(date).some(e => e.preset === presetId));
+}
+
+function removeEvent(date, id){
+  const d = dayOf(date);
+  if (id.indexOf("auto-") === 0) {
+    const pid = id.slice(5);
+    if (!d.dismissed.includes(pid)) d.dismissed.push(pid);
+    // 別の端末で時刻を直して書き出されていた場合も消す
+    d.items = d.items.filter(e => e.preset !== pid);
+    return;
+  }
+  const ev = d.items.find(e => e.id === id);
+  d.items = d.items.filter(e => e.id !== id);
+  // 曜日で自動に入るものを消したときは、その日だけ出ないようにする
+  if (ev && ev.preset && !d.dismissed.includes(ev.preset)) d.dismissed.push(ev.preset);
+}
+
+function editEventTime(date, id, key, value){
+  if (toMin(value) === null) return;
+  const d = dayOf(date);
+  let ev = d.items.find(e => e.id === id);
+  if (!ev && id.indexOf("auto-") === 0) {
+    const pid = id.slice(5);
+    ev = d.items.find(e => e.preset === pid);       // 別の端末で書き出し済みならそれを使う
+    if (!ev) {
+      const auto = eventsFor(date).find(e => e.id === id);
+      if (!auto) return;
+      // 自動のものを直したら、その日の用事として書き出す
+      ev = { id: "p-" + pid + "-" + date, preset: pid, name: auto.name, start: auto.start, end: auto.end,
+             place: auto.place, organs: (auto.organs || []).slice() };
+      d.items.push(ev);
+    }
+  }
+  if (ev) ev[key] = value;
+}
+
+function addEvent(date, ev){
+  const d = dayOf(date);
+  if (!d.items.some(e => e.id === ev.id)) d.items.push(Object.assign({}, ev));
+}
+
+function pruneEvents(){
+  const keep = new Date(Date.now() + 9*3600*1000 - KEEP_EVENT_DAYS*86400*1000).toISOString().slice(0,10);
+  for (const k of Object.keys(state.events)) if (k < keep) delete state.events[k];
+}
+
+// 操作をかけて保存する。別の端末で先に書き換えられていたら、読み直して同じ操作をかけ直す
+async function commitEvents(mutate){
+  // 描き直しで要素が入れ替わるので、表示を書くたびに探し直す
+  const status = (text, err) => {
+    const st = document.getElementById("ev-status");
+    if (!st) return;
+    st.classList.toggle("err", !!err);
+    st.textContent = text;
+  };
+  mutate();
+  renderToday();
+  if (!state.conn) return false;
+  status("保存しています…");
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      pruneEvents();
+      state.eventsSha = await writeJson(EVENTS_PATH, state.events, state.eventsSha);
+      lsSet(KEY_CACHE, cachePayload());
+      status("保存しました");
+      return true;
+    } catch (e) {
+      let err = e;
+      if ((e.status === 409 || e.status === 422) && attempt < 2) {
+        try {
+          const fresh = await readJson(EVENTS_PATH);
+          state.events = (fresh.data && typeof fresh.data === "object") ? fresh.data : {};
+          state.eventsSha = fresh.sha;
+          mutate();
+          renderToday();
+          status("保存しています…");
+          continue;
+        } catch (e2) { err = e2; }
+      }
+      lsSet(KEY_CACHE, cachePayload());
+      status(err.status ? err.message : "通信できませんでした。つながったら開き直してください。", true);
+      return false;
+    }
+  }
+  return false;
+}
+async function saveEvents(){ return commitEvents(() => {}); }
+
+function renderEventsPanel(events){
+  const doc = state.tasksDoc;
+  const box = document.getElementById("events-panel");
+  const presets = state.settings.presets || [];
+  const places = state.settings.places || [];
+  const chips = presets.map(p => {
+    const on = events.some(e => e.preset === p.id);
+    return '<button type="button" data-preset="' + esc(p.id) + '" aria-pressed="' + on + '">' + esc(p.name) + "</button>";
+  }).join("") + '<button type="button" class="new" data-ev-new>新しい用事</button>';
+
+  const list = events.map(e =>
+    '<li data-ev="' + esc(e.id) + '"><div class="en">' + esc(e.name) + "<small>" + esc(e.place || ANYWHERE) +
+      (e.auto ? "・曜日で自動" : "") + "</small></div>" +
+    '<div class="times"><input type="time" data-evk="start" value="' + esc(e.start) + '" aria-label="' + esc(e.name) + 'の開始">' +
+    "–" + '<input type="time" data-evk="end" value="' + esc(e.end) + '" aria-label="' + esc(e.name) + 'の終了"></div>' +
+    '<button type="button" class="del" data-ev-del="' + esc(e.id) + '" aria-label="' + esc(e.name) + 'を外す">外す</button></li>'
+  ).join("");
+
+  const placeOpts = places.map(p => '<option' + (p === "外" ? " selected" : "") + ">" + esc(p) + "</option>").join("");
+  const organs = ORGANS.map(o => '<button type="button" aria-pressed="true" data-nf-organ="' + o + '">' + o + "</button>").join("");
+
+  box.innerHTML = '<div class="evp"><div class="evp-h"><h2>用事</h2><span>押すと今日に入ります</span></div>' +
+    '<div class="chips">' + chips + "</div>" +
+    (list ? '<ul class="ev-list">' + list + "</ul>" : "") +
+    '<div class="ev-form"' + (state.evFormOpen ? "" : " hidden") + ' id="ev-form">' +
+      '<div class="grid2">' +
+        '<div class="f"><label for="nf-name">名前</label><input id="nf-name" type="text" placeholder="歯医者"></div>' +
+        '<div class="f"><label for="nf-place">場所</label><select id="nf-place">' + placeOpts + "</select></div>" +
+        '<div class="f"><label for="nf-start">開始</label><input id="nf-start" type="time" value="17:00"></div>' +
+        '<div class="f"><label for="nf-end">終了</label><input id="nf-end" type="time" value="18:00"></div>' +
+      "</div>" +
+      '<div class="f" style="margin-top:.5rem"><label>用事の間ふさがる器官</label></div>' +
+      '<div class="organs" role="group" aria-label="ふさがる器官">' + organs + "</div>" +
+      '<div class="row"><label style="font-size:.85rem"><input type="checkbox" id="nf-save"> よく使う用事に登録する</label></div>' +
+      '<div class="row"><button type="button" class="btn" data-ev-add>今日に入れる</button>' +
+      '<button type="button" class="btn ghost" data-ev-cancel>やめる</button></div>' +
+    "</div>" +
+    '<span class="status" id="ev-status"></span></div>';
+}
+
+/* ───────── 計画 ───────── */
+
+function normalizePlan(p){
+  const items = (p && Array.isArray(p.items)) ? p.items.filter(i => i && i.id && KINDS[i.type]) : [];
+  return { version: 1, items };
+}
+function addDays(dateStr, n){
+  const t = new Date(dateStr + "T00:00:00Z").getTime() + n * 86400000;
+  return new Date(t).toISOString().slice(0, 10);
+}
+function daysBetween(a, b){
+  return Math.round((new Date(b + "T00:00:00Z") - new Date(a + "T00:00:00Z")) / 86400000);
+}
+function isDate(s){ return /^\d{4}-\d{2}-\d{2}$/.test(s || "") && !isNaN(new Date(s + "T00:00:00Z")); }
+function itemStart(i){ return i.start || i.date; }
+function itemEnd(i){ return i.end || i.date; }
+
+// 省の一覧。所属にはWAVEやSTAGEも混ざるので、省一覧DB(なければ国力ログ)を正とする
+const NOT_MINISTRY = /^(WAVE|STAGE)/i;
+function ministryNames(){
+  const doc = state.tasksDoc || {};
+  const set = new Set();
+  (doc.ministries || []).forEach(m => set.add(m));
+  Object.keys(doc.weights || {}).forEach(m => set.add(m));
+  if (!set.size) {
+    // 古い取り込みで一覧が無いときは、所属からWAVE・STAGEを除いて代用する
+    (doc.tasks || []).forEach(t => (t.ministries || []).forEach(m => { if (!NOT_MINISTRY.test(m)) set.add(m); }));
+  }
+  return Array.from(set).filter(m => !NOT_MINISTRY.test(m));
+}
+// レーンの候補。全体と省。すでに計画にあるレーンは消さずに残す
+function knownLanes(){
+  const set = new Set(["全体"]);
+  ministryNames().forEach(m => set.add(m));
+  (state.plan.items || []).forEach(i => i.lane && set.add(i.lane));
+  return Array.from(set);
+}
+function laneOrder(lanes){
+  const w = (state.tasksDoc && state.tasksDoc.weights) || {};
+  return lanes.slice().sort((a, b) => {
+    if (a === "全体") return -1; if (b === "全体") return 1;
+    return (+w[b] || 0) - (+w[a] || 0) || a.localeCompare(b, "ja");
+  });
+}
+function laneColor(lane){
+  const lanes = laneOrder(knownLanes());
+  const i = Math.max(0, lanes.indexOf(lane));
+  return lane === "全体" ? "#5F6873" : LANE_COLORS[(i - 1 + LANE_COLORS.length) % LANE_COLORS.length];
+}
+function statusOf(id){ return ((state.planStatus && state.planStatus.items) || {})[id] || null; }
+
+function renderPlan(){
+  const dateEl = document.getElementById("plan-date");
+  if (!dateEl) return;
+  const st = state.planStatus;
+  dateEl.innerHTML = st ? ("照合 " + esc(st.generated_at || "")) : "まだ照合していません";
+
+  // 知らせ
+  const notes = (st && st.notices) || [];
+  document.getElementById("plan-notices").innerHTML = notes.map(n =>
+    '<button type="button" class="pnotice ' + esc(n.level) + '" data-pid="' + esc(n.id || "") + '">' +
+    esc(n.lane && n.lane !== "全体" ? n.lane + "　" : "") + esc(n.text) + "</button>").join("");
+
+  document.querySelectorAll("#zoom [data-zoom]").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.zoom === state.planZoom)));
+
+  renderTimeline();
+  renderPlanEditor();
+}
+
+function renderTimeline(){
+  const box = document.getElementById("tl");
+  const items = state.plan.items || [];
+  const today = todayJST();
+  if (!items.length) {
+    box.innerHTML = '<div class="tl-empty">まだ計画がありません。下のボタンから、期間・作戦・節目などを足してください。</div>';
+    return;
+  }
+
+  // 表示する範囲:今日の2週間前から、いちばん遠い予定の1週間後まで
+  let from = addDays(today, -14), to = addDays(today, 60);
+  for (const i of items) {
+    const a = itemStart(i), z = itemEnd(i);
+    if (isDate(a) && a < from) from = a;
+    if (isDate(z) && z > to) to = z;
+  }
+  from = addDays(from, -3); to = addDays(to, 7);
+  const ppd = ZOOMS[state.planZoom] || 9;
+  const W = (daysBetween(from, to) + 1) * ppd;
+  const x = dt => daysBetween(from, dt) * ppd;
+  const todayX = x(today);
+
+  // 見出し:月と、週表示のときは週の始まり
+  let head = "";
+  let cur = from.slice(0, 7) + "-01";
+  if (cur < from) cur = addDays(cur, 0);
+  while (cur <= to) {
+    const left = Math.max(0, x(cur));
+    const y = +cur.slice(0, 4), m = +cur.slice(5, 7);
+    const label = (m === 1 || cur <= from) ? y + "年" + m + "月" : m + "月";
+    head += '<div class="tl-mon" style="left:' + left + 'px">' + label + "</div>";
+    const nm = m === 12 ? (y + 1) + "-01-01" : y + "-" + String(m + 1).padStart(2, "0") + "-01";
+    cur = nm;
+  }
+  if (state.planZoom === "週") {
+    let dd = from;
+    while (dd <= to) {
+      if (weekdayOf(dd) === 1) head += '<div class="tl-wk" style="left:' + (x(dd) + ppd / 2) + 'px">' + (+dd.slice(8)) + "</div>";
+      dd = addDays(dd, 1);
+    }
+  }
+  let html = '<div class="tl-row tl-head"><div class="tl-label"></div><div class="tl-track" style="width:' + W + 'px">' +
+             head + '<div class="tl-today" style="left:' + todayX + 'px"></div></div></div>';
+
+  const lanes = laneOrder(Array.from(new Set(items.map(i => i.lane || "全体"))));
+  const ROW = 26;
+  for (const lane of lanes) {
+    const color = laneColor(lane);
+    const mine = items.filter(i => (i.lane || "全体") === lane);
+    const marks = mine.filter(i => i.type === "milestone" || i.type === "setup");
+    const bars = mine.filter(i => i.type === "period" || i.type === "campaign" || i.type === "buffer")
+      .filter(i => isDate(i.start) && isDate(i.end))
+      .sort((a, b) => (a.type === "period" ? -1 : 0) - (b.type === "period" ? -1 : 0) || a.start.localeCompare(b.start));
+
+    // 帯を重ならない段に詰める
+    const rows = [];
+    const placed = bars.map(b => {
+      let r = rows.findIndex(end => end < b.start);
+      if (r < 0) { rows.push(b.end); r = rows.length - 1; } else rows[r] = b.end;
+      return { b, r };
+    });
+    const markRow = marks.length ? 1 : 0;
+    const h = (rows.length + markRow) * ROW + 8;
+
+    let inner = "";
+    for (const m of marks) {
+      const dt = m.date; if (!isDate(dt)) continue;
+      const st = statusOf(m.id) || {};
+      let cls = m.type === "milestone" ? (st.state === "achieved" ? "achieved" : st.state === "missed" ? "missed"
+                : (st.state === "pending" && st.on_track === false ? "behind" : "")) : (st.state === "created" ? "created" : "");
+      const shape = m.type === "milestone" ? '<span class="dm"></span>' : '<span class="sq"></span>';
+      inner += '<button type="button" class="tl-mk ' + cls + '" data-pid="' + esc(m.id) + '" style="left:' + (x(dt) + ppd / 2 - 6) +
+               'px;top:4px" aria-label="' + esc(KINDS[m.type] + " " + (m.name || "")) + '">' + shape +
+               '<span class="l">' + esc(m.name || "") + "</span></button>";
+    }
+    for (const { b, r } of placed) {
+      const st = statusOf(b.id) || {};
+      const cls = [b.type,
+        b.type === "campaign" && st.state === "drift" ? "drift" : "",
+        b.type === "buffer" && st.state === "clash" ? "clash" : "",
+        b.type === "period" && b.start <= today && today <= b.end ? "active" : ""].join(" ");
+      const left = x(b.start), width = Math.max(ppd, (daysBetween(b.start, b.end) + 1) * ppd);
+      const label = b.type === "campaign" && b.generation ? (b.name || b.task) + "(世代" + b.generation + ")" : (b.name || KINDS[b.type]);
+      inner += '<button type="button" class="tl-it ' + cls + '" data-pid="' + esc(b.id) + '" style="left:' + left +
+               'px;width:' + width + "px;top:" + ((r + markRow) * ROW + 4) + 'px" title="' + esc(label) + '">' + esc(label) + "</button>";
+    }
+    html += '<div class="tl-row" style="--c:' + color + '"><div class="tl-label" style="color:' + color + '">' + esc(lane) +
+            '</div><div class="tl-track" style="width:' + W + "px;height:" + h + 'px">' + inner +
+            '<div class="tl-today" style="left:' + todayX + 'px"></div></div></div>';
+  }
+  box.innerHTML = html;
+  // 今日が左から4分の1あたりに来るようにする
+  box.scrollLeft = Math.max(0, todayX - box.clientWidth / 4);
+}
+
+function newItem(type){
+  const today = todayJST();
+  const base = { id: uid(), type, lane: "全体", name: "" };
+  if (type === "period") return Object.assign(base, { grain: "月", start: today, end: addDays(today, 29), goal: "" });
+  if (type === "campaign") return Object.assign(base, { task: "", start: today, end: addDays(today, 27), generation: "", target: "" });
+  if (type === "milestone") return Object.assign(base, { date: addDays(today, 14), subject: "task", target: "", metric: "累計", op: ">=", value: "" });
+  if (type === "setup") return Object.assign(base, { date: addDays(today, 7),
+    task: { name: "", kind: "完了型", slot: "一日中", stance: "攻", target: "", requirement: "", ministries: [] } });
+  return Object.assign(base, { name: "予備", start: addDays(today, 7), end: addDays(today, 13) });
+}
+
+function renderPlanEditor(){
+  const box = document.getElementById("plan-editor");
+  const ed = state.planEdit;
+  if (!ed) { box.innerHTML = ""; return; }
+  const it = ed.item;
+  const lanes = laneOrder(knownLanes());
+  const laneOpts = lanes.map(l => '<option' + (l === (it.lane || "全体") ? " selected" : "") + ">" + esc(l) + "</option>").join("");
+  const taskNames = ((state.tasksDoc && state.tasksDoc.tasks) || []).map(t => t.name);
+  const datalist = '<datalist id="pl-tasks">' + taskNames.map(n => '<option value="' + esc(n) + '">').join("") + "</datalist>";
+  const f = (label, html) => '<div class="f"><label>' + label + "</label>" + html + "</div>";
+  const inp = (k, v, type, extra) => '<input data-pk="' + k + '" type="' + (type || "text") + '" value="' + esc(v == null ? "" : v) + '"' + (extra || "") + ">";
+  const sel = (k, v, opts) => '<select data-pk="' + k + '">' + opts.map(o => {
+    const [val, lab] = Array.isArray(o) ? o : [o, o];
+    return '<option value="' + esc(val) + '"' + (String(val) === String(v) ? " selected" : "") + ">" + esc(lab) + "</option>";
+  }).join("") + "</select>";
+
+  let fields = f("レーン", '<select data-pk="lane">' + laneOpts + "</select>");
+  let now = "";
+  const st = statusOf(it.id) || {};
+
+  if (it.type === "period") {
+    fields += f("名前", inp("name", it.name, "text", ' placeholder="10月 語彙を固める"')) +
+      f("長さ", sel("grain", it.grain, ["年", "四半期", "月", "週"])) +
+      f("開始", inp("start", it.start, "date")) + f("終了", inp("end", it.end, "date")) +
+      f("到達点(1行)", inp("goal", it.goal, "text", ' placeholder="過去問の語彙で8割"'));
+    if (st.state) now = "残り" + st.days_left + "日。この期間の節目 " + st.milestones.total + "件(達成" + st.milestones.achieved +
+                        "・未達" + st.milestones.missed + "・これから" + st.milestones.pending + ")";
+  } else if (it.type === "campaign") {
+    fields += f("名前", inp("name", it.name, "text", ' placeholder="EEJを世代2で回す"')) +
+      f("対象のタスク", inp("task", it.task, "text", ' list="pl-tasks"')) +
+      f("開始", inp("start", it.start, "date")) + f("終了", inp("end", it.end, "date")) +
+      f("世代", inp("generation", it.generation, "number", ' min="1" step="1"')) +
+      f("目標回数", inp("target", it.target, "number", ' min="1" step="1"'));
+    if (st.state === "drift") now = "ずれ:" + st.drift.join("、");
+    else if (st.state === "ok") now = "計画どおりです。";
+    else if (st.state === "upcoming") now = "まだ始まっていません。";
+  } else if (it.type === "milestone") {
+    const subj = it.subject || "task";
+    const metrics = subj === "ministry" ? ["支配", "国力", "領土"] : ["累計", "世代内累計", "世代", "連続"];
+    const target = subj === "ministry"
+      ? '<select data-pk="target">' + lanes.filter(l => l !== "全体").map(l => '<option' + (l === it.target ? " selected" : "") + ">" + esc(l) + "</option>").join("") + "</select>"
+      : inp("target", it.target, "text", ' list="pl-tasks"');
+    fields += f("名前", inp("name", it.name, "text", ' placeholder="漢字を累計30に"')) +
+      f("日付", inp("date", it.date, "date")) +
+      f("何を見るか", sel("subject", subj, [["task", "タスク"], ["ministry", "省"]])) +
+      f(subj === "ministry" ? "省" : "タスク", target) +
+      f("指標", sel("metric", metrics.includes(it.metric) ? it.metric : metrics[0], metrics)) +
+      f("条件", sel("op", it.op || ">=", [[">=", "以上"], ["<=", "以下"]])) +
+      f("値", inp("value", it.value, "number", ' step="any"'));
+    if (st.state === "achieved") now = "達成(" + st.judged_on + " 時点で " + st.value + ")";
+    else if (st.state === "missed") now = "未達(" + st.judged_on + " 時点で " + st.value + ")";
+    else if (st.state === "pending") now = "あと" + st.days_left + "日。今は " + (st.value == null ? "—" : st.value) + (st.on_track ? "(届いている)" : "");
+    else if (st.state === "unknown") now = "対象が見つからず判定できませんでした。";
+  } else if (it.type === "setup") {
+    const t = it.task || {};
+    fields += f("いつ作るか", inp("date", it.date, "date")) +
+      f("作るタスクの名前", inp("task.name", t.name, "text", ' placeholder="英検過去問1年分"')) +
+      f("型", sel("task.kind", t.kind || "完了型", ["完了型", "習慣型"])) +
+      f("時間帯", sel("task.slot", t.slot || "一日中", ["朝", "昼", "夜", "一日中"])) +
+      f("攻守", sel("task.stance", t.stance || "攻", ["攻", "守"])) +
+      ((t.kind || "完了型") === "習慣型" ? f("目標回数", inp("task.target", t.target, "number", ' min="1" step="1"')) : "") +
+      f("所属(読点で区切る)", inp("task.ministries", (t.ministries || []).join("、"), "text", ' placeholder="英語、受験"')) +
+      f("達成要件", inp("task.requirement", t.requirement, "text"));
+    if (st.state === "created") now = st.created_on + " にタスクを作りました。";
+    else if (st.state === "pending") now = "あと" + st.days_left + "日で作ります。";
+    else if (st.state === "waiting") now = "今日のタスクの生成を待っています。";
+  } else {
+    fields += f("名前", inp("name", it.name, "text")) + f("開始", inp("start", it.start, "date")) + f("終了", inp("end", it.end, "date"));
+    if (st.state === "clash") now = "この期間に始まる予定:" + st.clash.join("、");
+  }
+
+  box.innerHTML = '<div class="peditor">' + datalist +
+    "<h2>" + (ed.isNew ? KINDS[it.type] + "を足す" : KINDS[it.type] + "を直す") + "</h2>" +
+    (now ? '<p class="now">' + esc(now) + "</p>" : "") +
+    '<div class="grid2">' + fields + "</div>" +
+    '<div class="row"><button type="button" class="btn" data-plan-save>保存する</button>' +
+    '<button type="button" class="btn ghost" data-plan-cancel>やめる</button>' +
+    (ed.isNew ? "" : '<button type="button" class="btn ghost" data-plan-del style="margin-left:auto">消す</button>') +
+    "</div></div>";
+}
+
+function readPlanEditor(){
+  const ed = state.planEdit; if (!ed) return null;
+  const it = JSON.parse(JSON.stringify(ed.item));
+  document.querySelectorAll("#plan-editor [data-pk]").forEach(el => {
+    const k = el.dataset.pk, v = el.value;
+    if (k.indexOf("task.") === 0) {
+      it.task = it.task || {};
+      const kk = k.slice(5);
+      it.task[kk] = kk === "ministries" ? v.split(/[、,，\s]+/).map(x => x.trim()).filter(Boolean)
+                  : kk === "target" ? (v === "" ? "" : +v) : v;
+    } else if (["generation", "target", "value"].includes(k) && el.type === "number") {
+      it[k] = v === "" ? "" : +v;
+    } else it[k] = v;
+  });
+  return it;
+}
+
+function validatePlanItem(it){
+  if (it.type === "period" || it.type === "campaign" || it.type === "buffer") {
+    if (!isDate(it.start) || !isDate(it.end)) return "開始と終了の日付を入れてください。";
+    if (it.end < it.start) return "終了は開始より後にしてください。";
+  } else if (!isDate(it.date)) return "日付を入れてください。";
+  if (it.type === "period" && !it.name) return "名前を入れてください。";
+  if (it.type === "campaign" && !it.task) return "対象のタスクを入れてください。";
+  if (it.type === "milestone") {
+    if (!it.target) return "見る対象を選んでください。";
+    if (it.value === "" || it.value == null || isNaN(+it.value)) return "値を入れてください。";
+  }
+  if (it.type === "setup" && !(it.task && it.task.name)) return "作るタスクの名前を入れてください。";
+  return null;
+}
+
+async function commitPlan(mutate){
+  const status = (text, err) => {
+    const st = document.getElementById("plan-status");
+    if (!st) return;
+    st.classList.toggle("err", !!err);
+    st.textContent = text;
+  };
+  mutate();
+  renderPlan();
+  if (!state.conn) return false;
+  status("保存しています…");
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      state.planSha = await writeJson(PLAN_PATH, state.plan, state.planSha);
+      lsSet(KEY_CACHE, cachePayload());
+      status("保存しました。照合は次の朝(すぐ見たいときは Actions の Plan check)");
+      return true;
+    } catch (e) {
+      let err = e;
+      if ((e.status === 409 || e.status === 422) && attempt < 2) {
+        try {
+          const fresh = await readJson(PLAN_PATH);
+          state.plan = normalizePlan(fresh.data);
+          state.planSha = fresh.sha;
+          mutate();
+          renderPlan();
+          continue;
+        } catch (e2) { err = e2; }
+      }
+      lsSet(KEY_CACHE, cachePayload());
+      status(err.status ? err.message : "通信できませんでした。つながったら開き直してください。", true);
+      return false;
+    }
+  }
+  return false;
+}
+
+function upsertPlanItem(it){
+  const items = state.plan.items;
+  const i = items.findIndex(x => x.id === it.id);
+  if (i >= 0) items[i] = it; else items.push(it);
+}
+function removePlanItem(id){ state.plan.items = state.plan.items.filter(x => x.id !== id); }
+
+/* ───────── タスク ───────── */
+
+// STAGE・WAVEは省ごとに別物。リンクは「省|ラベル」で持つ
+function waveKey(def, label){ return (((def.ministries || [])[0]) || "所属なし") + "|" + label; }
+
+// 取り込んだ定義に、アプリで変えたものを重ねる。
+//   edits        中身の変更(名前、時間帯、攻守、省、実行間隔、重み、目標回数、達成要件、1日の分量)
+//   events       状況の変更(休止、再開、立て直し、アーカイブなど)。日付つきで積む
+//   generations  世代を上げた記録
+// 同じ変更が毎朝の取り込みでNotion側からも入ってくるが、2回効いても結果は同じになる
+const EDIT_KEYS = ["name", "slot", "stance", "interval", "weight", "requirement", "quota", "kind"];
+function effectiveDef(def){
+  const ov = (state.overlay.tasks || {})[def.id] || {};
+  const e = ov.edits || {};
+  const out = Object.assign({}, def);
+  for (const k of EDIT_KEYS) if (e[k] !== undefined) out[k] = e[k];
+  if (Array.isArray(e.ministries)) out.ministries = e.ministries.slice();
+  if (Array.isArray(e.waves)) out.waves = e.waves.map(l => ({ label: l, url: "" }));
+  if (e.name && e.name !== def.name) out.aliases = Array.from(new Set((def.aliases || []).concat([def.name])));
+  const gens = (def.generations || []).map(g => Object.assign({}, g));
+  for (const g of ov.generations || []) if (!gens.some(x => x.gen === g.gen && x.from === g.from)) gens.push(Object.assign({}, g));
+  gens.sort((a, b) => a.from < b.from ? -1 : 1);
+  if (e.target !== undefined && e.target !== null && e.target !== "") {
+    const today = taskDay();
+    const cur = gens.filter(g => g.from <= today).pop();
+    if (cur) cur.target = +e.target; else gens.push({ gen: 1, from: def.created, target: +e.target });
+  }
+  out.generations = gens;
+  out.events = (def.events || []).concat(ov.events || []);
+  const urls = state.overlay.waveUrls || {};
+  out.waves = (out.waves || []).map(w => ({ label: w.label, key: waveKey(out, w.label), url: urls[waveKey(out, w.label)] || w.url || "" }));
+  out.cycle = ov.cycle || def.cycle || null;
+  return out;
+}
+
+// 取り込んだタスクと、アプリで足したタスク(まだNotionから戻ってきていないもの)を合わせる
+function allDefs(){
+  const defs = (state.taskDefs && state.taskDefs.tasks) || [];
+  const have = new Set(defs.map(d => d.id));
+  const extra = (state.overlay.newTasks || []).filter(t => !have.has(t.id));
+  return defs.concat(extra);
+}
+
+// タスクの番号。名前と作った日から決まる。取り込み(import_tasks.py)と同じ計算なので、
+// アプリで足したタスクがNotionを経由して戻ってきても同じ番号になる
+async function taskIdFor(name, date){
+  const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(name.trim() + "|" + date));
+  return "t" + Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 10);
+}
+
+// タスクごとに、記録をたどって今日の状態を出す。結果は描画のあいだだけ覚えておく
+let taskCache = { key: null, list: [], bump: 0 };
+function taskStates(){
+  const defs = state.taskDefs;
+  if (!defs || !window.TaskEngine) return [];
+  const today = taskDay();
+  const key = today + "|" + (state.overlaySha || "") + "|" + JSON.stringify(state.taskLogShas) + "|" + allDefs().length + "|" +
+              JSON.stringify(state.appLogShas) + "|" + defs.importedUntil + "|" + taskCache.bump;
+  if (taskCache.key === key) return taskCache.list;
+  const E = window.TaskEngine;
+  const list = allDefs().map(raw => {
+    const def = effectiveDef(raw);
+    const rep = E.replay(def, mergedLogFor(def.id), today);
+    const row = rep.days.length && rep.days[rep.days.length - 1].date === today ? rep.days[rep.days.length - 1] : null;
+    const gens = (def.generations || []).slice().sort((a, b) => a.from < b.from ? -1 : 1);
+    const curGen = gens.filter(g => g.from <= today).pop() || { gen: 1, target: null };
+    const s = row || rep.next;
+    return {
+      def, rep, row,
+      status: s.status,
+      gen: row ? row.gen : rep.gen,
+      genTotal: s.genTotal, total: s.total, streak: s.streak, best: s.best, miss: s.miss, lastDone: s.lastDone,
+      target: curGen.target != null ? +curGen.target : null,
+      check: row ? row.check : null,
+      cycle: E.cycleIndex(def.cycle, rep.days, today),
+      progress: lastProgress(rep.days).value,
+      progressDate: lastProgress(rep.days).date,
+    };
+  });
+  taskCache = { key, list };
+  return list;
+}
+
+// 完了型の進捗率。最後に書いた値を、書き換えるまで引き継ぐ
+function lastProgress(days){
+  for (let i = days.length - 1; i >= 0; i--) {
+    const p = days[i].rec && days[i].rec.progress;
+    if (p !== undefined && p !== null && p !== "") return { value: +p, date: days[i].date };
+  }
+  return { value: null, date: null };
+}
+
+// その日の記録。アプリでつけたものがあれば、取り込んだものより優先する
+function mergedLogFor(id){
+  return day => {
+    const m = day.slice(0, 7);
+    const a = ((state.taskLogs[m] || {})[day] || {})[id];
+    const b = ((state.appLogs[m] || {})[day] || {})[id];
+    if (!a && !b) return undefined;
+    return Object.assign({}, a || {}, b || {});
+  };
+}
+
+// 行軍表の今日のタブから、名前でタスクを引く(改名前の名前でも引ける)
+function taskByName(name){
+  const n = (name || "").trim();
+  return taskStates().find(t => t.def.name === n || (t.def.aliases || []).includes(n)) || null;
+}
+
+const CHECK_MARK = { "完了": ["ok", "✓"], "超過完了": ["ok", "★"], "不完全な完了": ["ok", "△"],
+                     "不実行": ["ng", "✕"], "未着手": ["ng", "・"], "今日は該当しない": ["ex", "ー"],
+                     "進行中": ["ex", "…"], "まとめて実行待ち": ["ex", "…"] };
+
+function tkView(){ return Object.assign({ group: "省", sort: "name" }, lsGet(KEY_TKVIEW, {})); }
+function isCompletion(t){ return t.def.kind === "完了型" || (!t.target && t.progress != null); }
+function progressOf(t){
+  if (t.target) return Math.min(1, t.genTotal / t.target);
+  return t.progress != null ? Math.min(1, t.progress / 100) : null;
+}
+
+function renderTasks(){
+  const box = document.getElementById("tk-list");
+  if (!box) return;
+  const defs = state.taskDefs;
+  document.getElementById("tk-date").textContent = defs ? ("取り込み " + defs.importedUntil) : "—";
+  if (!defs) {
+    box.innerHTML = '<div class="empty">まだ取り込んでいません。notion-daily の Actions で Import tasks を動かしてください。</div>';
+    document.getElementById("tk-detail").innerHTML = "";
+    document.getElementById("tk-today").innerHTML = "";
+    document.getElementById("tk-waves").innerHTML = "";
+    return;
+  }
+  const ck = document.getElementById("ck-date");
+  if (ck) ck.textContent = taskDay();
+  const v = tkView();
+  document.getElementById("tk-group").value = v.group;
+  document.getElementById("tk-sort").value = v.sort;
+  const list = taskStates();
+  renderTodayRecords(list);
+
+  const live = list.filter(t => LIVE.includes(t.status));
+  const count = st => list.filter(t => t.status === st).length;
+  let html = '<div class="tk-sum">' + ["新規", "進行中", "定着", "熟達", "要再設定"].map(st =>
+    "<span>" + st + " <b>" + count(st) + "</b></span>").join("") + "</div>";
+
+  const order = { "熟達": 0, "定着": 1, "進行中": 2, "新規": 3, "実験": 4, "随時": 5, "要再設定": 6 };
+  // 順番:名前、100%に近い順、遠い順。目標の無いものは後ろ
+  const sorter = (a, b) => {
+    if (v.sort !== "name") {
+      const pa = progressOf(a), pb = progressOf(b);
+      if (pa == null && pb != null) return 1;
+      if (pb == null && pa != null) return -1;
+      if (pa != null && pb != null && pa !== pb) return v.sort === "near" ? pb - pa : pa - pb;
+    } else if (v.group === "省" && order[a.status] !== order[b.status]) {
+      return order[a.status] - order[b.status];
+    }
+    return a.def.name.localeCompare(b.def.name, "ja");
+  };
+
+  const groups = {};
+  for (const t of live) {
+    const g = v.group === "状況" ? t.status : ((t.def.ministries && t.def.ministries[0]) || "所属なし");
+    (groups[g] = groups[g] || []).push(t);
+  }
+  const names = v.group === "状況"
+    ? Object.keys(groups).sort((a, b) => order[a] - order[b])
+    : laneOrder(Object.keys(groups).filter(g => g !== "所属なし")).filter(g => g !== "全体")
+        .concat(groups["所属なし"] ? ["所属なし"] : []);
+  for (const g of names) {
+    const arr = groups[g].sort(sorter);
+    const active = v.group === "状況" ? arr : arr.filter(t => t.status !== "要再設定");
+    const fallen = v.group === "状況" ? [] : arr.filter(t => t.status === "要再設定");
+    const body = (v.group === "状況" && g === "要再設定")
+      ? '<details class="more"><summary>開く</summary>' + active.map(taskRowHtml).join("") + "</details>"
+      : active.map(taskRowHtml).join("");
+    html += '<div class="tk-group"><h2>' + esc(g) + "<span>" + active.length + "件</span></h2>" + body +
+      (fallen.length ? '<details class="more"><summary>要再設定　' + fallen.length + "件</summary>" +
+        fallen.map(taskRowHtml).join("") + "</details>" : "") + "</div>";
+  }
+  const rest = list.filter(t => !LIVE.includes(t.status));
+  if (rest.length) {
+    html += '<details class="more"><summary>休止中・終わったもの　' + rest.length + "件</summary>" +
+      rest.sort((a, b) => a.def.name.localeCompare(b.def.name, "ja")).map(taskRowHtml).join("") + "</details>";
+  }
+  box.innerHTML = html;
+  renderWaveLinks(list);
+  renderTaskDetail();
+  renderRecordSheet();
+}
+
+// 今日の記録:今日行が立っているタスクを時間帯ごとに。○を押すだけで完了
+// 優先度。行軍表と同じ物差し:重み × 省の重要度 × 手で付けた優先度 × リーチなら倍率
+function isReach(t){ return (t.status === "新規" && t.miss >= 1) || (t.status === "進行中" && t.miss >= 2); }
+function prioScore(t){
+  const w = ((state.tasksDoc && state.tasksDoc.weights) || {});
+  const mw = Math.max(1, ...(t.def.ministries || []).map(m => +w[m] || 0));
+  const manual = +(((state.settings.tasks || {})[t.def.name] || {}).priority) || 0;
+  const R = Math.max(1, +((state.settings.weights || {}).reach) || 3);
+  return ((+t.def.weight > 0) ? +t.def.weight : 1) * mw * (1 + 0.25 * manual) * (isReach(t) ? R : 1);
+}
+// 定着度。常連ほど上に。熟達→定着→進行中→新規の順、同じ段階なら連続が長いほど上
+const SETTLE_RANK = { "熟達": 6, "定着": 5, "進行中": 4, "新規": 3, "実験": 2, "随時": 2, "要再設定": 1 };
+function settleScore(t){ return (SETTLE_RANK[t.status] || 0) * 1e6 + t.streak * 1000 + t.best; }
+
+function renderTodayRecords(list){
+  const box = document.getElementById("tk-today");
+  const sortSel = document.getElementById("ck-sort");
+  const mode = Object.assign({ sort: "slot" }, lsGet(KEY_CKVIEW, {})).sort;
+  if (sortSel) sortSel.value = mode;
+  const today = list.filter(t => t.row && LIVE.includes(t.status));
+  if (!today.length) { box.innerHTML = '<div class="empty">今日のタスクはありません。</div>'; return; }
+  const isDone = t => window.TaskEngine.DONE.has(t.check);
+  const open = today.filter(t => !isDone(t)), fin = today.filter(isDone);
+  let html = '<div class="rec-list"><h2>今日の記録　<span style="font-size:.8rem;color:var(--sub);font-weight:400">' +
+             fin.length + " / " + today.length + "</span></h2>";
+  const recRow = t => {
+    const done = isDone(t), miss = t.check === "不実行";
+    const sub = [t.check || "未着手"];
+    if (mode !== "slot") sub.push(t.def.slot || "");
+    if (mode === "prio" && isReach(t)) sub.push("今日やらないと落ちる");
+    if (mode === "settle") sub.push(t.status + " 連続" + t.streak);
+    if (isCompletion(t)) sub.push("進捗 " + Math.round(t.progress || 0) + "%");
+    if (t.cycle) sub.push("今日は " + t.cycle.item);
+    if (t.row && t.row.prevBooking) sub.push("予約:" + t.row.prevBooking);
+    return '<div class="rec" data-recrow="' + esc(t.def.id) + '"><div class="rn">' + esc(t.def.name) + "<small>" + esc(sub.filter(Boolean).join("　")) + "</small></div>" +
+      '<button type="button" class="q' + (done ? " on" : miss ? " ng" : "") + '" data-quick="' + esc(t.def.id) +
+      '" aria-label="' + esc(t.def.name) + (done ? "の完了を取り消す" : "を完了にする") + '">' + (done ? "✓" : miss ? "✕" : "○") + "</button>" +
+      '<button type="button" class="more" data-record="' + esc(t.def.id) + '">記録</button></div>';
+  };
+  const byName = (a, b) => a.def.name.localeCompare(b.def.name, "ja");
+  if (mode === "slot") {
+    for (const slot of CHECK_SLOTS.concat(["その他"])) {
+      const arr = open.filter(t => (CHECK_SLOTS.includes(t.def.slot) ? t.def.slot : "その他") === slot).sort(byName);
+      if (!arr.length) continue;
+      html += '<div class="rec-slot">' + slot + "</div>" + arr.map(recRow).join("");
+    }
+  } else {
+    const score = mode === "prio" ? prioScore : settleScore;
+    html += open.slice().sort((a, b) => (score(b) - score(a)) || byName(a, b)).map(recRow).join("");
+  }
+  if (!open.length) html += '<div class="empty">今日の分はすべて済みました。</div>';
+  if (fin.length) {
+    html += '<details class="more done-box"><summary>済み　' + fin.length + "件</summary>" +
+      fin.sort(byName).map(recRow).join("") + "</details>";
+  }
+  box.innerHTML = html + "</div>";
+  if (flashTargetId) {
+    const row = box.querySelector('[data-recrow="' + flashTargetId + '"]');
+    if (row) { row.classList.add("flash"); if (row.scrollIntoView) row.scrollIntoView({ block: "center", behavior: "smooth" }); }
+    flashTargetId = null;
+  }
+}
+let flashTargetId = null;
+
+// WAVE・STAGEのリンク:同じラベルのものは1か所に入れれば全部に効く
+function renderWaveLinks(list){
+  const box = document.getElementById("tk-waves");
+  const groups = {};
+  for (const t of list) for (const w of (t.def.waves || [])) {
+    const g = ((t.def.ministries || [])[0]) || "所属なし";
+    const m = groups[g] = groups[g] || {};
+    m[w.label] = (m[w.label] || 0) + 1;
+  }
+  const mins = laneOrder(Object.keys(groups).filter(g => g !== "所属なし")).filter(g => g !== "全体")
+    .concat(groups["所属なし"] ? ["所属なし"] : []);
+  if (!mins.length) { box.innerHTML = '<div class="empty">WAVE・STAGEの付いたタスクはありません。</div>'; return; }
+  const urls = state.overlay.waveUrls || {};
+  let i = 0;
+  box.innerHTML = '<p class="hint" style="font-size:.82rem;color:var(--sub)">同じ省の同じWAVE・STAGEのタスクには、ここに入れた1つのリンクが全部に効きます。省が違えば別のページとして扱います。</p>' +
+    mins.map(g => '<h3 style="font-size:.88rem;margin:.8rem 0 .3rem">' + esc(g) + "</h3>" +
+      Object.keys(groups[g]).sort((a, b) => a.localeCompare(b, "ja", { numeric: true })).map(l => {
+        const key = g + "|" + l, id = "wl" + (i++);
+        return '<div class="f" style="margin-bottom:.45rem"><label for="' + id + '">' + esc(l) + "(" + groups[g][l] + "件)</label>" +
+          '<input id="' + id + '" data-wavelink="' + esc(key) + '" type="url" placeholder="NotionのページのURL" value="' + esc(urls[key] || "") + '"></div>';
+      }).join("")).join("") +
+    '<div class="row" style="margin-top:.4rem"><button type="button" class="btn" data-wavelinks-save>リンクを保存する</button></div>';
+}
+
+function taskRowHtml(t){
+  const meta = ['<span class="chip s-' + esc(t.status) + '">' + esc(t.status) + "</span>"];
+  if (t.target) {
+    const pct = Math.min(100, Math.round(t.genTotal / t.target * 100));
+    meta.push("<span>世代" + t.gen + "　" + t.genTotal + "/" + t.target + ' <span class="bar"><i style="width:' + pct + '%"></i></span></span>');
+  } else if (isCompletion(t)) {
+    const pct = Math.max(0, Math.min(100, Math.round(t.progress || 0)));
+    meta.push("<span>進捗 " + pct + '% <span class="bar"><i style="width:' + pct + '%"></i></span></span>');
+  } else if (t.gen > 1) {
+    meta.push("<span>世代" + t.gen + "</span>");
+  }
+  meta.push("<span>連続" + t.streak + "</span>");
+  if (t.cycle) meta.push('<span class="cyc">今日は ' + esc(t.cycle.item) + "</span>");
+  return '<button type="button" class="tk" data-tid="' + esc(t.def.id) + '"><div class="tn">' + esc(t.def.name) +
+         '</div><div class="tm">' + meta.join("") + "</div></button>";
+}
+
+// 記録の画面(チェックのタブ)
+function renderRecordSheet(){
+  const box = document.getElementById("ck-detail");
+  if (!box) return;
+  const t = state.recordOpen && taskStates().find(x => x.def.id === state.recordOpen);
+  if (!t || !t.row) { box.innerHTML = ""; return; }
+  const d = t.def;
+  let rec = "";
+  {
+    const r = t.row.rec || {};
+    const seen = (key, base) => {
+      const set = new Set(base);
+      for (const m of Object.values(state.taskLogs)) for (const dd of Object.values(m)) for (const x of Object.values(dd)) if (x[key]) set.add(x[key]);
+      return Array.from(set);
+    };
+    const opt = (key, values, cur) => '<div class="opts" data-opt="' + key + '">' + values.map(v =>
+      '<button type="button" data-v="' + esc(v) + '" aria-pressed="' + (v === cur) + '">' + esc(v) + "</button>").join("") + "</div>";
+    const sec = +r.seconds || 0;
+    rec = "<h3>今日の記録</h3>" +
+      '<div class="f"><label>チェック</label></div>' + opt("check", CHECK_OPTS, t.check) +
+      '<div class="f"><label>CA</label></div>' + opt("ca", seen("ca", ["未着手", "完了"]), r.ca) +
+      '<div class="f"><label>行動予約</label></div>' + opt("booking", seen("booking", ["未着手", "完了"]), r.booking) +
+      (t.row.prevBooking ? '<p class="now">前回の予約:' + esc(t.row.prevBooking) + "</p>" : "") +
+      '<div class="grid2">' +
+        '<div class="f"><label for="rc-next">次回の予約</label><input id="rc-next" data-rk="nextBooking" type="text" value="' + esc(r.nextBooking || "") + '"></div>' +
+        '<div class="f"><label>かかった時間</label><div class="dur"><input data-rk="min" type="number" min="0" placeholder="分" value="' + (sec ? Math.floor(sec / 60) : "") +
+          '">分<input data-rk="sec" type="number" min="0" max="59" placeholder="秒" value="' + (sec ? Math.round(sec % 60) : "") + '">秒</div></div>' +
+        '<div class="f"><label for="rc-q">質(1〜9)</label><select id="rc-q" data-rk="quality"><option value="">—</option>' +
+          [1,2,3,4,5,6,7,8,9].map(n => '<option' + (+r.quality === n ? " selected" : "") + ">" + n + "</option>").join("") + "</select></div>" +
+        (+d.quota > 0 ? '<div class="f"><label for="rc-did">やった量(1日' + d.quota + ')</label><input id="rc-did" data-rk="did" type="number" step="any" value="' + (r.did != null ? r.did : "") + '"></div>' : "") +
+        (isCompletion(t) ? '<div class="f"><label for="rc-pg">進捗率(%)' + (t.progressDate ? "　前回 " + esc(t.progressDate.slice(5)) : "") +
+          '</label><input id="rc-pg" data-rk="progress" type="number" min="0" max="100" step="1" value="' + (t.progress != null ? Math.round(t.progress) : "") + '"></div>' : "") +
+      "</div>" +
+      '<div class="row"><button type="button" class="btn" data-rec-save>記録を保存する</button></div>';
+  }
+  box.innerHTML = '<div class="peditor tk-detail"><h2>' + esc(d.name) + "</h2>" + rec +
+    '<div class="row"><button type="button" class="btn ghost" data-rec-close>閉じる</button></div></div>';
+}
+
+function renderTaskDetail(){
+  const box = document.getElementById("tk-detail");
+  if (state.taskMode === "new") { box.innerHTML = newTaskHtml(); return; }
+  const t = state.taskOpen && taskStates().find(x => x.def.id === state.taskOpen);
+  if (!t) { box.innerHTML = ""; return; }
+  const today = taskDay();
+  const E = window.TaskEngine;
+
+  // 直近14日の帯
+  const byDate = new Map(t.rep.days.map(d => [d.date, d]));
+  let strip = "", dates = "";
+  for (let i = 13; i >= 0; i--) {
+    const d = E.addDays(today, -i);
+    const row = byDate.get(d);
+    const [cls, mark] = row ? (CHECK_MARK[row.check] || ["ex", "?"]) : ["no", "　"];
+    strip += '<span class="' + cls + '" title="' + esc(d + " " + (row ? row.check : "行なし")) + '">' + mark + "</span>";
+    dates += "<span>" + (+d.slice(8)) + "</span>";
+  }
+
+  const d = t.def;
+  const waves = (d.waves || []).map((w, i) =>
+    '<div class="f" style="margin-bottom:.4rem"><label for="tw' + i + '">' + esc(w.label) + ' のページ(' + esc(w.key.split("|")[0]) + 'の' + esc(w.label) + 'の全タスクに効く)</label>' +
+    '<input id="tw' + i + '" data-wave="' + esc(w.key) + '" type="url" placeholder="NotionのページのURL" value="' + esc(w.url || "") + '"></div>' +
+    (w.url ? '<p style="margin:-.2rem 0 .5rem;font-size:.8rem"><a href="' + esc(w.url) + '" target="_blank" rel="noopener">' + esc(w.label) + " を開く</a></p>" : "")
+  ).join("");
+  const cyc = d.cycle || { items: [] };
+  const cycItems = (cyc.items || []).join("\n");
+  const curIdx = t.cycle ? t.cycle.index : 0;
+  const cycOpts = (cyc.items || []).map((it, i) => '<option value="' + i + '"' + (i === curIdx ? " selected" : "") + ">" +
+    esc(String.fromCharCode(97 + (i % 26)) + " " + it) + "</option>").join("");
+  const gens = (d.generations || []).slice().sort((a, b) => a.from < b.from ? -1 : 1).map(g =>
+    "<li>世代" + g.gen + "　" + esc(g.from) + " から" + (g.target ? "　目標" + g.target + "回" : "") + "</li>").join("");
+
+  box.innerHTML = '<div class="peditor tk-detail">' +
+    "<h2>" + esc(d.name) + "</h2>" +
+    '<p class="now">' + esc((d.ministries || []).join("・") || "所属なし") + "　" + esc(d.slot || "") +
+      (d.aliases && d.aliases.length ? "　前の名前:" + esc(d.aliases.join("、")) : "") + "</p>" +
+    '<div class="nums">' +
+      "<div>状況<b>" + esc(t.status) + "</b></div>" +
+      "<div>世代<b>" + t.gen + "</b></div>" +
+      (isCompletion(t)
+        ? "<div>進捗率<b>" + (t.progress != null ? Math.round(t.progress) + "%" : "—") + "</b></div>"
+        : "<div>世代内累計<b>" + t.genTotal + (t.target ? " / " + t.target : "") + "</b></div>") +
+      "<div>累計<b>" + t.total + "</b></div>" +
+      "<div>連続<b>" + t.streak + "</b></div>" +
+      "<div>最長連続<b>" + t.best + "</b></div>" +
+      "<div>未実行連続<b>" + t.miss + "</b></div>" +
+      "<div>最終達成日<b>" + esc(t.lastDone ? t.lastDone.slice(5) : "—") + "</b></div>" +
+    "</div>" +
+    "<h3>直近2週間</h3>" + '<div class="strip">' + strip + '</div><div class="strip-d">' + dates + "</div>" +
+    "<h3>世代の歴史</h3>" + '<ul class="gens">' + gens + "</ul>" +
+    "<h3>サイクル</h3>" +
+    '<p class="note" style="font-size:.8rem;color:var(--sub);margin:.1rem 0 .4rem">回す中身を1行に1つ書く。やった日だけ次へ進む。</p>' +
+    '<textarea data-cycle-items placeholder="過去の語彙\n未来の語彙\n長文1題">' + esc(cycItems) + "</textarea>" +
+    (cycOpts ? '<div class="f" style="margin-top:.4rem"><label for="tk-cyc-now">今日はどれか</label><select id="tk-cyc-now" data-cycle-now>' + cycOpts + "</select></div>" : "") +
+    (waves ? "<h3>WAVE・STAGE</h3>" + waves : "") +
+    '<div class="row"><button type="button" class="btn" data-tk-save>保存する</button>' +
+    '<button type="button" class="btn ghost" data-tk-close>閉じる</button></div>' +
+    settingsHtml(t) +
+    "</div>";
+}
+
+// 完了を外すときに入れる値。アプリの記録を消すだけだと、定着・熟達の自動の完了や
+// Notionの完了に戻ってしまうので、その場合は「未着手」をはっきり記録する
+function uncheckValue(day, t){
+  const m = day.slice(0, 7);
+  const base = (((state.taskLogs[m] || {})[day] || {})[t.def.id] || {}).check;
+  const auto = !base && window.TaskEngine.AUTO_DONE.has(t.status);
+  return (auto || window.TaskEngine.DONE.has(base)) ? "未着手" : null;
+}
+const DONE_DELAY = () => (window.__roadmapDoneDelay != null ? window.__roadmapDoneDelay : 650);
+
+// アプリでつけた記録を保存する。月ごとのファイルに、日付・タスクごとに入れる
+function setAppRecord(day, id, patch){
+  const m = day.slice(0, 7);
+  const month = state.appLogs[m] = state.appLogs[m] || {};
+  const d = month[day] = month[day] || {};
+  const cur = Object.assign({}, d[id] || {});
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === null || v === "" || v === undefined) delete cur[k]; else cur[k] = v;
+  }
+  if (Object.keys(cur).length) d[id] = cur; else delete d[id];
+  if (!Object.keys(d).length) delete month[day];
+}
+
+function tkStatus(text, err){
+  document.querySelectorAll(".tkst").forEach(st => { st.classList.toggle("err", !!err); st.textContent = text; });
+}
+
+async function commitAppLog(day, mutate){
+  const m = day.slice(0, 7);
+  const path = APPLOG_DIR + "/" + m + ".json";
+  const status = tkStatus;
+  mutate();
+  taskCache.bump++; taskCache.key = null;
+  renderTasks(); renderToday();
+  if (!state.conn) return false;
+  status("保存しています…");
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      state.appLogShas[m] = await writeJson(path, state.appLogs[m] || {}, state.appLogShas[m] || null);
+      lsSet(KEY_CACHE, cachePayload());
+      status("保存しました");
+      return true;
+    } catch (e) {
+      let err = e;
+      if ((e.status === 409 || e.status === 422) && attempt < 2) {
+        try {
+          const fresh = await readJson(path);
+          state.appLogs[m] = fresh.data || {};
+          state.appLogShas[m] = fresh.sha;
+          mutate();
+          taskCache.bump++; taskCache.key = null;
+          renderTasks(); renderToday();
+          continue;
+        } catch (e2) { err = e2; }
+      }
+      lsSet(KEY_CACHE, cachePayload());
+      status(err.status ? err.message : "通信できませんでした。つながったら開き直してください。", true);
+      return false;
+    }
+  }
+  return false;
+}
+
+// 状況ごとに出す操作
+const ACTIONS = {
+  pause:    ["休止する", "休止中"],
+  resume:   ["再開する", "進行中"],
+  rebuild:  ["立て直す(新規に戻す)", "新規"],
+  trial:    ["実験にする", "実験"],
+  trialEnd: ["実験を終える", "実験終了"],
+  ondemand: ["随時にする", "随時"],
+  normal:   ["通常に戻す", "進行中"],
+  hall:     ["殿堂入りにする", "殿堂入り"],
+  achieved: ["達成済みにする", "達成済み"],
+  archive:  ["アーカイブする", "アーカイブ"],
+  revive:   ["新規として戻す", "新規"],
+};
+function actionsFor(status){
+  if (["新規", "進行中", "定着", "熟達"].includes(status)) return ["pause", "trial", "ondemand", "hall", "achieved", "archive"];
+  if (status === "要再設定") return ["rebuild", "pause", "archive"];
+  if (status === "休止中") return ["resume", "archive"];
+  if (status === "実験") return ["trialEnd", "normal", "archive"];
+  if (status === "随時") return ["normal", "pause", "archive"];
+  return ["revive"];
+}
+
+function taskFormHtml(v, mode){
+  const mins = ministryNames();
+  const minBoxes = mins.map(m => '<label><input type="checkbox" data-fm-min value="' + esc(m) + '"' +
+    ((v.ministries || []).includes(m) ? " checked" : "") + ">" + esc(m) + "</label>").join("");
+  const sel = (k, cur, opts) => '<select data-fm="' + k + '">' + opts.map(o => '<option' + (o === cur ? " selected" : "") + ">" + esc(o) + "</option>").join("") + "</select>";
+  const inp = (k, val, type, extra) => '<input data-fm="' + k + '" type="' + (type || "text") + '" value="' + esc(val == null ? "" : val) + '"' + (extra || "") + ">";
+  return '<div class="grid2">' +
+      '<div class="f"><label>名前</label>' + inp("name", v.name) + "</div>" +
+      '<div class="f"><label>時間帯</label>' + sel("slot", v.slot || "一日中", ["朝", "昼", "夜", "一日中"]) + "</div>" +
+      '<div class="f"><label>攻守</label>' + sel("stance", v.stance || "守", ["攻", "守", "予定"]) + "</div>" +
+      '<div class="f"><label>型</label>' + sel("kind", v.kind || "習慣型", ["習慣型", "完了型"]) + "</div>" +
+      '<div class="f"><label>目標回数</label>' + inp("target", v.target, "number", ' min="1" step="1"') + "</div>" +
+      '<div class="f"><label>実行間隔</label>' + inp("interval", v.interval, "text", ' placeholder="空欄で毎日/月水金/3日"') + "</div>" +
+      '<div class="f"><label>重み</label>' + inp("weight", v.weight, "number", ' step="any" placeholder="空欄で1"') + "</div>" +
+      '<div class="f"><label>1日の分量</label>' + inp("quota", v.quota, "number", ' step="any" placeholder="貯金を使うとき"') + "</div>" +
+    "</div>" +
+    '<div class="f" style="margin-top:.5rem"><label>達成要件</label>' + inp("requirement", v.requirement) + "</div>" +
+    '<div class="f" style="margin-top:.5rem"><label>省</label><div class="chk">' + (minBoxes || '<span class="note">省一覧がまだ取り込まれていません</span>') + "</div></div>" +
+    '<div class="f" style="margin-top:.5rem"><label>WAVE・STAGE(読点で区切る)</label>' + inp("waves", (v.waves || []).map(w => w.label || w).join("、"), "text", ' placeholder="STAGE1-1、WAVE1-2"') + "</div>";
+}
+
+function readTaskForm(box){
+  const val = k => { const el = box.querySelector('[data-fm="' + k + '"]'); return el ? el.value.trim() : ""; };
+  const num = k => val(k) === "" ? null : +val(k);
+  return {
+    name: val("name"), slot: val("slot"), stance: val("stance"), kind: val("kind"),
+    target: num("target"), interval: val("interval"), weight: num("weight"), quota: num("quota"),
+    requirement: val("requirement"),
+    ministries: Array.from(box.querySelectorAll("[data-fm-min]:checked")).map(x => x.value),
+    waves: val("waves").split(/[、,，\s]+/).map(x => x.trim()).filter(Boolean),
+  };
+}
+
+function settingsHtml(t){
+  const acts = actionsFor(t.status).map(a =>
+    '<button type="button" data-act="' + a + '">' + esc(ACTIONS[a][0]) + "</button>").join("");
+  const d = t.def;
+  return '<details class="more" style="margin-top:1rem"' + (state.taskMode === "settings" ? " open" : "") + '><summary>タスクの設定を変える</summary>' +
+    "<h3>状況(今は" + esc(t.status) + ")</h3>" +
+    '<div class="opts">' + acts + "</div>" +
+    (actionsFor(t.status).includes("pause") ? '<div class="f" style="max-width:12rem"><label for="tk-resume">休止するときの再開日(空欄なら決めない)</label><input id="tk-resume" type="date"></div>' : "") +
+    "<h3>世代(今は世代" + t.gen + ")</h3>" +
+    '<div class="dur"><input data-genup-target type="number" min="1" step="1" placeholder="目標回数" value="' + esc(t.target || "") + '">回で' +
+    '<button type="button" class="btn ghost" data-genup style="margin-left:.4rem">世代' + (t.gen + 1) + "に上げる</button></div>" +
+    '<p class="note" style="font-size:.78rem;color:var(--sub)">今日から新しい世代。世代内累計は0から数え直す。名前を変える必要はない。</p>' +
+    "<h3>中身</h3>" +
+    taskFormHtml({ name: d.name, slot: d.slot, stance: d.stance, kind: d.kind, target: t.target, interval: d.interval,
+                   weight: d.weight, quota: d.quota, requirement: d.requirement, ministries: d.ministries, waves: d.waves }, "edit") +
+    '<div class="row"><button type="button" class="btn" data-edit-save>中身を保存する</button></div>' +
+    '<p class="note" style="font-size:.78rem;color:var(--sub)">変えたことは毎朝4:40にNotionへも書き写されます。</p>' +
+    "</details>";
+}
+
+function newTaskHtml(){
+  return '<div class="peditor tk-detail"><h2>タスクを足す</h2>' +
+    taskFormHtml({ slot: "一日中", stance: "守", kind: "習慣型", target: 10 }, "new") +
+    '<div class="row"><button type="button" class="btn" data-new-save>足す</button>' +
+    '<button type="button" class="btn ghost" data-tk-close>やめる</button></div>' +
+    '<p class="note" style="font-size:.78rem;color:var(--sub)">今日から新規として始まります。毎朝4:40にNotionにも作られます。</p></div>';
+}
+
+async function commitOverlay(mutate){
+  const status = tkStatus;
+  mutate();
+  taskCache.key = null;
+  renderTasks(); renderToday();
+  if (!state.conn) return false;
+  status("保存しています…");
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      state.overlaySha = await writeJson(OVERLAY_PATH, state.overlay, state.overlaySha);
+      lsSet(KEY_CACHE, cachePayload());
+      status("保存しました");
+      taskCache.key = null;
+      return true;
+    } catch (e) {
+      let err = e;
+      if ((e.status === 409 || e.status === 422) && attempt < 2) {
+        try {
+          const fresh = await readJson(OVERLAY_PATH);
+          state.overlay = (fresh.data && fresh.data.tasks) ? fresh.data : { version: 1, tasks: {} };
+          state.overlay.waveUrls = state.overlay.waveUrls || {};
+          state.overlay.newTasks = state.overlay.newTasks || [];
+          state.overlaySha = fresh.sha;
+          mutate();
+          taskCache.key = null;
+          renderTasks();
+          continue;
+        } catch (e2) { err = e2; }
+      }
+      status(err.status ? err.message : "通信できませんでした。つながったら開き直してください。", true);
+      return false;
+    }
+  }
+  return false;
+}
+
+/* ───────── 描画:設定 ───────── */
+
+function allTodayNames(){
+  const doc = state.tasksDoc;
+  if (!doc) return [];
+  return doc.tasks.filter(t => !SKIP.includes(t.status)).map(t => t);
+}
+
+function renderSettings(){
+  const s = state.settings;
+  const tasks = allTodayNames();
+  const box = document.getElementById("task-edits");
+
+  if (!tasks.length) {
+    box.innerHTML = '<div class="empty">接続すると、今日のタスクがここに並びます。</div>';
+  } else {
+    // 今日の組み立てに効く未設定 → それ以外の未設定(随時・済み) → 設定済み → 要再設定
+    const rank = t => {
+      const set = !!s.tasks[t.name];
+      if (t.status === "要再設定") return 3;
+      if (set) return 2;
+      const doneToday = DONE.includes(t.check) && !AUTO.includes(t.status);
+      return (t.status === "随時" || doneToday) ? 1 : 0;
+    };
+    const sorted = tasks.slice().sort((a, b) =>
+      (rank(a) - rank(b)) || a.name.localeCompare(b.name, "ja"));
+    const placeOpts = (s.places || []).map(p => p);
+    // 続けられるのは、今日これからやるタスクだけ。
+    // 同じ場所でできるものを先に出す。踏み台はたいてい同じ場所だから。
+    const chainable = tasks.filter(t =>
+      t.status !== "要再設定" && t.status !== "随時" &&
+      !(DONE.includes(t.check) && !AUTO.includes(t.status)));
+    const nextOpts = (self, cur) => {
+      const here = cfgOf(s, self).place;
+      const pool = chainable.filter(t => t.name !== self);
+      const near = pool.filter(t => {
+        const p = cfgOf(s, t.name).place;
+        return p === here || p === ANYWHERE || here === ANYWHERE;
+      }).map(t => t.name);
+      const far = pool.filter(t => !near.includes(t.name)).map(t => t.name);
+      const opt = n => '<option' + (n === cur ? " selected" : "") + ">" + esc(n) + "</option>";
+      let html = near.map(opt).join("");
+      if (far.length) html += '<optgroup label="場所が違う">' + far.map(opt).join("") + "</optgroup>";
+      if (cur && !pool.some(t => t.name === cur)) html += opt(cur);
+      return html;
+    };
+    const isReset = t => t.status === "要再設定";
+    const live = sorted.filter(t => !isReset(t));
+    const fallen = sorted.filter(isReset);
+    const card = (t, i) => {
+      const c = cfgOf(s, t.name);
+      const id = "t" + i;
+      const opts = (placeOpts.includes(c.place) ? placeOpts : placeOpts.concat([c.place]))
+        .map(p => '<option' + (p === c.place ? " selected" : "") + ">" + esc(p) + "</option>").join("");
+      const modeOpts = MODES.map(([v, l]) => '<option value="' + v + '"' + (v === c.mode ? " selected" : "") + ">" + (l || "なし") + "</option>").join("");
+      const prOpts = [-2,-1,0,1,2].map(v => '<option value="' + v + '"' + (v === c.priority ? " selected" : "") + ">" + (v > 0 ? "+" + v : v) + "</option>").join("");
+      const organs = ORGANS.map(o => '<button type="button" aria-pressed="' + (c.organs.includes(o)) + '" data-organ="' + o + '">' + o + "</button>").join("");
+      return '<div class="task-edit" data-name="' + esc(t.name) + '">' +
+        '<div class="tn">' + esc(t.name) + "<small>" + esc(t.slot || "時間帯なし") + (c.configured ? "" : "・未設定") + "</small></div>" +
+        '<div class="grid2">' +
+          '<div class="f"><label for="' + id + 'm">所要(分)</label><input id="' + id + 'm" data-k="min" type="number" min="1" step="1" value="' + c.min + '"></div>' +
+          '<div class="f"><label for="' + id + 'p">場所</label><select id="' + id + 'p" data-k="place">' + opts + "</select></div>" +
+          '<div class="f"><label for="' + id + 'd">集中の型</label><select id="' + id + 'd" data-k="mode">' + modeOpts + "</select></div>" +
+          '<div class="f"><label for="' + id + 'r">優先度</label><select id="' + id + 'r" data-k="priority">' + prOpts + "</select></div>" +
+          '<div class="f"><label for="' + id + 'f">固定の時刻</label><input id="' + id + 'f" data-k="fixed" type="time" value="' + esc(c.fixed) + '"></div>' +
+        "</div>" +
+        '<div class="f" style="margin-top:.5rem"><label for="' + id + 'x">この後に続ける</label>' +
+        '<select id="' + id + 'x" data-k="next"><option value="">なし</option>' + nextOpts(t.name, c.next) + "</select></div>" +
+        '<div class="organs" role="group" aria-label="使う器官">' + organs + "</div>" +
+      "</div>";
+    };
+    box.innerHTML = live.map(card).join("") +
+      (fallen.length
+        ? '<details class="more"><summary>要再設定　' + fallen.length +
+          "件</summary>" + fallen.map((t, i) => card(t, live.length + i)).join("") + "</details>"
+        : "");
+  }
+
+  // 時間の枠
+  const be = document.getElementById("blocks-edit");
+  be.innerHTML = Object.keys(s.blocks).map(n =>
+    '<div class="row3" data-block="' + esc(n) + '"><strong>' + esc(n) + "</strong>" +
+    '<div class="f"><input type="time" data-bk="start" value="' + esc(s.blocks[n].start) + '" aria-label="' + esc(n) + 'の開始"></div>' +
+    '<div class="f"><input type="time" data-bk="end" value="' + esc(s.blocks[n].end) + '" aria-label="' + esc(n) + 'の終了"></div></div>'
+  ).join("");
+
+  // よく使う用事
+  const pe = document.getElementById("presets-edit");
+  const plist = s.presets || [];
+  pe.innerHTML = plist.length ? plist.map((p, i) => {
+    const id = "p" + i;
+    const opts = (s.places || []).concat((s.places || []).includes(p.place) ? [] : [p.place])
+      .map(x => '<option' + (x === p.place ? " selected" : "") + ">" + esc(x) + "</option>").join("");
+    const organs = ORGANS.map(o => '<button type="button" aria-pressed="' + (p.organs || []).includes(o) + '" data-porgan="' + o + '">' + o + "</button>").join("");
+    const days = DAYS.map((d, k) => '<button type="button" aria-pressed="' + (p.days || []).includes(k) + '" data-pday="' + k + '">' + d + "</button>").join("");
+    return '<div class="task-edit" data-preset-id="' + esc(p.id) + '">' +
+      '<div class="grid2">' +
+        '<div class="f"><label for="' + id + 'n">名前</label><input id="' + id + 'n" data-pk="name" type="text" value="' + esc(p.name) + '"></div>' +
+        '<div class="f"><label for="' + id + 'l">場所</label><select id="' + id + 'l" data-pk="place">' + opts + "</select></div>" +
+        '<div class="f"><label for="' + id + 's">開始</label><input id="' + id + 's" data-pk="start" type="time" value="' + esc(p.start) + '"></div>' +
+        '<div class="f"><label for="' + id + 'e">終了</label><input id="' + id + 'e" data-pk="end" type="time" value="' + esc(p.end) + '"></div>' +
+      "</div>" +
+      '<div class="f" style="margin-top:.5rem"><label>用事の間ふさがる器官</label></div>' +
+      '<div class="organs" role="group" aria-label="ふさがる器官">' + organs + "</div>" +
+      '<div class="f" style="margin-top:.5rem"><label>自動で入れる曜日</label></div>' +
+      '<div class="days" role="group" aria-label="自動で入れる曜日">' + days + "</div>" +
+      '<button type="button" class="btn ghost" data-pdel style="margin-top:.6rem;padding:.25rem .8rem">この用事を消す</button>' +
+    "</div>";
+  }).join("") : '<div class="empty">バイトや通学のように繰り返す用事を登録しておくと、入れるのが楽になります。</div>';
+
+  document.getElementById("places").value = (s.places || []).join("、");
+  document.getElementById("w-place").value = s.weights.place;
+  document.getElementById("w-mode").value = s.weights.mode;
+  document.getElementById("w-priority").value = s.weights.priority;
+  document.getElementById("w-reach").value = s.weights.reach;
+  updateSaveBar();
+}
+
+function ensureTask(name){
+  const s = state.settings;
+  if (!s.tasks[name]) {
+    const c = cfgOf(s, name);
+    s.tasks[name] = { min: c.min, place: c.place, organs: c.organs, mode: c.mode,
+                      priority: c.priority, fixed: c.fixed, next: c.next };
+  }
+  return s.tasks[name];
+}
+
+function markDirty(){
+  state.dirty = true;
+  updateSaveBar();
+  renderToday();
+}
+function updateSaveBar(){
+  const btn = document.getElementById("save");
+  btn.disabled = !state.dirty || !state.conn;
+  const st = document.getElementById("save-status");
+  if (state.dirty && !st.classList.contains("err")) st.textContent = "保存していない変更があります";
+}
+
+/* ───────── 読み込みと保存 ───────── */
+
+async function loadAll(){
+  const st = document.getElementById("conn-status");
+  st.classList.remove("err");
+  st.textContent = "読み込んでいます…";
+  try {
+    const [t, s, ev, pl, ps] = await Promise.all([readJson(TASKS_PATH), readJson(SETTINGS_PATH), readJson(EVENTS_PATH),
+                                                  readJson(PLAN_PATH), readJson(PLAN_STATUS_PATH)]);
+    if (!t.data) throw new Error(TASKS_PATH + " がまだありません。Actions の Roadmap tasks を実行してください。");
+    state.tasksDoc = t.data;
+    state.settings = normalizeSettings(s.data);
+    state.settingsSha = s.sha;
+    state.events = (ev.data && typeof ev.data === "object") ? ev.data : {};
+    state.eventsSha = ev.sha;
+    state.plan = normalizePlan(pl.data);
+    state.planSha = pl.sha;
+    state.planStatus = ps.data || null;
+    const legacy = takeLegacyDone(state.tasksDoc.date);
+    state.dirty = false;
+    lsSet(KEY_CACHE, cachePayload());
+    st.textContent = "読み込みました(" + state.tasksDoc.tasks.length + "件)";
+    const ls = document.getElementById("last-sync");
+    if (ls) {
+      const n = new Date(Date.now() + 9 * 3600 * 1000).toISOString();
+      ls.textContent = "最後に読み込んだ時刻:" + n.slice(5, 10).replace("-", "/") + " " + n.slice(11, 16);
+    }
+    await loadTaskData();
+    renderToday(); renderSettings(); renderPlan(); renderTasks();
+    if (legacy.length) {
+      const date = state.tasksDoc.date;
+      await commitEvents(() => legacy.forEach(n => setDone(date, n, true)));
+    }
+    return true;
+  } catch (e) {
+    st.classList.add("err");
+    st.textContent = e.message;
+    return false;
+  }
+}
+
+async function loadTaskData(){
+  try {
+    const [d, o, files, appFiles] = await Promise.all([
+      readJson(TASKDEFS_PATH), readJson(OVERLAY_PATH), listDir(TASKLOG_DIR), listDir(APPLOG_DIR)]);
+    if (!d.data) return;
+    // 月ごとのファイルは、前回と同じ版(sha)なら手元に残したものを使う。重さを抑えるため
+    const sync = async (dir, list, data, shas) => {
+      const months = list.filter(f => /^\d{4}-\d{2}\.json$/.test(f.name));
+      const outData = {}, outSha = {};
+      await Promise.all(months.map(async f => {
+        const m = f.name.slice(0, 7);
+        if (shas[m] && shas[m] === f.sha && data[m]) { outData[m] = data[m]; outSha[m] = f.sha; return; }
+        const got = await readJson(dir + "/" + f.name);
+        outData[m] = got.data || {}; outSha[m] = got.sha;
+      }));
+      return [outData, outSha];
+    };
+    const [logs, logShas] = await sync(TASKLOG_DIR, files, state.taskLogs, state.taskLogShas);
+    const [apps, appShas] = await sync(APPLOG_DIR, appFiles, state.appLogs, state.appLogShas);
+    state.taskDefs = d.data;
+    state.taskLogs = logs; state.taskLogShas = logShas;
+    state.appLogs = apps; state.appLogShas = appShas;
+    const ov = (o.data && o.data.tasks) ? o.data : { version: 1, tasks: {} };
+    ov.waveUrls = ov.waveUrls || {};
+    ov.newTasks = ov.newTasks || [];
+    // 前の版のリンクを「省|ラベル」へ寄せる。タスクごとに入れたものはそのタスクの省へ。
+    // ラベルだけで入れたものは、そのラベルを使う省が1つだけなら移し、複数なら決められないので外す
+    const byId = new Map(d.data.tasks.map(t => [t.id, t]));
+    for (const [id, t] of Object.entries(ov.tasks || {})) {
+      const def = byId.get(id);
+      for (const [label, url] of Object.entries(t.waves || {})) {
+        if (url && def && !ov.waveUrls[waveKey(def, label)]) ov.waveUrls[waveKey(def, label)] = url;
+      }
+      delete t.waves;
+    }
+    for (const label of Object.keys(ov.waveUrls)) {
+      if (label.includes("|")) continue;
+      const keys = new Set(d.data.tasks.filter(t => (t.waves || []).some(w => w.label === label)).map(t => waveKey(t, label)));
+      if (keys.size === 1) { const k = [...keys][0]; if (!ov.waveUrls[k]) ov.waveUrls[k] = ov.waveUrls[label]; }
+      delete ov.waveUrls[label];
+    }
+    state.overlay = ov;
+    state.overlaySha = o.sha;
+    taskCache.key = null;
+  } catch (e) {
+    const st = document.getElementById("tk-status");
+    if (st) { st.classList.add("err"); st.textContent = e.message; }
+  }
+}
+
+function cachePayload(){
+  return { tasksDoc: state.tasksDoc, settings: state.settings, settingsSha: state.settingsSha,
+           events: state.events, eventsSha: state.eventsSha,
+           plan: state.plan, planSha: state.planSha, planStatus: state.planStatus,
+           taskDefs: state.taskDefs, taskLogs: state.taskLogs, taskLogShas: state.taskLogShas,
+           appLogs: state.appLogs, appLogShas: state.appLogShas, overlay: state.overlay, overlaySha: state.overlaySha };
+}
+
+function normalizeSettings(s){
+  const base = clone(DEFAULT_SETTINGS);
+  if (!s) return base;
+  return {
+    version: 1,
+    blocks: (s.blocks && Object.keys(s.blocks).length) ? s.blocks : base.blocks,
+    weights: Object.assign(base.weights, s.weights || {}),
+    places: (Array.isArray(s.places) && s.places.length) ? s.places : base.places,
+    presets: Array.isArray(s.presets) ? s.presets.filter(p => p && p.id).map(p => ({
+      id: String(p.id), name: p.name || "用事", start: p.start || "17:00", end: p.end || "18:00",
+      place: p.place || "外", organs: Array.isArray(p.organs) ? p.organs : ORGANS.slice(),
+      days: Array.isArray(p.days) ? p.days.map(Number).filter(n => n >= 0 && n <= 6) : [],
+    })) : [],
+    tasks: s.tasks || {},
+  };
+}
+
+async function saveSettings(){
+  const st = document.getElementById("save-status");
+  const btn = document.getElementById("save");
+  st.classList.remove("err");
+  st.textContent = "保存しています…";
+  btn.disabled = true;
+  try {
+    state.settingsSha = await writeJson(SETTINGS_PATH, state.settings, state.settingsSha);
+    state.dirty = false;
+    lsSet(KEY_CACHE, cachePayload());
+    st.textContent = "保存しました";
+    return true;
+  } catch (e) {
+    st.classList.add("err");
+    st.textContent = e.message;
+    btn.disabled = false;
+    return false;
+  } finally {
+    updateSaveBar();
+  }
+}
+
+/* ───────── 取り消しの表示 ───────── */
+
+let toastTimer = null, toastUndo = null;
+function showToast(text, undo){
+  const el = document.getElementById("toast");
+  document.getElementById("toast-text").textContent = text;
+  toastUndo = undo;
+  el.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.hidden = true; toastUndo = null; }, 6000);
+}
+
+/* ───────── 操作 ───────── */
+
+function showView(name){
+  document.querySelectorAll(".view").forEach(v => v.hidden = (v.id !== "view-" + name));
+  if (name === "today") renderToday();
+  if (name === "plan") renderPlan();
+  if (name === "tasks" || name === "check") renderTasks();
+  document.querySelectorAll("nav.tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.view === name)));
+  window.scrollTo(0, 0);
+}
+
+function bind(){
+  document.querySelectorAll("nav.tabs button").forEach(b =>
+    b.addEventListener("click", () => showView(b.dataset.view)));
+
+  // 今日:タップで済み/戻す
+  document.getElementById("plan").addEventListener("click", e => {
+    const doc = state.tasksDoc; if (!doc) return;
+    const d = e.target.closest("[data-done]");
+    const u = e.target.closest("[data-undo]");
+    if (!d && !u) return;
+    const name = d ? d.dataset.done : u.dataset.undo;
+    const tk = taskByName(name);
+    const restore = () => { flashTarget = name; };
+    if (tk && tk.row) {
+      const today = taskDay(), id = tk.def.id;
+      const before = (((state.appLogs[today.slice(0, 7)] || {})[today] || {})[id] || {}).check || null;
+      if (u) { restore(); commitAppLog(today, () => setAppRecord(today, id, { check: uncheckValue(today, tk) })); return; }
+      // いったん緑の✓にして一呼吸おいてから、済みの折りたたみへ移す
+      const row = d.closest(".stop"); if (row) row.classList.add("pending");
+      const timer = setTimeout(() => commitAppLog(today, () => setAppRecord(today, id, { check: "完了" })), DONE_DELAY());
+      showToast("「" + name + "」を完了にしました", () => {
+        clearTimeout(timer); restore();
+        commitAppLog(today, () => setAppRecord(today, id, { check: before }));
+      });
+      return;
+    }
+    if (u) { restore(); commitEvents(() => setDone(doc.date, name, false)); return; }
+    const row = d.closest(".stop"); if (row) row.classList.add("pending");
+    const timer = setTimeout(() => commitEvents(() => setDone(doc.date, name, true)), DONE_DELAY());
+    showToast("「" + name + "」を済みにしました", () => { clearTimeout(timer); restore(); commitEvents(() => setDone(doc.date, name, false)); });
+  });
+
+  // タスク
+  document.getElementById("tk-list").addEventListener("click", e => {
+    const b = e.target.closest("[data-tid]"); if (!b) return;
+    state.taskOpen = b.dataset.tid;
+    state.taskMode = null;
+    renderTaskDetail();
+    const box = document.getElementById("tk-detail");
+    if (box.scrollIntoView) box.scrollIntoView({ block: "nearest" });
+  });
+  // 記録の画面
+  document.getElementById("ck-detail").addEventListener("click", async e => {
+    if (e.target.closest("[data-rec-close]")) { state.recordOpen = null; renderRecordSheet(); return; }
+    const ob = e.target.closest(".opts [data-v]");
+    if (ob) {
+      const on = ob.getAttribute("aria-pressed") !== "true";
+      ob.parentElement.querySelectorAll("[data-v]").forEach(b => b.setAttribute("aria-pressed", "false"));
+      ob.setAttribute("aria-pressed", String(on));
+      return;
+    }
+    if (!e.target.closest("[data-rec-save]")) return;
+    const id = state.recordOpen; if (!id) return;
+    const box = document.getElementById("ck-detail");
+    const pick = key => { const b = box.querySelector('[data-opt="' + key + '"] [aria-pressed="true"]'); return b ? b.dataset.v : null; };
+    const val = k => { const el = box.querySelector('[data-rk="' + k + '"]'); return el ? el.value.trim() : ""; };
+    const min = +val("min") || 0, sec = +val("sec") || 0;
+    const patch = {
+      check: pick("check"), ca: pick("ca"), booking: pick("booking"),
+      nextBooking: val("nextBooking") || null,
+      seconds: (min || sec) ? min * 60 + sec : null,
+      quality: val("quality") ? +val("quality") : null,
+    };
+    if (box.querySelector('[data-rk="did"]')) patch.did = val("did") === "" ? null : +val("did");
+    if (box.querySelector('[data-rk="progress"]')) {
+      const pg = val("progress");
+      patch.progress = pg === "" ? null : Math.max(0, Math.min(100, +pg));
+    }
+    const today = taskDay();
+    await commitAppLog(today, () => setAppRecord(today, id, patch));
+  });
+
+  // チェックの並べ方
+  document.getElementById("ck-sort").addEventListener("change", e => {
+    lsSet(KEY_CKVIEW, { sort: e.target.value });
+    renderTasks();
+  });
+
+  document.getElementById("tk-new").addEventListener("click", () => {
+    state.taskMode = "new"; state.taskOpen = null;
+    renderTaskDetail();
+    const box = document.getElementById("tk-detail");
+    if (box.scrollIntoView) box.scrollIntoView({ block: "nearest" });
+  });
+
+  document.getElementById("toast-undo").addEventListener("click", () => {
+    const f = toastUndo; toastUndo = null;
+    document.getElementById("toast").hidden = true;
+    if (f) f();
+  });
+
+  // 並べ方
+  ["tk-group", "tk-sort"].forEach(id => document.getElementById(id).addEventListener("change", () => {
+    lsSet(KEY_TKVIEW, { group: document.getElementById("tk-group").value, sort: document.getElementById("tk-sort").value });
+    renderTasks();
+  }));
+
+  // 今日の記録:○で完了、もう一度で取り消し。「記録」で詳しく
+  document.getElementById("tk-today").addEventListener("click", async e => {
+    const q = e.target.closest("[data-quick]");
+    const r = e.target.closest("[data-record]");
+    const today = taskDay();
+    if (q) {
+      const id = q.dataset.quick;
+      const t = taskStates().find(x => x.def.id === id);
+      const on = !(t && window.TaskEngine.DONE.has(t.check));
+      const before = (((state.appLogs[today.slice(0, 7)] || {})[today] || {})[id] || {}).check || null;
+      if (!on) { flashTargetId = id; await commitAppLog(today, () => setAppRecord(today, id, { check: uncheckValue(today, t) })); return; }
+      // いったん✓にして一呼吸おいてから、済みの折りたたみへ移す
+      q.classList.add("on"); q.textContent = "✓";
+      const timer = setTimeout(() => commitAppLog(today, () => setAppRecord(today, id, { check: "完了" })), DONE_DELAY());
+      showToast("「" + t.def.name + "」を完了にしました", () => {
+        clearTimeout(timer); flashTargetId = id;
+        commitAppLog(today, () => setAppRecord(today, id, { check: before }));
+      });
+      return;
+    }
+    if (r) {
+      state.recordOpen = r.dataset.record;
+      renderRecordSheet();
+      const box = document.getElementById("ck-detail");
+      if (box.scrollIntoView) box.scrollIntoView({ block: "nearest" });
+    }
+  });
+
+  // WAVE・STAGEのリンクをまとめて保存
+  document.getElementById("tk-waves").addEventListener("click", async e => {
+    if (!e.target.closest("[data-wavelinks-save]")) return;
+    const vals = {};
+    document.querySelectorAll("#tk-waves [data-wavelink]").forEach(inp => { vals[inp.dataset.wavelink] = inp.value.trim(); });
+    await commitOverlay(() => {
+      state.overlay.waveUrls = Object.assign({}, state.overlay.waveUrls || {});
+      for (const [l, u] of Object.entries(vals)) { if (u) state.overlay.waveUrls[l] = u; else delete state.overlay.waveUrls[l]; }
+    });
+  });
+
+  document.getElementById("tk-detail").addEventListener("click", async e => {
+    if (e.target.closest("[data-tk-close]")) { state.taskOpen = null; state.taskMode = null; renderTaskDetail(); return; }
+
+    // 状況の操作
+    const act = e.target.closest("[data-act]");
+    if (act) {
+      const id = state.taskOpen; if (!id) return;
+      const a = act.dataset.act, status = ACTIONS[a][1], D = taskDay();
+      const resume = a === "pause" ? (document.getElementById("tk-resume") || {}).value || "" : "";
+      if (resume && resume <= D) {
+        const st = document.getElementById("tk-status"); st.classList.add("err"); st.textContent = "再開日は明日以降にしてください。"; return;
+      }
+      state.taskMode = "settings";
+      await commitOverlay(() => {
+        const t = state.overlay.tasks[id] = Object.assign({}, state.overlay.tasks[id] || {});
+        const evs = (t.events || []).filter(x => x.date !== D && !(x.resume && x.fromPause === D));
+        const ev = { date: D, status };
+        if (a === "rebuild" || a === "revive") ev.set = { miss: 0 };
+        if (a === "resume" || a === "normal") ev.resume = true;
+        evs.push(ev);
+        if (resume) evs.push({ date: resume, status: "進行中", resume: true, fromPause: D });
+        t.events = evs;
+      });
+      return;
+    }
+    // 世代を上げる
+    if (e.target.closest("[data-genup]")) {
+      const id = state.taskOpen; if (!id) return;
+      const t = taskStates().find(x => x.def.id === id); if (!t) return;
+      const tv = document.querySelector("#tk-detail [data-genup-target]").value;
+      const D = taskDay();
+      state.taskMode = "settings";
+      await commitOverlay(() => {
+        const o = state.overlay.tasks[id] = Object.assign({}, state.overlay.tasks[id] || {});
+        const gens = (o.generations || []).filter(g => g.from !== D);
+        // 今日より前の世代を基準にする。同じ日に2回押しても1つしか上がらない
+        const before = (t.def.generations || []).filter(g => g.from < D).pop();
+        gens.push({ gen: ((before && before.gen) || 1) + 1, from: D, target: tv === "" ? null : +tv });
+        o.generations = gens;
+        if (o.edits) delete o.edits.target;          // 目標は新しい世代のほうに持たせる
+      });
+      return;
+    }
+    // 中身を保存
+    if (e.target.closest("[data-edit-save]")) {
+      const id = state.taskOpen; if (!id) return;
+      const f = readTaskForm(document.getElementById("tk-detail"));
+      if (!f.name) { const st = document.getElementById("tk-status"); st.classList.add("err"); st.textContent = "名前を入れてください。"; return; }
+      const clash = taskStates().find(x => x.def.id !== id && (x.def.name === f.name || (x.def.aliases || []).includes(f.name)));
+      if (clash) { const st = document.getElementById("tk-status"); st.classList.add("err"); st.textContent = "同じ名前のタスクがあります。"; return; }
+      state.taskMode = "settings";
+      await commitOverlay(() => {
+        const o = state.overlay.tasks[id] = Object.assign({}, state.overlay.tasks[id] || {});
+        o.edits = f;
+        // まだNotionから戻ってきていない新しいタスクは、その定義も書き換える
+        const nt = (state.overlay.newTasks || []).find(x => x.id === id);
+        if (nt) Object.assign(nt, { slot: f.slot, stance: f.stance, kind: f.kind, interval: f.interval, weight: f.weight,
+          quota: f.quota, requirement: f.requirement, ministries: f.ministries, waves: f.waves.map(l => ({ label: l, url: "" })) });
+      });
+      return;
+    }
+    // 新しいタスクを足す
+    if (e.target.closest("[data-new-save]")) {
+      const f = readTaskForm(document.getElementById("tk-detail"));
+      const st = document.getElementById("tk-status");
+      if (!f.name) { st.classList.add("err"); st.textContent = "名前を入れてください。"; return; }
+      if (taskStates().some(x => x.def.name === f.name || (x.def.aliases || []).includes(f.name))) {
+        st.classList.add("err"); st.textContent = "同じ名前のタスクがあります。別の名前にしてください。"; return;
+      }
+      const D = taskDay();
+      const id = await taskIdFor(f.name, D);
+      const def = {
+        id, name: f.name, aliases: [], ministries: f.ministries, waves: f.waves.map(l => ({ label: l, url: "" })),
+        slot: f.slot, stance: f.stance, kind: f.kind, interval: f.interval, weight: f.weight, quota: f.quota,
+        requirement: f.requirement, created: D, initial: { status: "新規" },
+        generations: [{ gen: 1, from: D, target: f.kind === "習慣型" ? f.target : null }], events: [],
+      };
+      state.taskMode = null; state.taskOpen = id;
+      await commitOverlay(() => {
+        state.overlay.newTasks = (state.overlay.newTasks || []).filter(x => x.id !== id).concat([def]);
+      });
+      return;
+    }
+    if (!e.target.closest("[data-tk-save]")) return;
+    const id = state.taskOpen; if (!id) return;
+    const box = document.getElementById("tk-detail");
+    const items = box.querySelector("[data-cycle-items]").value.split("\n").map(x => x.trim()).filter(Boolean);
+    const nowSel = box.querySelector("[data-cycle-now]");
+    let idx = nowSel ? +nowSel.value : 0;
+    if (!(idx >= 0 && idx < items.length)) idx = 0;
+    const waves = {};
+    box.querySelectorAll("[data-wave]").forEach(inp => { waves[inp.dataset.wave] = inp.value.trim(); });
+    const today = taskDay();
+    await commitOverlay(() => {
+      const t = state.overlay.tasks[id] = Object.assign({}, state.overlay.tasks[id] || {});
+      // 今日どれかを選び直したら、今日を起点にする
+      t.cycle = items.length ? { items, anchorDate: today, anchorIndex: idx } : null;
+      delete t.waves;
+      state.overlay.waveUrls = Object.assign({}, state.overlay.waveUrls || {});
+      for (const [label, url] of Object.entries(waves)) {
+        if (url) state.overlay.waveUrls[label] = url; else delete state.overlay.waveUrls[label];
+      }
+    });
+  });
+
+  // 計画
+  document.getElementById("zoom").addEventListener("click", e => {
+    const b = e.target.closest("[data-zoom]"); if (!b) return;
+    state.planZoom = b.dataset.zoom; renderPlan();
+  });
+  document.getElementById("plan-add").addEventListener("click", e => {
+    const b = e.target.closest("[data-add]"); if (!b) return;
+    state.planEdit = { item: newItem(b.dataset.add), isNew: true };
+    renderPlanEditor();
+    const box = document.getElementById("plan-editor");
+    if (box.scrollIntoView) box.scrollIntoView({ block: "nearest" });
+  });
+  const openItem = id => {
+    const it = (state.plan.items || []).find(x => x.id === id);
+    if (!it) return;
+    state.planEdit = { item: JSON.parse(JSON.stringify(it)), isNew: false };
+    renderPlanEditor();
+    const box = document.getElementById("plan-editor");
+    if (box.scrollIntoView) box.scrollIntoView({ block: "nearest" });
+  };
+  document.getElementById("tl").addEventListener("click", e => {
+    const b = e.target.closest("[data-pid]"); if (b) openItem(b.dataset.pid);
+  });
+  document.getElementById("plan-notices").addEventListener("click", e => {
+    const b = e.target.closest("[data-pid]"); if (b && b.dataset.pid) openItem(b.dataset.pid);
+  });
+  const ped = document.getElementById("plan-editor");
+  ped.addEventListener("change", e => {
+    const k = e.target.dataset.pk; if (!k || !state.planEdit) return;
+    const it = readPlanEditor();
+    // 長さを変えたら、終了日を合わせる
+    if (k === "grain" && it.type === "period" && isDate(it.start)) {
+      const span = { "年": 364, "四半期": 90, "月": 29, "週": 6 }[it.grain] || 29;
+      it.end = addDays(it.start, span);
+    }
+    if (k === "subject") { it.target = ""; it.metric = it.subject === "ministry" ? "支配" : "累計"; }
+    state.planEdit.item = it;
+    if (k === "grain" || k === "subject" || k === "task.kind") renderPlanEditor();
+  });
+  ped.addEventListener("click", async e => {
+    if (e.target.closest("[data-plan-cancel]")) { state.planEdit = null; renderPlanEditor(); return; }
+    if (e.target.closest("[data-plan-del]")) {
+      const id = state.planEdit.item.id;
+      state.planEdit = null;
+      await commitPlan(() => removePlanItem(id));
+      return;
+    }
+    if (e.target.closest("[data-plan-save]")) {
+      const it = readPlanEditor();
+      if (it.type === "buffer" && !it.name) it.name = "予備";
+      if (it.type === "setup" && !it.name) it.name = (it.task && it.task.name) || "";
+      const err = validatePlanItem(it);
+      const st = document.getElementById("plan-status");
+      if (err) { st.classList.add("err"); st.textContent = err; return; }
+      state.planEdit = null;
+      await commitPlan(() => upsertPlanItem(JSON.parse(JSON.stringify(it))));
+    }
+  });
+
+  // 今日:用事の欄
+  const evp = document.getElementById("events-panel");
+  evp.addEventListener("click", async e => {
+    const doc = state.tasksDoc; if (!doc) return;
+    const chip = e.target.closest("[data-preset]");
+    if (chip) {
+      const pid = chip.dataset.preset;
+      const on = !eventsFor(doc.date).some(e => e.preset === pid);
+      await commitEvents(() => setPreset(doc.date, pid, on));
+      return;
+    }
+    if (e.target.closest("[data-ev-new]")) { state.evFormOpen = true; renderToday(); return; }
+    if (e.target.closest("[data-ev-cancel]")) { state.evFormOpen = false; renderToday(); return; }
+    const del = e.target.closest("[data-ev-del]");
+    if (del) { const id = del.dataset.evDel; await commitEvents(() => removeEvent(doc.date, id)); return; }
+    const org = e.target.closest("[data-nf-organ]");
+    if (org) { org.setAttribute("aria-pressed", String(org.getAttribute("aria-pressed") !== "true")); return; }
+    if (e.target.closest("[data-ev-add]")) {
+      const name = document.getElementById("nf-name").value.trim();
+      const start = document.getElementById("nf-start").value;
+      const end = document.getElementById("nf-end").value;
+      const place = document.getElementById("nf-place").value;
+      const organs = Array.from(evp.querySelectorAll('[data-nf-organ][aria-pressed="true"]')).map(b => b.dataset.nfOrgan);
+      const st = document.getElementById("ev-status");
+      if (!name) { st.classList.add("err"); st.textContent = "名前を入れてください。"; return; }
+      if (toMin(start) === null || toMin(end) === null || toMin(end) <= toMin(start)) {
+        st.classList.add("err"); st.textContent = "終了は開始より後にしてください。"; return;
+      }
+      const register = document.getElementById("nf-save").checked;
+      const ev = { id: uid(), name, start, end, place, organs };
+      if (register) {
+        const p = { id: uid(), name, start, end, place, organs: organs.slice(), days: [] };
+        state.settings.presets = (state.settings.presets || []).concat([p]);
+        ev.preset = p.id;
+      }
+      state.evFormOpen = false;
+      renderSettings();
+      await commitEvents(() => addEvent(doc.date, ev));
+      if (register) await saveSettings();
+      return;
+    }
+  });
+  evp.addEventListener("change", async e => {
+    const doc = state.tasksDoc; if (!doc) return;
+    const row = e.target.closest("[data-ev]");
+    const k = e.target.dataset.evk;
+    if (!row || !k) return;
+    const id = row.dataset.ev, v = e.target.value;
+    await commitEvents(() => editEventTime(doc.date, id, k, v));
+  });
+
+  // 設定:よく使う用事
+  const pe = document.getElementById("presets-edit");
+  const presetOf = el => {
+    const row = el.closest("[data-preset-id]");
+    return row ? (state.settings.presets || []).find(p => p.id === row.dataset.presetId) : null;
+  };
+  pe.addEventListener("change", e => {
+    const p = presetOf(e.target); const k = e.target.dataset.pk;
+    if (!p || !k) return;
+    if ((k === "start" || k === "end") && toMin(e.target.value) === null) return;
+    p[k] = k === "name" ? (e.target.value.trim() || p.name) : e.target.value;
+    markDirty();
+  });
+  pe.addEventListener("click", e => {
+    const p = presetOf(e.target); if (!p) return;
+    const o = e.target.closest("[data-porgan]");
+    const d = e.target.closest("[data-pday]");
+    if (o) {
+      const on = o.getAttribute("aria-pressed") !== "true";
+      o.setAttribute("aria-pressed", String(on));
+      const set = new Set(p.organs || []); on ? set.add(o.dataset.porgan) : set.delete(o.dataset.porgan);
+      p.organs = ORGANS.filter(x => set.has(x));
+      markDirty(); return;
+    }
+    if (d) {
+      const on = d.getAttribute("aria-pressed") !== "true";
+      d.setAttribute("aria-pressed", String(on));
+      const k = +d.dataset.pday;
+      const set = new Set(p.days || []); on ? set.add(k) : set.delete(k);
+      p.days = Array.from(set).sort();
+      markDirty(); return;
+    }
+    if (e.target.closest("[data-pdel]")) {
+      state.settings.presets = state.settings.presets.filter(x => x !== p);
+      markDirty(); renderSettings();
+    }
+  });
+  document.getElementById("add-preset").addEventListener("click", () => {
+    state.settings.presets = (state.settings.presets || []).concat([{
+      id: uid(), name: "新しい用事", start: "17:00", end: "21:00", place: "外",
+      organs: ORGANS.slice(), days: [],
+    }]);
+    markDirty(); renderSettings();
+  });
+
+  // 設定:タスクごとの値
+  const edits = document.getElementById("task-edits");
+  edits.addEventListener("change", e => {
+    const row = e.target.closest(".task-edit"); if (!row) return;
+    const k = e.target.dataset.k; if (!k) return;
+    const t = ensureTask(row.dataset.name);
+    if (k === "min") t.min = Math.max(1, +e.target.value || 1);
+    else if (k === "priority") t.priority = +e.target.value;
+    else t[k] = e.target.value;
+    if (k === "next") renderSettings();
+    markDirty();
+  });
+  edits.addEventListener("click", e => {
+    const b = e.target.closest("[data-organ]"); if (!b) return;
+    const row = b.closest(".task-edit");
+    const t = ensureTask(row.dataset.name);
+    const o = b.dataset.organ;
+    const on = b.getAttribute("aria-pressed") !== "true";
+    b.setAttribute("aria-pressed", String(on));
+    const set = new Set(t.organs || []);
+    on ? set.add(o) : set.delete(o);
+    t.organs = ORGANS.filter(x => set.has(x));
+    markDirty();
+  });
+
+  document.getElementById("blocks-edit").addEventListener("change", e => {
+    const row = e.target.closest("[data-block]"); if (!row) return;
+    const k = e.target.dataset.bk; if (!k || toMin(e.target.value) === null) return;
+    state.settings.blocks[row.dataset.block][k] = e.target.value;
+    markDirty();
+  });
+  document.getElementById("places").addEventListener("change", e => {
+    const list = e.target.value.split(/[、,，\s]+/).map(x => x.trim()).filter(Boolean);
+    if (!list.includes(ANYWHERE)) list.push(ANYWHERE);
+    state.settings.places = Array.from(new Set(list));
+    markDirty(); renderSettings();
+  });
+  ["place","mode","priority","reach"].forEach(k => {
+    document.getElementById("w-" + k).addEventListener("change", e => {
+      const min = (k === "reach") ? 1 : 0;
+      state.settings.weights[k] = Math.max(min, +e.target.value || min);
+      markDirty();
+    });
+  });
+
+  document.getElementById("save").addEventListener("click", saveSettings);
+
+  // 同期:変更がなくても読み込み直す
+  document.getElementById("reload-data").addEventListener("click", async () => {
+    const st = document.getElementById("reload-status");
+    if (!state.conn) { st.classList.add("err"); st.textContent = "先に接続してください。"; return; }
+    st.classList.remove("err"); st.textContent = "読み込んでいます…";
+    const ok = await loadAll();
+    st.textContent = ok ? "読み込みました" : "読み込めませんでした(上の表示を見てください)";
+    if (!ok) st.classList.add("err");
+  });
+  // アプリを最新の版に:URLに時刻を付けて開き直す。手元に残った古いページを使わせないため
+  document.getElementById("reload-app").addEventListener("click", () => {
+    const u = new URL(window.location.href);
+    u.searchParams.set("v", String(Date.now()));
+    window.location.replace(u.toString());
+  });
+
+  // 接続
+  document.getElementById("connect").addEventListener("click", async () => {
+    const conn = {
+      owner: document.getElementById("c-owner").value.trim(),
+      repo: document.getElementById("c-repo").value.trim(),
+      branch: document.getElementById("c-branch").value.trim() || "main",
+      token: document.getElementById("c-token").value.trim(),
+    };
+    const st = document.getElementById("conn-status");
+    if (!conn.owner || !conn.repo || !conn.token) {
+      st.classList.add("err");
+      st.textContent = "ユーザー名・リポジトリ・トークンを入れてください。";
+      return;
+    }
+    state.conn = conn;
+    lsSet(KEY_CONN, conn);
+    if (await loadAll()) showView("today");
+  });
+}
+
+function boot(){
+  // アプリとしてインストールできるようにする。通信できるときは常に最新を取る作り
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  }
+  bind();
+  const av = document.getElementById("app-version");
+  if (av) av.textContent = APP_VERSION;
+  const conn = lsGet(KEY_CONN, null);
+  document.getElementById("c-owner").value = conn ? conn.owner : "";
+  document.getElementById("c-repo").value = conn ? conn.repo : "notion-daily";
+  document.getElementById("c-branch").value = conn ? conn.branch : "main";
+  document.getElementById("c-token").value = conn ? conn.token : "";
+
+  // 前回読み込んだぶんをまず出す。通信を待たずに見られるように
+  const cache = lsGet(KEY_CACHE, null);
+  if (cache && cache.tasksDoc) {
+    state.tasksDoc = cache.tasksDoc;
+    state.settings = normalizeSettings(cache.settings);
+    state.settingsSha = cache.settingsSha || null;
+    state.events = cache.events || {};
+    state.eventsSha = cache.eventsSha || null;
+    state.plan = normalizePlan(cache.plan);
+    state.planSha = cache.planSha || null;
+    state.planStatus = cache.planStatus || null;
+    state.taskDefs = cache.taskDefs || null;
+    state.taskLogs = cache.taskLogs || {};
+    state.taskLogShas = cache.taskLogShas || {};
+    state.appLogs = cache.appLogs || {};
+    state.appLogShas = cache.appLogShas || {};
+    state.overlay = cache.overlay || { version: 1, tasks: {}, waveUrls: {} };
+    state.overlaySha = cache.overlaySha || null;
+  }
+  renderToday(); renderSettings(); renderPlan(); renderTasks();
+
+  if (conn && conn.owner && conn.token) {
+    state.conn = conn;
+    loadAll();
+  } else {
+    showView("connect");
+  }
+}
+
+window.__roadmap = { buildPlan, cfgOf, classify, state, loadAll, saveSettings, saveEvents, eventsFor,
+                     togglePreset, setPreset, removeEvent, editEventTime, setDone, getDone, commitEvents,
+                     commitPlan, normalizePlan, validatePlanItem, newItem, taskStates, commitOverlay,
+                     commitAppLog, setAppRecord, taskDay, taskIdFor,
+                     b64encode, b64decode, DEFAULT_SETTINGS };
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
+})();
+</script>
+</body>
+</html>
