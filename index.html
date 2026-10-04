@@ -123,6 +123,50 @@ details.more summary{cursor:pointer;color:var(--sub);font-size:.88rem;padding:.3
 .days button{border:1px solid var(--rule);background:#fff;border-radius:3px;width:2.1rem;padding:.2rem 0;cursor:pointer}
 .days button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
 
+/* 計画 */
+.zoom{display:flex;gap:.3rem;margin:0 0 .6rem}
+.zoom button{border:1px solid var(--rule);background:#fff;border-radius:3px;padding:.25rem .75rem;cursor:pointer}
+.zoom button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.tl-wrap{overflow-x:auto;border:1px solid var(--rule);background:var(--sheet);border-radius:4px;-webkit-overflow-scrolling:touch}
+.tl-row{display:flex;border-bottom:1px solid var(--rule);min-width:max-content}
+.tl-row:last-child{border-bottom:none}
+.tl-label{position:sticky;left:0;z-index:3;flex:0 0 4.4rem;width:4.4rem;background:var(--sheet);
+  padding:.4rem .45rem;font-size:.78rem;font-weight:700;border-right:1px solid var(--rule);line-height:1.3;word-break:break-all}
+.tl-track{position:relative;flex:0 0 auto}
+.tl-head .tl-track{height:2.1rem}
+.tl-mon{position:absolute;top:0;height:100%;border-left:1px solid var(--rule);font-size:.72rem;color:var(--sub);padding:.15rem .3rem;white-space:nowrap}
+.tl-wk{position:absolute;bottom:0;font-size:.66rem;color:var(--sub);transform:translateX(-50%)}
+.tl-today{position:absolute;top:0;bottom:0;width:2px;background:var(--reach);opacity:.55;z-index:1;pointer-events:none}
+.tl-it{position:absolute;height:22px;border:none;border-radius:3px;font:inherit;font-size:.72rem;line-height:22px;
+  padding:0 .4rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;text-align:left;z-index:2;color:var(--ink)}
+.tl-it.period{background:transparent;border:1.5px solid var(--c);line-height:19px;font-weight:700}
+.tl-it.period.active{background:color-mix(in srgb,var(--c) 10%,transparent)}
+.tl-it.campaign{background:var(--c);color:#fff}
+.tl-it.campaign.drift{outline:2px dashed var(--reach);outline-offset:1px}
+.tl-it.buffer{background:repeating-linear-gradient(135deg,var(--rule) 0 4px,transparent 4px 8px);color:var(--sub);border:1px solid var(--rule)}
+.tl-it.buffer.clash{border-color:var(--reach)}
+.tl-mk{position:absolute;height:22px;display:flex;align-items:center;gap:.3rem;border:none;background:none;
+  font:inherit;font-size:.7rem;color:var(--ink);cursor:pointer;padding:0;z-index:2;white-space:nowrap;max-width:9rem;overflow:hidden}
+.tl-mk .dm{flex:0 0 12px;width:12px;height:12px;transform:rotate(45deg);background:var(--sheet);border:2px solid var(--c)}
+.tl-mk.achieved .dm{background:#3D8A5A;border-color:#3D8A5A}
+.tl-mk.missed .dm{background:var(--reach);border-color:var(--reach)}
+.tl-mk.behind .dm{border-color:#B07D2A;background:#F4E6C8}
+.tl-mk .sq{flex:0 0 12px;width:12px;height:12px;background:var(--c);border-radius:2px}
+.tl-mk.created .sq{background:#3D8A5A}
+.tl-mk span.l{overflow:hidden;text-overflow:ellipsis}
+.tl-empty{padding:1.2rem .9rem;color:var(--sub);font-size:.9rem}
+.add-row{display:flex;flex-wrap:wrap;gap:.35rem;margin:.8rem 0}
+.add-row button{border:1px dashed var(--sub);background:transparent;border-radius:3px;padding:.3rem .7rem;cursor:pointer;color:var(--ink)}
+.pnotice{display:block;width:100%;text-align:left;border:none;border-left:3px solid var(--sub);background:var(--sheet);
+  padding:.45rem .7rem;margin:0 0 .35rem;font:inherit;font-size:.85rem;cursor:pointer;color:var(--ink);line-height:1.5}
+.pnotice.bad{border-left-color:var(--reach)}
+.pnotice.warn{border-left-color:#B07D2A}
+.pnotice.good{border-left-color:#3D8A5A}
+.peditor{background:var(--sheet);border:1px solid var(--rule);border-radius:4px;padding:.8rem;margin-top:.4rem}
+.peditor h2{font-size:1rem;margin:0 0 .6rem}
+.peditor .now{font-size:.84rem;color:var(--sub);margin:.1rem 0 .7rem}
+.peditor .row{display:flex;gap:.6rem;align-items:center;margin-top:.8rem;flex-wrap:wrap}
+
 /* 設定 */
 .sec{margin-bottom:1.6rem}
 .sec h2{font-size:1rem;margin:0 0 .5rem;letter-spacing:.06em}
@@ -166,6 +210,30 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
     <div id="notices"></div>
     <div id="events-panel"></div>
     <div id="plan"></div>
+  </section>
+
+  <section class="view" id="view-plan" hidden>
+    <header class="head">
+      <h1>計画</h1>
+      <div class="date" id="plan-date">—</div>
+    </header>
+    <div id="plan-notices"></div>
+    <div class="zoom" role="group" aria-label="表示の幅" id="zoom">
+      <button type="button" data-zoom="週">週</button>
+      <button type="button" data-zoom="月">月</button>
+      <button type="button" data-zoom="四半期">四半期</button>
+      <button type="button" data-zoom="年">年</button>
+    </div>
+    <div class="tl-wrap" id="tl"></div>
+    <div class="add-row" id="plan-add">
+      <button type="button" data-add="period">期間を足す</button>
+      <button type="button" data-add="campaign">作戦を足す</button>
+      <button type="button" data-add="milestone">節目を足す</button>
+      <button type="button" data-add="setup">仕込みを足す</button>
+      <button type="button" data-add="buffer">予備を足す</button>
+    </div>
+    <div id="plan-editor"></div>
+    <span class="status" id="plan-status"></span>
   </section>
 
   <section class="view" id="view-settings" hidden>
@@ -235,6 +303,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 
 <nav class="tabs" role="tablist">
   <button role="tab" aria-selected="true" data-view="today">今日</button>
+  <button role="tab" aria-selected="false" data-view="plan">計画</button>
   <button role="tab" aria-selected="false" data-view="settings">設定</button>
   <button role="tab" aria-selected="false" data-view="connect">接続</button>
 </nav>
@@ -248,6 +317,11 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
 const EVENTS_PATH = "roadmap/events.json";
+const PLAN_PATH = "roadmap/plan.json";
+const PLAN_STATUS_PATH = "roadmap/plan_status.json";
+const ZOOMS = { "週": 30, "月": 9, "四半期": 3.2, "年": 1.3 };      // 1日あたりの幅(px)
+const LANE_COLORS = ["#2F5DA8","#3D8A5A","#B07D2A","#7A4FA0","#2C8C99","#A0485F","#5A5FA8","#4F7A2F","#8A6A2F","#2F6F7A"];
+const KINDS = { period: "期間", campaign: "作戦", milestone: "節目", setup: "仕込み", buffer: "予備" };
 const DAYS = ["日","月","火","水","木","金","土"];
 const KEEP_EVENT_DAYS = 30;                          // 用事の記録はこの日数ぶんだけ残す
 const KEY_CONN = "roadmap-conn";
@@ -283,6 +357,11 @@ const state = {
   events: {},
   eventsSha: null,
   evFormOpen: false,
+  plan: { version: 1, items: [] },
+  planSha: null,
+  planStatus: null,
+  planZoom: "月",
+  planEdit: null,            // 編集中の項目 { item, isNew }
 };
 
 function clone(o){ return JSON.parse(JSON.stringify(o)); }
@@ -989,6 +1068,327 @@ function renderEventsPanel(events){
     '<span class="status" id="ev-status"></span></div>';
 }
 
+/* ───────── 計画 ───────── */
+
+function normalizePlan(p){
+  const items = (p && Array.isArray(p.items)) ? p.items.filter(i => i && i.id && KINDS[i.type]) : [];
+  return { version: 1, items };
+}
+function addDays(dateStr, n){
+  const t = new Date(dateStr + "T00:00:00Z").getTime() + n * 86400000;
+  return new Date(t).toISOString().slice(0, 10);
+}
+function daysBetween(a, b){
+  return Math.round((new Date(b + "T00:00:00Z") - new Date(a + "T00:00:00Z")) / 86400000);
+}
+function isDate(s){ return /^\d{4}-\d{2}-\d{2}$/.test(s || "") && !isNaN(new Date(s + "T00:00:00Z")); }
+function itemStart(i){ return i.start || i.date; }
+function itemEnd(i){ return i.end || i.date; }
+
+// レーンの候補。全体、計画に出てくる省、今日のタスクの省
+function knownLanes(){
+  const set = new Set(["全体"]);
+  (state.plan.items || []).forEach(i => i.lane && set.add(i.lane));
+  ((state.tasksDoc && state.tasksDoc.tasks) || []).forEach(t => (t.ministries || []).forEach(m => set.add(m)));
+  Object.keys((state.tasksDoc && state.tasksDoc.weights) || {}).forEach(m => set.add(m));
+  return Array.from(set);
+}
+function laneOrder(lanes){
+  const w = (state.tasksDoc && state.tasksDoc.weights) || {};
+  return lanes.slice().sort((a, b) => {
+    if (a === "全体") return -1; if (b === "全体") return 1;
+    return (+w[b] || 0) - (+w[a] || 0) || a.localeCompare(b, "ja");
+  });
+}
+function laneColor(lane){
+  const lanes = laneOrder(knownLanes());
+  const i = Math.max(0, lanes.indexOf(lane));
+  return lane === "全体" ? "#5F6873" : LANE_COLORS[(i - 1 + LANE_COLORS.length) % LANE_COLORS.length];
+}
+function statusOf(id){ return ((state.planStatus && state.planStatus.items) || {})[id] || null; }
+
+function renderPlan(){
+  const dateEl = document.getElementById("plan-date");
+  if (!dateEl) return;
+  const st = state.planStatus;
+  dateEl.innerHTML = st ? ("照合 " + esc(st.generated_at || "")) : "まだ照合していません";
+
+  // 知らせ
+  const notes = (st && st.notices) || [];
+  document.getElementById("plan-notices").innerHTML = notes.map(n =>
+    '<button type="button" class="pnotice ' + esc(n.level) + '" data-pid="' + esc(n.id || "") + '">' +
+    esc(n.lane && n.lane !== "全体" ? n.lane + "　" : "") + esc(n.text) + "</button>").join("");
+
+  document.querySelectorAll("#zoom [data-zoom]").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.zoom === state.planZoom)));
+
+  renderTimeline();
+  renderPlanEditor();
+}
+
+function renderTimeline(){
+  const box = document.getElementById("tl");
+  const items = state.plan.items || [];
+  const today = todayJST();
+  if (!items.length) {
+    box.innerHTML = '<div class="tl-empty">まだ計画がありません。下のボタンから、期間・作戦・節目などを足してください。</div>';
+    return;
+  }
+
+  // 表示する範囲:今日の2週間前から、いちばん遠い予定の1週間後まで
+  let from = addDays(today, -14), to = addDays(today, 60);
+  for (const i of items) {
+    const a = itemStart(i), z = itemEnd(i);
+    if (isDate(a) && a < from) from = a;
+    if (isDate(z) && z > to) to = z;
+  }
+  from = addDays(from, -3); to = addDays(to, 7);
+  const ppd = ZOOMS[state.planZoom] || 9;
+  const W = (daysBetween(from, to) + 1) * ppd;
+  const x = dt => daysBetween(from, dt) * ppd;
+  const todayX = x(today);
+
+  // 見出し:月と、週表示のときは週の始まり
+  let head = "";
+  let cur = from.slice(0, 7) + "-01";
+  if (cur < from) cur = addDays(cur, 0);
+  while (cur <= to) {
+    const left = Math.max(0, x(cur));
+    const y = +cur.slice(0, 4), m = +cur.slice(5, 7);
+    const label = (m === 1 || cur <= from) ? y + "年" + m + "月" : m + "月";
+    head += '<div class="tl-mon" style="left:' + left + 'px">' + label + "</div>";
+    const nm = m === 12 ? (y + 1) + "-01-01" : y + "-" + String(m + 1).padStart(2, "0") + "-01";
+    cur = nm;
+  }
+  if (state.planZoom === "週") {
+    let dd = from;
+    while (dd <= to) {
+      if (weekdayOf(dd) === 1) head += '<div class="tl-wk" style="left:' + (x(dd) + ppd / 2) + 'px">' + (+dd.slice(8)) + "</div>";
+      dd = addDays(dd, 1);
+    }
+  }
+  let html = '<div class="tl-row tl-head"><div class="tl-label"></div><div class="tl-track" style="width:' + W + 'px">' +
+             head + '<div class="tl-today" style="left:' + todayX + 'px"></div></div></div>';
+
+  const lanes = laneOrder(Array.from(new Set(items.map(i => i.lane || "全体"))));
+  const ROW = 26;
+  for (const lane of lanes) {
+    const color = laneColor(lane);
+    const mine = items.filter(i => (i.lane || "全体") === lane);
+    const marks = mine.filter(i => i.type === "milestone" || i.type === "setup");
+    const bars = mine.filter(i => i.type === "period" || i.type === "campaign" || i.type === "buffer")
+      .filter(i => isDate(i.start) && isDate(i.end))
+      .sort((a, b) => (a.type === "period" ? -1 : 0) - (b.type === "period" ? -1 : 0) || a.start.localeCompare(b.start));
+
+    // 帯を重ならない段に詰める
+    const rows = [];
+    const placed = bars.map(b => {
+      let r = rows.findIndex(end => end < b.start);
+      if (r < 0) { rows.push(b.end); r = rows.length - 1; } else rows[r] = b.end;
+      return { b, r };
+    });
+    const markRow = marks.length ? 1 : 0;
+    const h = (rows.length + markRow) * ROW + 8;
+
+    let inner = "";
+    for (const m of marks) {
+      const dt = m.date; if (!isDate(dt)) continue;
+      const st = statusOf(m.id) || {};
+      let cls = m.type === "milestone" ? (st.state === "achieved" ? "achieved" : st.state === "missed" ? "missed"
+                : (st.state === "pending" && st.on_track === false ? "behind" : "")) : (st.state === "created" ? "created" : "");
+      const shape = m.type === "milestone" ? '<span class="dm"></span>' : '<span class="sq"></span>';
+      inner += '<button type="button" class="tl-mk ' + cls + '" data-pid="' + esc(m.id) + '" style="left:' + (x(dt) + ppd / 2 - 6) +
+               'px;top:4px" aria-label="' + esc(KINDS[m.type] + " " + (m.name || "")) + '">' + shape +
+               '<span class="l">' + esc(m.name || "") + "</span></button>";
+    }
+    for (const { b, r } of placed) {
+      const st = statusOf(b.id) || {};
+      const cls = [b.type,
+        b.type === "campaign" && st.state === "drift" ? "drift" : "",
+        b.type === "buffer" && st.state === "clash" ? "clash" : "",
+        b.type === "period" && b.start <= today && today <= b.end ? "active" : ""].join(" ");
+      const left = x(b.start), width = Math.max(ppd, (daysBetween(b.start, b.end) + 1) * ppd);
+      const label = b.type === "campaign" && b.generation ? (b.name || b.task) + "(世代" + b.generation + ")" : (b.name || KINDS[b.type]);
+      inner += '<button type="button" class="tl-it ' + cls + '" data-pid="' + esc(b.id) + '" style="left:' + left +
+               'px;width:' + width + "px;top:" + ((r + markRow) * ROW + 4) + 'px" title="' + esc(label) + '">' + esc(label) + "</button>";
+    }
+    html += '<div class="tl-row" style="--c:' + color + '"><div class="tl-label" style="color:' + color + '">' + esc(lane) +
+            '</div><div class="tl-track" style="width:' + W + "px;height:" + h + 'px">' + inner +
+            '<div class="tl-today" style="left:' + todayX + 'px"></div></div></div>';
+  }
+  box.innerHTML = html;
+  // 今日が左から4分の1あたりに来るようにする
+  box.scrollLeft = Math.max(0, todayX - box.clientWidth / 4);
+}
+
+function newItem(type){
+  const today = todayJST();
+  const base = { id: uid(), type, lane: "全体", name: "" };
+  if (type === "period") return Object.assign(base, { grain: "月", start: today, end: addDays(today, 29), goal: "" });
+  if (type === "campaign") return Object.assign(base, { task: "", start: today, end: addDays(today, 27), generation: "", target: "" });
+  if (type === "milestone") return Object.assign(base, { date: addDays(today, 14), subject: "task", target: "", metric: "累計", op: ">=", value: "" });
+  if (type === "setup") return Object.assign(base, { date: addDays(today, 7),
+    task: { name: "", kind: "完了型", slot: "一日中", stance: "攻", target: "", requirement: "", ministries: [] } });
+  return Object.assign(base, { name: "予備", start: addDays(today, 7), end: addDays(today, 13) });
+}
+
+function renderPlanEditor(){
+  const box = document.getElementById("plan-editor");
+  const ed = state.planEdit;
+  if (!ed) { box.innerHTML = ""; return; }
+  const it = ed.item;
+  const lanes = laneOrder(knownLanes());
+  const laneOpts = lanes.map(l => '<option' + (l === (it.lane || "全体") ? " selected" : "") + ">" + esc(l) + "</option>").join("");
+  const taskNames = ((state.tasksDoc && state.tasksDoc.tasks) || []).map(t => t.name);
+  const datalist = '<datalist id="pl-tasks">' + taskNames.map(n => '<option value="' + esc(n) + '">').join("") + "</datalist>";
+  const f = (label, html) => '<div class="f"><label>' + label + "</label>" + html + "</div>";
+  const inp = (k, v, type, extra) => '<input data-pk="' + k + '" type="' + (type || "text") + '" value="' + esc(v == null ? "" : v) + '"' + (extra || "") + ">";
+  const sel = (k, v, opts) => '<select data-pk="' + k + '">' + opts.map(o => {
+    const [val, lab] = Array.isArray(o) ? o : [o, o];
+    return '<option value="' + esc(val) + '"' + (String(val) === String(v) ? " selected" : "") + ">" + esc(lab) + "</option>";
+  }).join("") + "</select>";
+
+  let fields = f("レーン", '<select data-pk="lane">' + laneOpts + "</select>");
+  let now = "";
+  const st = statusOf(it.id) || {};
+
+  if (it.type === "period") {
+    fields += f("名前", inp("name", it.name, "text", ' placeholder="10月 語彙を固める"')) +
+      f("長さ", sel("grain", it.grain, ["年", "四半期", "月", "週"])) +
+      f("開始", inp("start", it.start, "date")) + f("終了", inp("end", it.end, "date")) +
+      f("到達点(1行)", inp("goal", it.goal, "text", ' placeholder="過去問の語彙で8割"'));
+    if (st.state) now = "残り" + st.days_left + "日。この期間の節目 " + st.milestones.total + "件(達成" + st.milestones.achieved +
+                        "・未達" + st.milestones.missed + "・これから" + st.milestones.pending + ")";
+  } else if (it.type === "campaign") {
+    fields += f("名前", inp("name", it.name, "text", ' placeholder="EEJを世代2で回す"')) +
+      f("対象のタスク", inp("task", it.task, "text", ' list="pl-tasks"')) +
+      f("開始", inp("start", it.start, "date")) + f("終了", inp("end", it.end, "date")) +
+      f("世代", inp("generation", it.generation, "number", ' min="1" step="1"')) +
+      f("目標回数", inp("target", it.target, "number", ' min="1" step="1"'));
+    if (st.state === "drift") now = "ずれ:" + st.drift.join("、");
+    else if (st.state === "ok") now = "計画どおりです。";
+    else if (st.state === "upcoming") now = "まだ始まっていません。";
+  } else if (it.type === "milestone") {
+    const subj = it.subject || "task";
+    const metrics = subj === "ministry" ? ["支配", "国力", "領土"] : ["累計", "世代内累計", "世代", "連続"];
+    const target = subj === "ministry"
+      ? '<select data-pk="target">' + lanes.filter(l => l !== "全体").map(l => '<option' + (l === it.target ? " selected" : "") + ">" + esc(l) + "</option>").join("") + "</select>"
+      : inp("target", it.target, "text", ' list="pl-tasks"');
+    fields += f("名前", inp("name", it.name, "text", ' placeholder="漢字を累計30に"')) +
+      f("日付", inp("date", it.date, "date")) +
+      f("何を見るか", sel("subject", subj, [["task", "タスク"], ["ministry", "省"]])) +
+      f(subj === "ministry" ? "省" : "タスク", target) +
+      f("指標", sel("metric", metrics.includes(it.metric) ? it.metric : metrics[0], metrics)) +
+      f("条件", sel("op", it.op || ">=", [[">=", "以上"], ["<=", "以下"]])) +
+      f("値", inp("value", it.value, "number", ' step="any"'));
+    if (st.state === "achieved") now = "達成(" + st.judged_on + " 時点で " + st.value + ")";
+    else if (st.state === "missed") now = "未達(" + st.judged_on + " 時点で " + st.value + ")";
+    else if (st.state === "pending") now = "あと" + st.days_left + "日。今は " + (st.value == null ? "—" : st.value) + (st.on_track ? "(届いている)" : "");
+    else if (st.state === "unknown") now = "対象が見つからず判定できませんでした。";
+  } else if (it.type === "setup") {
+    const t = it.task || {};
+    fields += f("いつ作るか", inp("date", it.date, "date")) +
+      f("作るタスクの名前", inp("task.name", t.name, "text", ' placeholder="英検過去問1年分"')) +
+      f("型", sel("task.kind", t.kind || "完了型", ["完了型", "習慣型"])) +
+      f("時間帯", sel("task.slot", t.slot || "一日中", ["朝", "昼", "夜", "一日中"])) +
+      f("攻守", sel("task.stance", t.stance || "攻", ["攻", "守"])) +
+      ((t.kind || "完了型") === "習慣型" ? f("目標回数", inp("task.target", t.target, "number", ' min="1" step="1"')) : "") +
+      f("所属(読点で区切る)", inp("task.ministries", (t.ministries || []).join("、"), "text", ' placeholder="英語、受験"')) +
+      f("達成要件", inp("task.requirement", t.requirement, "text"));
+    if (st.state === "created") now = st.created_on + " にタスクを作りました。";
+    else if (st.state === "pending") now = "あと" + st.days_left + "日で作ります。";
+    else if (st.state === "waiting") now = "今日のタスクの生成を待っています。";
+  } else {
+    fields += f("名前", inp("name", it.name, "text")) + f("開始", inp("start", it.start, "date")) + f("終了", inp("end", it.end, "date"));
+    if (st.state === "clash") now = "この期間に始まる予定:" + st.clash.join("、");
+  }
+
+  box.innerHTML = '<div class="peditor">' + datalist +
+    "<h2>" + (ed.isNew ? KINDS[it.type] + "を足す" : KINDS[it.type] + "を直す") + "</h2>" +
+    (now ? '<p class="now">' + esc(now) + "</p>" : "") +
+    '<div class="grid2">' + fields + "</div>" +
+    '<div class="row"><button type="button" class="btn" data-plan-save>保存する</button>' +
+    '<button type="button" class="btn ghost" data-plan-cancel>やめる</button>' +
+    (ed.isNew ? "" : '<button type="button" class="btn ghost" data-plan-del style="margin-left:auto">消す</button>') +
+    "</div></div>";
+}
+
+function readPlanEditor(){
+  const ed = state.planEdit; if (!ed) return null;
+  const it = JSON.parse(JSON.stringify(ed.item));
+  document.querySelectorAll("#plan-editor [data-pk]").forEach(el => {
+    const k = el.dataset.pk, v = el.value;
+    if (k.indexOf("task.") === 0) {
+      it.task = it.task || {};
+      const kk = k.slice(5);
+      it.task[kk] = kk === "ministries" ? v.split(/[、,，\s]+/).map(x => x.trim()).filter(Boolean)
+                  : kk === "target" ? (v === "" ? "" : +v) : v;
+    } else if (["generation", "target", "value"].includes(k) && el.type === "number") {
+      it[k] = v === "" ? "" : +v;
+    } else it[k] = v;
+  });
+  return it;
+}
+
+function validatePlanItem(it){
+  if (it.type === "period" || it.type === "campaign" || it.type === "buffer") {
+    if (!isDate(it.start) || !isDate(it.end)) return "開始と終了の日付を入れてください。";
+    if (it.end < it.start) return "終了は開始より後にしてください。";
+  } else if (!isDate(it.date)) return "日付を入れてください。";
+  if (it.type === "period" && !it.name) return "名前を入れてください。";
+  if (it.type === "campaign" && !it.task) return "対象のタスクを入れてください。";
+  if (it.type === "milestone") {
+    if (!it.target) return "見る対象を選んでください。";
+    if (it.value === "" || it.value == null || isNaN(+it.value)) return "値を入れてください。";
+  }
+  if (it.type === "setup" && !(it.task && it.task.name)) return "作るタスクの名前を入れてください。";
+  return null;
+}
+
+async function commitPlan(mutate){
+  const status = (text, err) => {
+    const st = document.getElementById("plan-status");
+    if (!st) return;
+    st.classList.toggle("err", !!err);
+    st.textContent = text;
+  };
+  mutate();
+  renderPlan();
+  if (!state.conn) return false;
+  status("保存しています…");
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      state.planSha = await writeJson(PLAN_PATH, state.plan, state.planSha);
+      lsSet(KEY_CACHE, cachePayload());
+      status("保存しました。照合は次の朝(すぐ見たいときは Actions の Plan check)");
+      return true;
+    } catch (e) {
+      let err = e;
+      if ((e.status === 409 || e.status === 422) && attempt < 2) {
+        try {
+          const fresh = await readJson(PLAN_PATH);
+          state.plan = normalizePlan(fresh.data);
+          state.planSha = fresh.sha;
+          mutate();
+          renderPlan();
+          continue;
+        } catch (e2) { err = e2; }
+      }
+      lsSet(KEY_CACHE, cachePayload());
+      status(err.status ? err.message : "通信できませんでした。つながったら開き直してください。", true);
+      return false;
+    }
+  }
+  return false;
+}
+
+function upsertPlanItem(it){
+  const items = state.plan.items;
+  const i = items.findIndex(x => x.id === it.id);
+  if (i >= 0) items[i] = it; else items.push(it);
+}
+function removePlanItem(id){ state.plan.items = state.plan.items.filter(x => x.id !== id); }
+
 /* ───────── 描画:設定 ───────── */
 
 function allTodayNames(){
@@ -1136,18 +1536,22 @@ async function loadAll(){
   st.classList.remove("err");
   st.textContent = "読み込んでいます…";
   try {
-    const [t, s, ev] = await Promise.all([readJson(TASKS_PATH), readJson(SETTINGS_PATH), readJson(EVENTS_PATH)]);
+    const [t, s, ev, pl, ps] = await Promise.all([readJson(TASKS_PATH), readJson(SETTINGS_PATH), readJson(EVENTS_PATH),
+                                                  readJson(PLAN_PATH), readJson(PLAN_STATUS_PATH)]);
     if (!t.data) throw new Error(TASKS_PATH + " がまだありません。Actions の Roadmap tasks を実行してください。");
     state.tasksDoc = t.data;
     state.settings = normalizeSettings(s.data);
     state.settingsSha = s.sha;
     state.events = (ev.data && typeof ev.data === "object") ? ev.data : {};
     state.eventsSha = ev.sha;
+    state.plan = normalizePlan(pl.data);
+    state.planSha = pl.sha;
+    state.planStatus = ps.data || null;
     const legacy = takeLegacyDone(state.tasksDoc.date);
     state.dirty = false;
     lsSet(KEY_CACHE, cachePayload());
     st.textContent = "読み込みました(" + state.tasksDoc.tasks.length + "件)";
-    renderToday(); renderSettings();
+    renderToday(); renderSettings(); renderPlan();
     if (legacy.length) {
       const date = state.tasksDoc.date;
       await commitEvents(() => legacy.forEach(n => setDone(date, n, true)));
@@ -1162,7 +1566,8 @@ async function loadAll(){
 
 function cachePayload(){
   return { tasksDoc: state.tasksDoc, settings: state.settings, settingsSha: state.settingsSha,
-           events: state.events, eventsSha: state.eventsSha };
+           events: state.events, eventsSha: state.eventsSha,
+           plan: state.plan, planSha: state.planSha, planStatus: state.planStatus };
 }
 
 function normalizeSettings(s){
@@ -1208,6 +1613,7 @@ async function saveSettings(){
 
 function showView(name){
   document.querySelectorAll(".view").forEach(v => v.hidden = (v.id !== "view-" + name));
+  if (name === "plan") renderPlan();
   document.querySelectorAll("nav.tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.view === name)));
   window.scrollTo(0, 0);
 }
@@ -1224,6 +1630,65 @@ function bind(){
     if (!d && !u) return;
     const name = d ? d.dataset.done : u.dataset.undo;
     commitEvents(() => setDone(doc.date, name, !!d));
+  });
+
+  // 計画
+  document.getElementById("zoom").addEventListener("click", e => {
+    const b = e.target.closest("[data-zoom]"); if (!b) return;
+    state.planZoom = b.dataset.zoom; renderPlan();
+  });
+  document.getElementById("plan-add").addEventListener("click", e => {
+    const b = e.target.closest("[data-add]"); if (!b) return;
+    state.planEdit = { item: newItem(b.dataset.add), isNew: true };
+    renderPlanEditor();
+    const box = document.getElementById("plan-editor");
+    if (box.scrollIntoView) box.scrollIntoView({ block: "nearest" });
+  });
+  const openItem = id => {
+    const it = (state.plan.items || []).find(x => x.id === id);
+    if (!it) return;
+    state.planEdit = { item: JSON.parse(JSON.stringify(it)), isNew: false };
+    renderPlanEditor();
+    const box = document.getElementById("plan-editor");
+    if (box.scrollIntoView) box.scrollIntoView({ block: "nearest" });
+  };
+  document.getElementById("tl").addEventListener("click", e => {
+    const b = e.target.closest("[data-pid]"); if (b) openItem(b.dataset.pid);
+  });
+  document.getElementById("plan-notices").addEventListener("click", e => {
+    const b = e.target.closest("[data-pid]"); if (b && b.dataset.pid) openItem(b.dataset.pid);
+  });
+  const ped = document.getElementById("plan-editor");
+  ped.addEventListener("change", e => {
+    const k = e.target.dataset.pk; if (!k || !state.planEdit) return;
+    const it = readPlanEditor();
+    // 長さを変えたら、終了日を合わせる
+    if (k === "grain" && it.type === "period" && isDate(it.start)) {
+      const span = { "年": 364, "四半期": 90, "月": 29, "週": 6 }[it.grain] || 29;
+      it.end = addDays(it.start, span);
+    }
+    if (k === "subject") { it.target = ""; it.metric = it.subject === "ministry" ? "支配" : "累計"; }
+    state.planEdit.item = it;
+    if (k === "grain" || k === "subject" || k === "task.kind") renderPlanEditor();
+  });
+  ped.addEventListener("click", async e => {
+    if (e.target.closest("[data-plan-cancel]")) { state.planEdit = null; renderPlanEditor(); return; }
+    if (e.target.closest("[data-plan-del]")) {
+      const id = state.planEdit.item.id;
+      state.planEdit = null;
+      await commitPlan(() => removePlanItem(id));
+      return;
+    }
+    if (e.target.closest("[data-plan-save]")) {
+      const it = readPlanEditor();
+      if (it.type === "buffer" && !it.name) it.name = "予備";
+      if (it.type === "setup" && !it.name) it.name = (it.task && it.task.name) || "";
+      const err = validatePlanItem(it);
+      const st = document.getElementById("plan-status");
+      if (err) { st.classList.add("err"); st.textContent = err; return; }
+      state.planEdit = null;
+      await commitPlan(() => upsertPlanItem(JSON.parse(JSON.stringify(it))));
+    }
   });
 
   // 今日:用事の欄
@@ -1405,8 +1870,11 @@ function boot(){
     state.settingsSha = cache.settingsSha || null;
     state.events = cache.events || {};
     state.eventsSha = cache.eventsSha || null;
+    state.plan = normalizePlan(cache.plan);
+    state.planSha = cache.planSha || null;
+    state.planStatus = cache.planStatus || null;
   }
-  renderToday(); renderSettings();
+  renderToday(); renderSettings(); renderPlan();
 
   if (conn && conn.owner && conn.token) {
     state.conn = conn;
@@ -1418,6 +1886,7 @@ function boot(){
 
 window.__roadmap = { buildPlan, cfgOf, classify, state, loadAll, saveSettings, saveEvents, eventsFor,
                      togglePreset, setPreset, removeEvent, editEventTime, setDone, getDone, commitEvents,
+                     commitPlan, normalizePlan, validatePlanItem, newItem,
                      b64encode, b64decode, DEFAULT_SETTINGS };
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
 })();
