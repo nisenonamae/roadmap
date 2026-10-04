@@ -1016,11 +1016,29 @@ function renderSettings(){
     const sorted = tasks.slice().sort((a, b) =>
       (rank(a) - rank(b)) || a.name.localeCompare(b.name, "ja"));
     const placeOpts = (s.places || []).map(p => p);
-    const names = tasks.map(t => t.name);
-    const nextOpts = (self, cur) => names.filter(n => n !== self)
-      .concat(cur && !names.includes(cur) ? [cur] : [])
-      .map(n => '<option' + (n === cur ? " selected" : "") + ">" + esc(n) + "</option>").join("");
-    box.innerHTML = sorted.map((t, i) => {
+    // 続けられるのは、今日これからやるタスクだけ。
+    // 同じ場所でできるものを先に出す。踏み台はたいてい同じ場所だから。
+    const chainable = tasks.filter(t =>
+      t.status !== "要再設定" && t.status !== "随時" &&
+      !(DONE.includes(t.check) && !AUTO.includes(t.status)));
+    const nextOpts = (self, cur) => {
+      const here = cfgOf(s, self).place;
+      const pool = chainable.filter(t => t.name !== self);
+      const near = pool.filter(t => {
+        const p = cfgOf(s, t.name).place;
+        return p === here || p === ANYWHERE || here === ANYWHERE;
+      }).map(t => t.name);
+      const far = pool.filter(t => !near.includes(t.name)).map(t => t.name);
+      const opt = n => '<option' + (n === cur ? " selected" : "") + ">" + esc(n) + "</option>";
+      let html = near.map(opt).join("");
+      if (far.length) html += '<optgroup label="場所が違う">' + far.map(opt).join("") + "</optgroup>";
+      if (cur && !pool.some(t => t.name === cur)) html += opt(cur);
+      return html;
+    };
+    const isReset = t => t.status === "要再設定";
+    const live = sorted.filter(t => !isReset(t));
+    const fallen = sorted.filter(isReset);
+    const card = (t, i) => {
       const c = cfgOf(s, t.name);
       const id = "t" + i;
       const opts = (placeOpts.includes(c.place) ? placeOpts : placeOpts.concat([c.place]))
@@ -1041,7 +1059,12 @@ function renderSettings(){
         '<select id="' + id + 'x" data-k="next"><option value="">なし</option>' + nextOpts(t.name, c.next) + "</select></div>" +
         '<div class="organs" role="group" aria-label="使う器官">' + organs + "</div>" +
       "</div>";
-    }).join("");
+    };
+    box.innerHTML = live.map(card).join("") +
+      (fallen.length
+        ? '<details class="more"><summary>要再設定　' + fallen.length +
+          "件</summary>" + fallen.map((t, i) => card(t, live.length + i)).join("") + "</details>"
+        : "");
   }
 
   // 時間の枠
