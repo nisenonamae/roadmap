@@ -1,0 +1,16 @@
+{
+  "name": "行軍表",
+  "short_name": "行軍表",
+  "description": "今日のタスクを時刻表の形に組み立てる",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#EEF1F0",
+  "theme_color": "#1D2430",
+  "orientation": "portrait",
+  "lang": "ja",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "./icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
