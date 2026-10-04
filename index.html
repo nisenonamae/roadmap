@@ -76,8 +76,16 @@ button,input,select{font:inherit;color:inherit}
 .stop.done .t{color:var(--sub);font-size:.8rem;letter-spacing:.1em}
 .stop.done .line::after{background:var(--c);border-color:var(--c)}
 .stop .meta .undo-hint{color:var(--sub);font-size:.74rem}
-.stop button.row{all:unset;display:block;cursor:pointer;width:100%}
-.stop button.row:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.stop .row-in{display:flex;gap:.6rem;align-items:flex-start}
+.stop .row-in .txt{flex:1;min-width:0}
+.stop .tick{flex:0 0 auto;width:2.4rem;height:2.4rem;margin-top:.1rem;border-radius:50%;border:2px solid var(--rule);
+  background:var(--sheet);font-size:1rem;color:var(--sub);cursor:pointer}
+.stop .tick.on{background:#3D8A5A;border-color:#3D8A5A;color:#fff}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom));z-index:20;
+  background:var(--ink);color:#fff;border-radius:6px;padding:.6rem .8rem;display:flex;gap:.9rem;align-items:center;
+  font-size:.88rem;max-width:calc(100% - 2rem);box-shadow:0 4px 14px rgba(0,0,0,.18)}
+.toast[hidden]{display:none}
+.toast button{border:none;background:none;color:#9FD4B3;font:inherit;font-weight:700;cursor:pointer;padding:0;white-space:nowrap}
 
 /* 乗り換え */
 .transfer{display:grid;grid-template-columns:3.4rem 14px 1fr;column-gap:.6rem;
@@ -430,6 +438,8 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
   </section>
 
 </div>
+
+<div class="toast" id="toast" role="status" hidden><span id="toast-text"></span><button type="button" id="toast-undo">取り消す</button></div>
 
 <nav class="tabs" role="tablist">
   <button role="tab" aria-selected="true" data-view="today">今日</button>
@@ -1053,9 +1063,10 @@ function stopHtml(it, time, places){
     : 'data-done="' + esc(it.task.name) + '" aria-label="' + esc(it.task.name) + 'を済みにする"';
   return pre + '<div class="stop' + (done ? " done" : "") + '" style="--c:' + color + '">' +
     '<span class="t">' + esc(done ? "済" : time) + '</span><span class="line"></span>' +
-    '<div class="body"><button class="row" ' + act + ">" +
+    '<div class="body"><div class="row-in"><div class="txt">' +
     '<div class="name">' + esc(it.task.name) + '</div><div class="meta">' + meta.join("") + "</div>" + nag +
-    "</button></div></div>";
+    '</div><button type="button" class="tick' + (done ? " on" : "") + '" ' + act + ">" + (done ? "✓" : "○") + "</button>" +
+    "</div></div></div>";
 }
 
 /* ───────── 用事 ───────── */
@@ -1570,11 +1581,15 @@ function removePlanItem(id){ state.plan.items = state.plan.items.filter(x => x.i
 
 /* ───────── タスク ───────── */
 
+// STAGE・WAVEは省ごとに別物。リンクは「省|ラベル」で持つ
+function waveKey(def, label){ return (((def.ministries || [])[0]) || "所属なし") + "|" + label; }
+
 // 取り込んだ定義に、アプリで足したもの(サイクル、WAVEのリンク)を重ねる
 function effectiveDef(def){
   const ov = (state.overlay.tasks || {})[def.id] || {};
   const urls = state.overlay.waveUrls || {};
-  const waves = (def.waves || []).map(w => ({ label: w.label, url: urls[w.label] || (ov.waves || {})[w.label] || w.url || "" }));
+  const waves = (def.waves || []).map(w => ({ label: w.label, key: waveKey(def, w.label),
+                                              url: urls[waveKey(def, w.label)] || w.url || "" }));
   return Object.assign({}, def, { cycle: ov.cycle || def.cycle || null, waves });
 }
 
@@ -1731,14 +1746,24 @@ function renderTodayRecords(list){
 // WAVE・STAGEのリンク:同じラベルのものは1か所に入れれば全部に効く
 function renderWaveLinks(list){
   const box = document.getElementById("tk-waves");
-  const counts = {};
-  for (const t of list) for (const w of (t.def.waves || [])) counts[w.label] = (counts[w.label] || 0) + 1;
-  const labels = Object.keys(counts).sort((a, b) => a.localeCompare(b, "ja", { numeric: true }));
-  if (!labels.length) { box.innerHTML = '<div class="empty">WAVE・STAGEの付いたタスクはありません。</div>'; return; }
+  const groups = {};
+  for (const t of list) for (const w of (t.def.waves || [])) {
+    const g = ((t.def.ministries || [])[0]) || "所属なし";
+    const m = groups[g] = groups[g] || {};
+    m[w.label] = (m[w.label] || 0) + 1;
+  }
+  const mins = laneOrder(Object.keys(groups).filter(g => g !== "所属なし")).filter(g => g !== "全体")
+    .concat(groups["所属なし"] ? ["所属なし"] : []);
+  if (!mins.length) { box.innerHTML = '<div class="empty">WAVE・STAGEの付いたタスクはありません。</div>'; return; }
   const urls = state.overlay.waveUrls || {};
-  box.innerHTML = '<p class="hint" style="font-size:.82rem;color:var(--sub)">同じWAVE・STAGEのタスクには、ここに入れた1つのリンクが全部に効きます。</p>' +
-    labels.map((l, i) => '<div class="f" style="margin-bottom:.45rem"><label for="wl' + i + '">' + esc(l) + "(" + counts[l] + "件)</label>" +
-      '<input id="wl' + i + '" data-wavelink="' + esc(l) + '" type="url" placeholder="NotionのページのURL" value="' + esc(urls[l] || "") + '"></div>').join("") +
+  let i = 0;
+  box.innerHTML = '<p class="hint" style="font-size:.82rem;color:var(--sub)">同じ省の同じWAVE・STAGEのタスクには、ここに入れた1つのリンクが全部に効きます。省が違えば別のページとして扱います。</p>' +
+    mins.map(g => '<h3 style="font-size:.88rem;margin:.8rem 0 .3rem">' + esc(g) + "</h3>" +
+      Object.keys(groups[g]).sort((a, b) => a.localeCompare(b, "ja", { numeric: true })).map(l => {
+        const key = g + "|" + l, id = "wl" + (i++);
+        return '<div class="f" style="margin-bottom:.45rem"><label for="' + id + '">' + esc(l) + "(" + groups[g][l] + "件)</label>" +
+          '<input id="' + id + '" data-wavelink="' + esc(key) + '" type="url" placeholder="NotionのページのURL" value="' + esc(urls[key] || "") + '"></div>';
+      }).join("")).join("") +
     '<div class="row" style="margin-top:.4rem"><button type="button" class="btn" data-wavelinks-save>リンクを保存する</button></div>';
 }
 
@@ -1776,8 +1801,8 @@ function renderTaskDetail(){
 
   const d = t.def;
   const waves = (d.waves || []).map((w, i) =>
-    '<div class="f" style="margin-bottom:.4rem"><label for="tw' + i + '">' + esc(w.label) + ' のページ(同じ' + esc(w.label) + 'の全タスクに効く)</label>' +
-    '<input id="tw' + i + '" data-wave="' + esc(w.label) + '" type="url" placeholder="NotionのページのURL" value="' + esc(w.url || "") + '"></div>' +
+    '<div class="f" style="margin-bottom:.4rem"><label for="tw' + i + '">' + esc(w.label) + ' のページ(' + esc(w.key.split("|")[0]) + 'の' + esc(w.label) + 'の全タスクに効く)</label>' +
+    '<input id="tw' + i + '" data-wave="' + esc(w.key) + '" type="url" placeholder="NotionのページのURL" value="' + esc(w.url || "") + '"></div>' +
     (w.url ? '<p style="margin:-.2rem 0 .5rem;font-size:.8rem"><a href="' + esc(w.url) + '" target="_blank" rel="noopener">' + esc(w.label) + " を開く</a></p>" : "")
   ).join("");
   const cyc = d.cycle || { items: [] };
@@ -2136,9 +2161,21 @@ async function loadTaskData(){
     state.appLogs = apps; state.appLogShas = appShas;
     const ov = (o.data && o.data.tasks) ? o.data : { version: 1, tasks: {} };
     ov.waveUrls = ov.waveUrls || {};
-    // 前の版でタスクごとに入れたリンクは、WAVE・STAGEごとのリンクへ寄せる
-    for (const t of Object.values(ov.tasks || {})) {
-      for (const [label, url] of Object.entries(t.waves || {})) if (url && !ov.waveUrls[label]) ov.waveUrls[label] = url;
+    // 前の版のリンクを「省|ラベル」へ寄せる。タスクごとに入れたものはそのタスクの省へ。
+    // ラベルだけで入れたものは、そのラベルを使う省が1つだけなら移し、複数なら決められないので外す
+    const byId = new Map(d.data.tasks.map(t => [t.id, t]));
+    for (const [id, t] of Object.entries(ov.tasks || {})) {
+      const def = byId.get(id);
+      for (const [label, url] of Object.entries(t.waves || {})) {
+        if (url && def && !ov.waveUrls[waveKey(def, label)]) ov.waveUrls[waveKey(def, label)] = url;
+      }
+      delete t.waves;
+    }
+    for (const label of Object.keys(ov.waveUrls)) {
+      if (label.includes("|")) continue;
+      const keys = new Set(d.data.tasks.filter(t => (t.waves || []).some(w => w.label === label)).map(t => waveKey(t, label)));
+      if (keys.size === 1) { const k = [...keys][0]; if (!ov.waveUrls[k]) ov.waveUrls[k] = ov.waveUrls[label]; }
+      delete ov.waveUrls[label];
     }
     state.overlay = ov;
     state.overlaySha = o.sha;
@@ -2196,6 +2233,18 @@ async function saveSettings(){
   }
 }
 
+/* ───────── 取り消しの表示 ───────── */
+
+let toastTimer = null, toastUndo = null;
+function showToast(text, undo){
+  const el = document.getElementById("toast");
+  document.getElementById("toast-text").textContent = text;
+  toastUndo = undo;
+  el.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.hidden = true; toastUndo = null; }, 6000);
+}
+
 /* ───────── 操作 ───────── */
 
 function showView(name){
@@ -2220,11 +2269,14 @@ function bind(){
     const name = d ? d.dataset.done : u.dataset.undo;
     const tk = taskByName(name);
     if (tk && tk.row) {
-      const today = taskDay();
-      commitAppLog(today, () => setAppRecord(today, tk.def.id, { check: d ? "完了" : null }));
+      const today = taskDay(), id = tk.def.id;
+      const before = (((state.appLogs[today.slice(0, 7)] || {})[today] || {})[id] || {}).check || null;
+      commitAppLog(today, () => setAppRecord(today, id, { check: d ? "完了" : null }));
+      if (d) showToast(name + " を完了にしました", () => commitAppLog(today, () => setAppRecord(today, id, { check: before })));
       return;
     }
     commitEvents(() => setDone(doc.date, name, !!d));
+    if (d) showToast(name + " を済みにしました", () => commitEvents(() => setDone(doc.date, name, false)));
   });
 
   // タスク
@@ -2236,6 +2288,12 @@ function bind(){
     const box = document.getElementById("tk-detail");
     if (box.scrollIntoView) box.scrollIntoView({ block: "nearest" });
   });
+  document.getElementById("toast-undo").addEventListener("click", () => {
+    const f = toastUndo; toastUndo = null;
+    document.getElementById("toast").hidden = true;
+    if (f) f();
+  });
+
   // 並べ方
   ["tk-group", "tk-sort"].forEach(id => document.getElementById(id).addEventListener("change", () => {
     lsSet(KEY_TKVIEW, { group: document.getElementById("tk-group").value, sort: document.getElementById("tk-sort").value });
@@ -2251,7 +2309,10 @@ function bind(){
       const id = q.dataset.quick;
       const t = taskStates().find(x => x.def.id === id);
       const on = !(t && window.TaskEngine.DONE.has(t.check));
-      await commitAppLog(today, () => setAppRecord(today, id, { check: on ? "完了" : null }));
+      const before = (((state.appLogs[today.slice(0, 7)] || {})[today] || {})[id] || {}).check || null;
+      const p = commitAppLog(today, () => setAppRecord(today, id, { check: on ? "完了" : null }));
+      if (on) showToast(t.def.name + " を完了にしました", () => commitAppLog(today, () => setAppRecord(today, id, { check: before })));
+      await p;
       return;
     }
     if (r) {
