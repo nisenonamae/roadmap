@@ -311,8 +311,18 @@ function lsSet(key, value){
   catch(e){ return false; }
 }
 function doneKey(date){ return "roadmap-done-" + date; }
-function getDoneLocal(date){ return new Set(lsGet(doneKey(date), [])); }
-function setDoneLocal(date, set){ lsSet(doneKey(date), Array.from(set)); }
+// 済みの記録は events.json に入れて、どの端末でも同じにする
+function getDone(date){
+  const d = state.events[date];
+  return new Set((d && Array.isArray(d.done)) ? d.done : []);
+}
+// 前の版で端末の中だけに残していた済みを、一度だけ同期のほうへ移す
+function takeLegacyDone(date){
+  const local = lsGet(doneKey(date), []);
+  if (!Array.isArray(local) || !local.length) return [];
+  try { localStorage.removeItem(doneKey(date)); } catch(e) {}
+  return local;
+}
 
 /* ───────── GitHub ───────── */
 
@@ -374,7 +384,7 @@ async function writeJson(path, obj, sha){
     headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
   });
-  if (!r.ok) throw new Error(describeHttp(r.status, path));
+  if (!r.ok) { const err = new Error(describeHttp(r.status, path)); err.status = r.status; throw err; }
   const out = await r.json();
   return out.content && out.content.sha;
 }
@@ -638,7 +648,7 @@ function renderToday(){
   const events = eventsFor(doc.date);
   renderEventsPanel(events);
 
-  const done = getDoneLocal(doc.date);
+  const done = getDone(doc.date);
   const plan = buildPlan(doc, state.settings, done, events);
   const places = state.settings.places || [];
 
@@ -745,24 +755,36 @@ function eventsFor(date){
 }
 
 function dayOf(date){
-  if (!state.events[date]) state.events[date] = { items: [], dismissed: [] };
+  if (!state.events[date]) state.events[date] = { items: [], dismissed: [], done: [] };
   const d = state.events[date];
-  d.items = d.items || []; d.dismissed = d.dismissed || [];
+  d.items = d.items || []; d.dismissed = d.dismissed || []; d.done = d.done || [];
   return d;
 }
 
-function togglePreset(date, presetId){
+// 以下の操作は、どれも同じ結果になるまで何度やり直しても安全な形にしてある。
+// 別の端末で先に書き換えられていたとき、読み直して同じ操作をかけ直すため。
+
+function setDone(date, name, on){
+  const d = dayOf(date);
+  const has = d.done.includes(name);
+  if (on && !has) d.done.push(name);
+  if (!on && has) d.done = d.done.filter(x => x !== name);
+}
+
+function setPreset(date, presetId, on){
   const p = (state.settings.presets || []).find(x => x.id === presetId);
   if (!p) return;
   const d = dayOf(date);
   const now = eventsFor(date).find(e => e.preset === presetId);
-  if (now) {
-    removeEvent(date, now.id);
-    return;
+  if (on && !now) {
+    d.dismissed = d.dismissed.filter(x => x !== presetId);
+    d.items.push({ id: "p-" + presetId + "-" + date, preset: p.id, name: p.name, start: p.start, end: p.end,
+                   place: p.place, organs: (p.organs || []).slice() });
   }
-  d.dismissed = d.dismissed.filter(x => x !== presetId);
-  d.items.push({ id: uid(), preset: p.id, name: p.name, start: p.start, end: p.end,
-                 place: p.place, organs: (p.organs || []).slice() });
+  if (!on && now) removeEvent(date, now.id);
+}
+function togglePreset(date, presetId){
+  setPreset(date, presetId, !eventsFor(date).some(e => e.preset === presetId));
 }
 
 function removeEvent(date, id){
@@ -770,6 +792,8 @@ function removeEvent(date, id){
   if (id.indexOf("auto-") === 0) {
     const pid = id.slice(5);
     if (!d.dismissed.includes(pid)) d.dismissed.push(pid);
+    // 別の端末で時刻を直して書き出されていた場合も消す
+    d.items = d.items.filter(e => e.preset !== pid);
     return;
   }
   const ev = d.items.find(e => e.id === id);
@@ -783,14 +807,23 @@ function editEventTime(date, id, key, value){
   const d = dayOf(date);
   let ev = d.items.find(e => e.id === id);
   if (!ev && id.indexOf("auto-") === 0) {
-    // 自動のものを直したら、その日の用事として書き出す
-    const auto = eventsFor(date).find(e => e.id === id);
-    if (!auto) return;
-    ev = { id: uid(), preset: auto.preset, name: auto.name, start: auto.start, end: auto.end,
-           place: auto.place, organs: (auto.organs || []).slice() };
-    d.items.push(ev);
+    const pid = id.slice(5);
+    ev = d.items.find(e => e.preset === pid);       // 別の端末で書き出し済みならそれを使う
+    if (!ev) {
+      const auto = eventsFor(date).find(e => e.id === id);
+      if (!auto) return;
+      // 自動のものを直したら、その日の用事として書き出す
+      ev = { id: "p-" + pid + "-" + date, preset: pid, name: auto.name, start: auto.start, end: auto.end,
+             place: auto.place, organs: (auto.organs || []).slice() };
+      d.items.push(ev);
+    }
   }
   if (ev) ev[key] = value;
+}
+
+function addEvent(date, ev){
+  const d = dayOf(date);
+  if (!d.items.some(e => e.id === ev.id)) d.items.push(Object.assign({}, ev));
 }
 
 function pruneEvents(){
@@ -798,21 +831,47 @@ function pruneEvents(){
   for (const k of Object.keys(state.events)) if (k < keep) delete state.events[k];
 }
 
-async function saveEvents(){
-  const st = document.getElementById("ev-status");
+// 操作をかけて保存する。別の端末で先に書き換えられていたら、読み直して同じ操作をかけ直す
+async function commitEvents(mutate){
+  // 描き直しで要素が入れ替わるので、表示を書くたびに探し直す
+  const status = (text, err) => {
+    const st = document.getElementById("ev-status");
+    if (!st) return;
+    st.classList.toggle("err", !!err);
+    st.textContent = text;
+  };
+  mutate();
+  renderToday();
   if (!state.conn) return false;
-  if (st) { st.classList.remove("err"); st.textContent = "保存しています…"; }
-  try {
-    pruneEvents();
-    state.eventsSha = await writeJson(EVENTS_PATH, state.events, state.eventsSha);
-    lsSet(KEY_CACHE, cachePayload());
-    if (st) st.textContent = "保存しました";
-    return true;
-  } catch (e) {
-    if (st) { st.classList.add("err"); st.textContent = e.message; }
-    return false;
+  status("保存しています…");
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      pruneEvents();
+      state.eventsSha = await writeJson(EVENTS_PATH, state.events, state.eventsSha);
+      lsSet(KEY_CACHE, cachePayload());
+      status("保存しました");
+      return true;
+    } catch (e) {
+      let err = e;
+      if ((e.status === 409 || e.status === 422) && attempt < 2) {
+        try {
+          const fresh = await readJson(EVENTS_PATH);
+          state.events = (fresh.data && typeof fresh.data === "object") ? fresh.data : {};
+          state.eventsSha = fresh.sha;
+          mutate();
+          renderToday();
+          status("保存しています…");
+          continue;
+        } catch (e2) { err = e2; }
+      }
+      lsSet(KEY_CACHE, cachePayload());
+      status(err.status ? err.message : "通信できませんでした。つながったら開き直してください。", true);
+      return false;
+    }
   }
+  return false;
 }
+async function saveEvents(){ return commitEvents(() => {}); }
 
 function renderEventsPanel(events){
   const doc = state.tasksDoc;
@@ -978,10 +1037,15 @@ async function loadAll(){
     state.settingsSha = s.sha;
     state.events = (ev.data && typeof ev.data === "object") ? ev.data : {};
     state.eventsSha = ev.sha;
+    const legacy = takeLegacyDone(state.tasksDoc.date);
     state.dirty = false;
     lsSet(KEY_CACHE, cachePayload());
     st.textContent = "読み込みました(" + state.tasksDoc.tasks.length + "件)";
     renderToday(); renderSettings();
+    if (legacy.length) {
+      const date = state.tasksDoc.date;
+      await commitEvents(() => legacy.forEach(n => setDone(date, n, true)));
+    }
     return true;
   } catch (e) {
     st.classList.add("err");
@@ -1052,11 +1116,8 @@ function bind(){
     const d = e.target.closest("[data-done]");
     const u = e.target.closest("[data-undo]");
     if (!d && !u) return;
-    const set = getDoneLocal(doc.date);
-    if (d) set.add(d.dataset.done);
-    if (u) set.delete(u.dataset.undo);
-    setDoneLocal(doc.date, set);
-    renderToday();
+    const name = d ? d.dataset.done : u.dataset.undo;
+    commitEvents(() => setDone(doc.date, name, !!d));
   });
 
   // 今日:用事の欄
@@ -1064,11 +1125,16 @@ function bind(){
   evp.addEventListener("click", async e => {
     const doc = state.tasksDoc; if (!doc) return;
     const chip = e.target.closest("[data-preset]");
-    if (chip) { togglePreset(doc.date, chip.dataset.preset); renderToday(); await saveEvents(); return; }
+    if (chip) {
+      const pid = chip.dataset.preset;
+      const on = !eventsFor(doc.date).some(e => e.preset === pid);
+      await commitEvents(() => setPreset(doc.date, pid, on));
+      return;
+    }
     if (e.target.closest("[data-ev-new]")) { state.evFormOpen = true; renderToday(); return; }
     if (e.target.closest("[data-ev-cancel]")) { state.evFormOpen = false; renderToday(); return; }
     const del = e.target.closest("[data-ev-del]");
-    if (del) { removeEvent(doc.date, del.dataset.evDel); renderToday(); await saveEvents(); return; }
+    if (del) { const id = del.dataset.evDel; await commitEvents(() => removeEvent(doc.date, id)); return; }
     const org = e.target.closest("[data-nf-organ]");
     if (org) { org.setAttribute("aria-pressed", String(org.getAttribute("aria-pressed") !== "true")); return; }
     if (e.target.closest("[data-ev-add]")) {
@@ -1089,10 +1155,9 @@ function bind(){
         state.settings.presets = (state.settings.presets || []).concat([p]);
         ev.preset = p.id;
       }
-      dayOf(doc.date).items.push(ev);
       state.evFormOpen = false;
-      renderToday(); renderSettings();
-      await saveEvents();
+      renderSettings();
+      await commitEvents(() => addEvent(doc.date, ev));
       if (register) await saveSettings();
       return;
     }
@@ -1102,9 +1167,8 @@ function bind(){
     const row = e.target.closest("[data-ev]");
     const k = e.target.dataset.evk;
     if (!row || !k) return;
-    editEventTime(doc.date, row.dataset.ev, k, e.target.value);
-    renderToday();
-    await saveEvents();
+    const id = row.dataset.ev, v = e.target.value;
+    await commitEvents(() => editEventTime(doc.date, id, k, v));
   });
 
   // 設定:よく使う用事
@@ -1246,7 +1310,8 @@ function boot(){
 }
 
 window.__roadmap = { buildPlan, cfgOf, classify, state, loadAll, saveSettings, saveEvents, eventsFor,
-                     togglePreset, removeEvent, editEventTime, b64encode, b64decode, DEFAULT_SETTINGS };
+                     togglePreset, setPreset, removeEvent, editEventTime, setDone, getDone, commitEvents,
+                     b64encode, b64decode, DEFAULT_SETTINGS };
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
 })();
 </script>
