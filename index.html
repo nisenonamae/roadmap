@@ -166,6 +166,13 @@ details.more summary{cursor:pointer;color:var(--sub);font-size:.88rem;padding:.3
 .peditor h2{font-size:1rem;margin:0 0 .6rem}
 .peditor .now{font-size:.84rem;color:var(--sub);margin:.1rem 0 .7rem}
 .peditor .row{display:flex;gap:.6rem;align-items:center;margin-top:.8rem;flex-wrap:wrap}
+details.rules{margin-top:1.4rem;border-top:1px solid var(--rule);padding-top:.5rem}
+details.rules summary{cursor:pointer;font-weight:700;padding:.3rem 0;letter-spacing:.06em}
+details.rules .rb{font-size:.88rem;line-height:1.75;padding:.2rem 0 .6rem}
+details.rules h3{font-size:.92rem;margin:1rem 0 .25rem}
+details.rules p{margin:.2rem 0}
+details.rules ol,details.rules ul{margin:.2rem 0;padding-left:1.3rem}
+details.rules .note{color:var(--sub);font-size:.8rem}
 
 /* 設定 */
 .sec{margin-bottom:1.6rem}
@@ -234,6 +241,55 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
     </div>
     <div id="plan-editor"></div>
     <span class="status" id="plan-status"></span>
+    <details class="rules">
+      <summary>計画の決まり</summary>
+      <div class="rb">
+        <p class="note">数字はすべて暫定値。3ヶ月の作戦会議で見直す。</p>
+
+        <h3>上から決める</h3>
+        <p>1年、四半期、月、週の順に決める。下から積み上げない。1年の期間は1つの省につき1本まで、到達点は1つだけ。2つ書きたくなったら、省を分けるか片方を捨てる。</p>
+
+        <h3>立てる順番</h3>
+        <ol>
+          <li>期日を節目として置く。本番の日、試験日、締切</li>
+          <li>逆算して節目を置く。月に1つ以上、週に2つ以上は置かない</li>
+          <li>節目に届くための作戦を置く。どのタスクをどの世代・目標回数で回すか</li>
+          <li>途中で要る達成型タスクを仕込みに置く</li>
+          <li>予備を置く</li>
+          <li>同時に走らせる上限を超えていないか確かめる</li>
+        </ol>
+        <p>調べ物(合格者の準備期間、必要な語彙数など)はClaudeと一緒にやり、根拠は作戦会議録に1行残す。</p>
+
+        <h3>書き方</h3>
+        <p>到達点も節目も、外から判定できる数字で書く。「英語ができる」ではなく「英検準1級に合格」「累計30以上」。期間の名前は短く、中身は到達点の1行だけ。</p>
+
+        <h3>予備</h3>
+        <p>1ヶ月に4日以上置く。試験と行事の前後を優先する。予備の間は新しい作戦も仕込みも始めない。予備を削って詰め込みたくなったら、計画の量が多すぎる合図。</p>
+
+        <h3>同時に走らせる上限</h3>
+        <ul>
+          <li>1つの省で、同時に走る作戦は2本まで</li>
+          <li>全体で、同時に走る作戦は5本まで</li>
+          <li>1週間に作る仕込みは2つまで</li>
+        </ul>
+        <p>新しい作戦は、同じ省で走っている作戦のタスクが定着か熟達に上がってから始める。</p>
+
+        <h3>作戦と世代</h3>
+        <p>作戦の開始日に世代を上げ、同じ日の行で世代内累計を0にする。3日前から知らせが出るので、そこで準備する。改名と世代上げは別の日にやる。目標回数は作戦の日数の7割を目安にする。</p>
+
+        <h3>節目が未達になったら</h3>
+        <p>3日以内に作戦会議で、期日を延ばす・到達点を下げる・作戦を変える、のどれかを決める。放置しない。変えたら、何をなぜ変えたかを作戦会議録に1行残す。</p>
+
+        <h3>見直しの周期</h3>
+        <ul>
+          <li>1週間の作戦会議:今週の知らせ、来週始まる作戦と仕込み</li>
+          <li>1ヶ月の作戦会議:今月の節目の結果、来月の作戦と節目を確定</li>
+          <li>3ヶ月の作戦会議:次の四半期を確定、この決まりの数字を見直す</li>
+          <li>1年の作戦会議:1年の期間を立て直す</li>
+        </ul>
+        <p>計画は作戦会議の中で立てる。思いつきで足さない。</p>
+      </div>
+    </details>
   </section>
 
   <section class="view" id="view-settings" hidden>
@@ -1085,12 +1141,24 @@ function isDate(s){ return /^\d{4}-\d{2}-\d{2}$/.test(s || "") && !isNaN(new Dat
 function itemStart(i){ return i.start || i.date; }
 function itemEnd(i){ return i.end || i.date; }
 
-// レーンの候補。全体、計画に出てくる省、今日のタスクの省
+// 省の一覧。所属にはWAVEやSTAGEも混ざるので、省一覧DB(なければ国力ログ)を正とする
+const NOT_MINISTRY = /^(WAVE|STAGE)/i;
+function ministryNames(){
+  const doc = state.tasksDoc || {};
+  const set = new Set();
+  (doc.ministries || []).forEach(m => set.add(m));
+  Object.keys(doc.weights || {}).forEach(m => set.add(m));
+  if (!set.size) {
+    // 古い取り込みで一覧が無いときは、所属からWAVE・STAGEを除いて代用する
+    (doc.tasks || []).forEach(t => (t.ministries || []).forEach(m => { if (!NOT_MINISTRY.test(m)) set.add(m); }));
+  }
+  return Array.from(set).filter(m => !NOT_MINISTRY.test(m));
+}
+// レーンの候補。全体と省。すでに計画にあるレーンは消さずに残す
 function knownLanes(){
   const set = new Set(["全体"]);
+  ministryNames().forEach(m => set.add(m));
   (state.plan.items || []).forEach(i => i.lane && set.add(i.lane));
-  ((state.tasksDoc && state.tasksDoc.tasks) || []).forEach(t => (t.ministries || []).forEach(m => set.add(m)));
-  Object.keys((state.tasksDoc && state.tasksDoc.weights) || {}).forEach(m => set.add(m));
   return Array.from(set);
 }
 function laneOrder(lanes){
