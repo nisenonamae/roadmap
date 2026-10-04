@@ -63,7 +63,11 @@ button,input,select{font:inherit;color:inherit}
 .stop .nagara{margin-top:.35rem;padding-left:.7rem;border-left:2px dotted var(--rule);font-size:.88rem}
 .stop .nagara div{line-height:1.5}
 .stop .nagara span{color:var(--sub);font-size:.78rem;margin-left:.4rem}
-.stop.done .name{text-decoration:line-through;color:var(--sub)}
+.stop.done{opacity:.62}
+.stop.done .name{text-decoration:line-through;text-decoration-thickness:1px;color:var(--sub)}
+.stop.done .t{color:var(--sub);font-size:.8rem;letter-spacing:.1em}
+.stop.done .line::after{background:var(--c);border-color:var(--c)}
+.stop .meta .undo-hint{color:var(--sub);font-size:.74rem}
 .stop button.row{all:unset;display:block;cursor:pointer;width:100%}
 .stop button.row:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 
@@ -73,6 +77,8 @@ button,input,select{font:inherit;color:inherit}
 .transfer .line{position:relative}
 .transfer .line::before{content:"";position:absolute;left:5px;top:0;bottom:0;width:4px;
   background:repeating-linear-gradient(var(--rule) 0 3px,transparent 3px 6px)}
+.transfer.chain .line::before{background:var(--c,#8A929C);opacity:.45}
+.transfer.chain .txt{color:var(--ink);opacity:.6}
 .transfer .txt{padding:.15rem 0}
 
 /* その他の一覧 */
@@ -160,7 +166,8 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 
     <div class="sec">
       <h2>タスク</h2>
-      <p class="hint">所要時間・場所・使う器官を入れると、ながらの組み合わせと順番が正確になります。まだ設定していないものが上に並びます。</p>
+      <p class="hint">所要時間・場所・使う器官を入れると、ながらの組み合わせと順番が正確になります。まだ設定していないものが上に並びます。<br>
+      「この後に続ける」を指定すると、2つが必ず隣り合います。軽いほうを先に置いて、重いほうへの踏み台にするときに使います。</p>
       <div id="task-edits"></div>
     </div>
 
@@ -410,6 +417,7 @@ function cfgOf(settings, name){
     mode: s.mode || "",
     priority: +s.priority || 0,
     fixed: toMin(s.fixed) !== null ? s.fixed : "",
+    next: s.next || "",            // この後に続けるタスク。踏み台にするときに使う
     configured: configured,
   };
 }
@@ -419,12 +427,14 @@ function cfgOf(settings, name){
 function classify(tasksDoc, doneLocal){
   const out = { schedulable: [], done: [], reset: [], ondemand: [] };
   for (const t of (tasksDoc && tasksDoc.tasks) || []) {
-    if (doneLocal.has(t.name)) { out.done.push(t); continue; }
     if (t.status === "要再設定") { out.reset.push(t); continue; }
     if (t.status === "随時") { out.ondemand.push(t); continue; }
     if (SKIP.includes(t.status)) continue;
-    if (DONE.includes(t.check) && !AUTO.includes(t.status)) { out.done.push(t); continue; }
-    out.schedulable.push(t);
+    // 済みにしたものも行軍表に残す。間違えて押しても戻せるように。
+    const done = doneLocal.has(t.name) || (DONE.includes(t.check) && !AUTO.includes(t.status));
+    const task = done ? Object.assign({}, t, { done: true }) : t;
+    out.schedulable.push(task);
+    if (done) out.done.push(t);
   }
   return out;
 }
@@ -442,10 +452,12 @@ function buildPlan(tasksDoc, settings, doneLocal, events){
     return w * Math.max(mw, 1) * (1 + 0.25 * c.priority);
   }
   // 今日の候補のうち最大を10として揃える。場所・型の加点と同じ物差しにするため
-  const maxValue = Math.max(1e-9, ...groups.schedulable.map(t => rawValue(t, cfgOf(settings, t.name))));
+  const maxValue = Math.max(1e-9, ...groups.schedulable.filter(t => !t.done)
+    .map(t => rawValue(t, cfgOf(settings, t.name))));
   // 順位 = 価値 × (リーチなら倍率)。落としたときに失うものの大きさで並べる
   function prio(x){
     if (x.isEvent) return 0;
+    if (x.task.done) return -1000;              // 済みは残すが、並びは最後
     const v = 10 * rawValue(x.task, x.c) / maxValue;
     return v * (x.task.reach ? Math.max(1, +W.reach || 1) : 1);
   }
@@ -483,7 +495,7 @@ function buildPlan(tasksDoc, settings, doneLocal, events){
     for (const { x, pool } of candidates(pools)) {
       if (item.nagara.length >= 2) break;
       if (!item.c.configured || !x.c.configured) continue;
-      if (x.c.fixed) continue;
+      if (x.task.done || x.c.fixed || follower(x)) continue;
       if (x.c.min > item.c.min) continue;
       if (!(x.c.place === ANYWHERE || x.c.place === item.c.place)) continue;
       if (x.c.organs.some(o => used.has(o))) continue;
@@ -497,7 +509,7 @@ function buildPlan(tasksDoc, settings, doneLocal, events){
     let budget = item.c.min;
     for (const { x, pool } of candidates(pools)) {
       if (item.nagara.length >= 4) break;
-      if (!x.c.configured || x.c.fixed) continue;
+      if (!x.c.configured || x.c.fixed || x.task.done || follower(x)) continue;
       if (x.c.min > budget) continue;
       if (!(x.c.place === ANYWHERE || x.c.place === item.c.place)) continue;
       if (x.c.organs.some(o => item.c.organs.includes(o))) continue;
@@ -511,10 +523,38 @@ function buildPlan(tasksDoc, settings, doneLocal, events){
   const blockNames = Object.keys(settings.blocks || {});
   const byBlock = {}; blockNames.forEach(n => byBlock[n] = []);
   const flex = [];
+  const all = [];
   for (const t of groups.schedulable) {
     const x = { task: t, c: cfgOf(settings, t.name) };
+    all.push(x);
     if (byBlock[t.slot]) byBlock[t.slot].push(x); else flex.push(x);
   }
+
+  // 「この後に続ける」で繋いだタスクは、ひとつながりとして動かす。
+  // 軽いほうを先に踏めば、重いほうもそのまま続けられるため。
+  const byName = new Map(all.map(x => [x.task.name, x]));
+  const chained = new Set();
+  for (const x of all) {
+    const nx = x.c.next && byName.get(x.c.next);
+    if (!nx || nx === x || chained.has(nx) || nx.task.done) continue;
+    x.chain = nx;
+    nx.chainedFrom = x;
+    chained.add(nx);
+  }
+  // 輪になっていたら繋がない(たどれなくなるため)
+  for (const x of all) {
+    let seen = new Set([x]), cur = x.chain;
+    while (cur) {
+      if (seen.has(cur)) { x.chain = null; break; }
+      seen.add(cur); cur = cur.chain;
+    }
+  }
+  // 続きのタスクは単独では置かない。先頭のタスクが引き連れる
+  const follower = v => !!v.chainedFrom && v.chainedFrom.chain === v;
+  const chainLen = x => { let n = x.c.min, c = x.chain; while (c) { n += c.c.min; c = c.chain; } return n; };
+  const chainList = x => { const out = []; let c = x.chain; while (c) { out.push(c); c = c.chain; } return out; };
+  const dropFollowers = pool => { for (let i = pool.length - 1; i >= 0; i--) if (follower(pool[i])) pool.splice(i, 1); };
+  [flex].concat(Object.values(byBlock)).forEach(dropFollowers);
 
   const ordered = blockNames
     .map(n => ({ name: n, start: toMin(settings.blocks[n].start), end: toMin(settings.blocks[n].end) }))
@@ -570,8 +610,16 @@ function buildPlan(tasksDoc, settings, doneLocal, events){
       it.transferFrom = transfer(prev, x);
       if (x.isEvent) attachSeq(it, [rest, flex]); else attach(it, [rest, flex]);
       items.push(it);
-      prev = x;
-      cursor = Math.max(cursor, it.end);
+      if (!x.task.done) { prev = x; cursor = Math.max(cursor, it.end); }
+      // 続けるタスクを、そのまま後ろに繋げる
+      for (const nx of chainList(x)) {
+        const nit = mkItem(nx, cursor);
+        nit.afterChain = true;
+        attach(nit, [rest, flex]);
+        items.push(nit);
+        if (!nx.task.done) { prev = nx; cursor = nit.end; }
+        take(nx, rest); take(nx, flex);
+      }
     };
 
     // 枠のタスクを並べる。固定時刻のものと用事は、その時刻に差し込む
@@ -580,7 +628,7 @@ function buildPlan(tasksDoc, settings, doneLocal, events){
       const fAt = nf ? toMin(nf.c.fixed) : Infinity;
       if (nf && fAt <= cursor) { fixed.shift(); place(nf, Math.max(cursor, fAt)); continue; }
       const gap = fAt - cursor;
-      const pick = pickBest(rest, prev, x => x.c.min <= gap);
+      const pick = pickBest(rest, prev, x => chainLen(x) <= gap);
       if (!pick) {
         if (nf) { fixed.shift(); place(nf, fAt); continue; }
         break;
@@ -591,13 +639,18 @@ function buildPlan(tasksDoc, settings, doneLocal, events){
     // 枠に空きがあれば「一日中」のタスクで埋める
     while (true) {
       const room = b.end - cursor;
-      const pick = pickBest(flex, prev, x => !x.c.fixed && x.c.min <= room);
+      const pick = pickBest(flex, prev, x => !x.c.fixed && chainLen(x) <= room);
       if (!pick) break;
       flex.splice(flex.indexOf(pick), 1);
       place(pick, cursor);
     }
 
-    blocks.push({ name: b.name, start: b.start, end: b.end, items,
+    // 済みの行はまとめて最後に置く。これからやるものが上に並ぶように
+    const live = items.filter(i => !(i.task && i.task.done));
+    const fin = items.filter(i => i.task && i.task.done);
+    fin.forEach(i => { i.transferFrom = null; i.afterChain = false; });
+    const sorted = live.concat(fin);
+    blocks.push({ name: b.name, start: b.start, end: b.end, items: sorted,
                   used: cursor - b.start, overflow: Math.max(0, cursor - b.end) });
   }
 
@@ -611,6 +664,13 @@ function buildPlan(tasksDoc, settings, doneLocal, events){
     attach(it, [flex]);
     leftover.push(it);
     prev = pick;
+    for (const nx of chainList(pick)) {
+      take(nx, flex);
+      const nit = { task: nx.task, c: nx.c, nagara: [], transferFrom: null, afterChain: true };
+      attach(nit, [flex]);
+      leftover.push(nit);
+      prev = nx;
+    }
   }
 
   // 枠と単独の用事を、時刻順に一本の流れにする
@@ -618,7 +678,7 @@ function buildPlan(tasksDoc, settings, doneLocal, events){
     .concat(alone.map(it => ({ type: "event", start: it.start, item: it })))
     .sort((p, q) => p.start - q.start);
 
-  const unconfigured = groups.schedulable.filter(t => !(settings.tasks || {})[t.name]).length;
+  const unconfigured = groups.schedulable.filter(t => !t.done && !(settings.tasks || {})[t.name]).length;
   return { blocks, alone, sections, leftover, done: groups.done, reset: groups.reset,
            ondemand: groups.ondemand, unconfigured };
 }
@@ -690,11 +750,10 @@ function renderToday(){
   const extra = [];
   if (plan.ondemand.length) extra.push(['随時(条件が来たら)', plan.ondemand]);
   if (plan.reset.length) extra.push(['要再設定', plan.reset]);
-  if (plan.done.length) extra.push(['済み', plan.done]);
+
   for (const [label, arr] of extra) {
     html += '<details class="more"><summary>' + esc(label) + "　" + arr.length + "件</summary><ul class=\"list\">" +
-      arr.map(t => '<li><span>' + esc(t.name) + '</span><span class="r">' +
-        (label === "済み" ? '<button class="btn ghost" data-undo="' + esc(t.name) + '" style="padding:.1rem .6rem">戻す</button>' : esc(t.slot || "")) +
+      arr.map(t => '<li><span>' + esc(t.name) + '</span><span class="r">' + esc(t.slot || "") +
         "</span></li>").join("") + "</ul></details>";
   }
 
@@ -705,14 +764,21 @@ function stopHtml(it, time, places){
   const c = it.c;
   const color = placeColor(c.place, places);
   let pre = "";
-  if (it.transferFrom) {
+  if (it.afterChain) {
+    pre = '<div class="transfer chain" style="--c:' + color + '"><span></span><span class="line"></span>' +
+          '<span class="txt">そのまま続ける</span></div>';
+  } else if (it.transferFrom) {
     pre = '<div class="transfer"><span></span><span class="line"></span><span class="txt">' +
           esc(it.transferFrom) + "から" + esc(c.place) + "へ</span></div>";
   }
+  const done = !it.isEvent && it.task.done;
   const meta = [];
   meta.push('<span class="pl">' + esc(c.place) + "</span>");
   if (it.isEvent) {
     meta.push('<span class="span-t">' + fmt(it.start) + "–" + fmt(it.end) + "</span>");
+  } else if (done) {
+    meta.push("<span>" + dur(c.min) + "</span>");
+    meta.push('<span class="undo-hint">押すと戻せます</span>');
   } else {
     meta.push("<span>" + dur(c.min) + "</span>");
     if (c.mode) meta.push("<span>" + esc(c.mode) + "</span>");
@@ -729,9 +795,12 @@ function stopHtml(it, time, places){
       '<div class="body"><div class="name">' + esc(it.task.name) + '</div><div class="meta">' + meta.join("") + "</div>" + nag +
       "</div></div>";
   }
-  return pre + '<div class="stop" style="--c:' + color + '">' +
-    '<span class="t">' + esc(time) + '</span><span class="line"></span>' +
-    '<div class="body"><button class="row" data-done="' + esc(it.task.name) + '" aria-label="' + esc(it.task.name) + 'を済みにする">' +
+  const act = done
+    ? 'data-undo="' + esc(it.task.name) + '" aria-label="' + esc(it.task.name) + 'を戻す"'
+    : 'data-done="' + esc(it.task.name) + '" aria-label="' + esc(it.task.name) + 'を済みにする"';
+  return pre + '<div class="stop' + (done ? " done" : "") + '" style="--c:' + color + '">' +
+    '<span class="t">' + esc(done ? "済" : time) + '</span><span class="line"></span>' +
+    '<div class="body"><button class="row" ' + act + ">" +
     '<div class="name">' + esc(it.task.name) + '</div><div class="meta">' + meta.join("") + "</div>" + nag +
     "</button></div></div>";
 }
@@ -940,6 +1009,10 @@ function renderSettings(){
     const sorted = tasks.slice().sort((a, b) =>
       (rank(a) - rank(b)) || a.name.localeCompare(b.name, "ja"));
     const placeOpts = (s.places || []).map(p => p);
+    const names = tasks.map(t => t.name);
+    const nextOpts = (self, cur) => names.filter(n => n !== self)
+      .concat(cur && !names.includes(cur) ? [cur] : [])
+      .map(n => '<option' + (n === cur ? " selected" : "") + ">" + esc(n) + "</option>").join("");
     box.innerHTML = sorted.map((t, i) => {
       const c = cfgOf(s, t.name);
       const id = "t" + i;
@@ -957,6 +1030,8 @@ function renderSettings(){
           '<div class="f"><label for="' + id + 'r">優先度</label><select id="' + id + 'r" data-k="priority">' + prOpts + "</select></div>" +
           '<div class="f"><label for="' + id + 'f">固定の時刻</label><input id="' + id + 'f" data-k="fixed" type="time" value="' + esc(c.fixed) + '"></div>' +
         "</div>" +
+        '<div class="f" style="margin-top:.5rem"><label for="' + id + 'x">この後に続ける</label>' +
+        '<select id="' + id + 'x" data-k="next"><option value="">なし</option>' + nextOpts(t.name, c.next) + "</select></div>" +
         '<div class="organs" role="group" aria-label="使う器官">' + organs + "</div>" +
       "</div>";
     }).join("");
@@ -1006,7 +1081,8 @@ function ensureTask(name){
   const s = state.settings;
   if (!s.tasks[name]) {
     const c = cfgOf(s, name);
-    s.tasks[name] = { min: c.min, place: c.place, organs: c.organs, mode: c.mode, priority: c.priority, fixed: c.fixed };
+    s.tasks[name] = { min: c.min, place: c.place, organs: c.organs, mode: c.mode,
+                      priority: c.priority, fixed: c.fixed, next: c.next };
   }
   return s.tasks[name];
 }
@@ -1225,6 +1301,7 @@ function bind(){
     if (k === "min") t.min = Math.max(1, +e.target.value || 1);
     else if (k === "priority") t.priority = +e.target.value;
     else t[k] = e.target.value;
+    if (k === "next") renderSettings();
     markDirty();
   });
   edits.addEventListener("click", e => {
