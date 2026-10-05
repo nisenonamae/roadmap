@@ -503,7 +503,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-05 r35";
+const APP_VERSION = "2026-10-05 r36";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -676,7 +676,8 @@ async function fetchRetry(url, opts, tries){
   throw last;
 }
 function netError(path, e){
-  const err = new Error(path + " を読めませんでした(" + (e && e.message ? e.message : "通信の失敗") + ")。電波のよい所で「データを読み込み直す」を押してください。");
+  const err = new Error(path + " を読めませんでした(" + (e && e.message ? e.message : "通信の失敗") +
+    ")。電波の問題でなければ、広告ブロックやVPN、セキュリティのアプリがこの通信を止めている可能性があります。");
   err.network = true;
   return err;
 }
@@ -710,11 +711,41 @@ async function readJson(path){
   return { data: JSON.parse(text), sha: meta.sha };
 }
 
-async function listDir(path){
+// 予備の経路。アドレスに「log」などの語が入ると、広告ブロックなどに止められることがある。
+// GitHubの git/trees・git/blobs は、名前ではなく中身の番号で取り出すので、アドレスにその語が入らない
+function gitUrl(kind, sha){
+  const c = state.conn;
+  return "https://api.github.com/repos/" + encodeURIComponent(c.owner) + "/" + encodeURIComponent(c.repo) + "/git/" + kind + "/" + sha;
+}
+async function readBlob(sha, label){
+  let r;
+  try { r = await fetchRetry(gitUrl("blobs", sha), { headers: authHeaders(), cache: "no-store" }); }
+  catch (e) { throw netError(label || sha, e); }
+  if (!r.ok) throw new Error(describeHttp(r.status, label || sha));
+  const b = await r.json();
+  return JSON.parse(b.encoding === "base64" ? b64decode(b.content) : b.content);
+}
+async function listDirViaTree(path){
+  const parts = path.split("/"), name = parts.pop(), parent = parts.join("/");
+  const up = await listDir(parent, true);
+  const dir = up.find(x => x.name === name && x.type === "dir");
+  if (!dir) return [];
+  let r;
+  try { r = await fetchRetry(gitUrl("trees", dir.sha), { headers: authHeaders(), cache: "no-store" }); }
+  catch (e) { throw netError(path, e); }
+  if (!r.ok) throw new Error(describeHttp(r.status, path));
+  const t = await r.json();
+  return (t.tree || []).filter(x => x.type === "blob").map(x => ({ name: x.path, sha: x.sha, type: "file", viaTree: true }));
+}
+
+async function listDir(path, noFallback){
   const url = apiUrl(path) + "?ref=" + encodeURIComponent(state.conn.branch);
   let r;
   try { r = await fetchRetry(url, { headers: authHeaders(), cache: "no-store" }); }
-  catch (e) { throw netError(path, e); }
+  catch (e) {
+    if (noFallback) throw netError(path, e);
+    return listDirViaTree(path);              // 名前で取れなければ、中身の番号の経路で
+  }
   if (r.status === 404) return [];
   if (!r.ok) throw new Error(describeHttp(r.status, path));
   const list = await r.json();
@@ -2458,7 +2489,15 @@ async function loadTaskData(){
           const f = queue.shift();
           const m = f.name.slice(0, 7);
           if (shas[m] && shas[m] === f.sha && data[m]) { outData[m] = data[m]; outSha[m] = f.sha; continue; }
-          const got = await readJson(dir + "/" + f.name);
+          let got;
+          if (f.viaTree) got = { data: await readBlob(f.sha, dir + "/" + f.name), sha: f.sha };
+          else {
+            try { got = await readJson(dir + "/" + f.name); }
+            catch (e) {
+              if (!e.network || !f.sha) throw e;
+              got = { data: await readBlob(f.sha, dir + "/" + f.name), sha: f.sha };
+            }
+          }
           outData[m] = got.data || {}; outSha[m] = got.sha;
         }
       };
