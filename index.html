@@ -75,6 +75,10 @@ button,input,select{font:inherit;color:inherit}
 .stop.done .name{text-decoration:line-through;text-decoration-thickness:1px;color:var(--sub)}
 .stop.done .t{color:var(--sub);font-size:.8rem;letter-spacing:.1em}
 .stop.done .line::after{background:var(--c);border-color:var(--c)}
+.staff-banner{background:#1D2430;color:#EEF1F0;border-radius:4px;padding:.7rem .9rem;margin:0 0 1rem}
+.staff-banner .sb-term{font-size:.78rem;opacity:.75;letter-spacing:.1em}
+.staff-banner .sb-slogan{font-size:1.05rem;font-weight:700;line-height:1.4}
+.staff-banner .sb-emg{margin-top:.4rem;background:#B3283C;color:#fff;border-radius:3px;padding:.3rem .6rem;font-size:.86rem}
 .stop.pending .tick{background:#3D8A5A;border-color:#3D8A5A;color:#fff}
 .stop.pending .name{text-decoration:line-through;color:var(--sub)}
 @keyframes flashrow{0%{background:#FFF1B8}100%{background:transparent}}
@@ -291,6 +295,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
     </header>
     <div id="notices"></div>
     <div id="events-panel"></div>
+    <div id="staff-banner"></div>
     <div id="plan"></div>
   </section>
 
@@ -503,7 +508,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-05 r37";
+const APP_VERSION = "2026-10-05 r38";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -513,7 +518,8 @@ const TASKDEFS_PATH = "roadmap/tasks/defs.json";
 const OVERLAY_PATH = "roadmap/tasks/overlay.json";     // アプリで足したもの。取り込み直しで消えない
 const TASKLOG_DIR = "roadmap/tasks/log";
 const APPLOG_DIR = "roadmap/tasks/applog";
-const CUTOVER_PATH = "roadmap/tasks/cutover.json";   // 切り替え済みの印。あればNotionのタスク表はもう使っていない          // アプリでつけた記録。取り込みでは上書きされない
+const CUTOVER_PATH = "roadmap/tasks/cutover.json";
+const STAFF_PATH = "roadmap/gov/staff.json";       // 参謀本部(作戦期・目標・緊急会議)。省アプリで決める   // 切り替え済みの印。あればNotionのタスク表はもう使っていない          // アプリでつけた記録。取り込みでは上書きされない
 const KEY_TKVIEW = "roadmap-tkview";
 const KEY_CKVIEW = "roadmap-ckview";
 const CHECK_SLOTS = ["朝", "昼", "一日中", "夜"];
@@ -576,6 +582,7 @@ const state = {
   cutover: null,
   taskMode: null,            // "settings" で設定の欄を開いておく、"new" でタスクを足す画面
   recordOpen: null,          // チェックのタブで開いている記録の画面
+  staff: null,
   hallConfirm: null,         // 殿堂入りの確認を開いているタスク
   demoteConfirm: null,       // 降格の確認を開いているタスク
 };
@@ -814,7 +821,29 @@ function classify(tasksDoc, doneLocal){
   return out;
 }
 
+function staffTerm(){
+  const sf = state.staff; if (!sf || !sf.terms) return null;
+  const d = todayJST();
+  return sf.terms.find(t => t.issuedAt && !t.closedAt && t.start <= d && d <= t.end) || null;
+}
+// 参謀本部の目標に結びついたタスク(最初の一歩と毎週の点検)。今日の一番上に置く
+function staffNames(){
+  const names = new Set();
+  for (const t of ((state.overlay && state.overlay.newTasks) || [])) if (t.staff) names.add(t.name);
+  const term = staffTerm();
+  if (term) { for (const g of term.goals || []) if (g.firstStep) names.add(g.firstStep.name); names.add("参謀本部の点検"); }
+  return names;
+}
+function staffBanner(){
+  const term = staffTerm(), emg = ((state.staff && state.staff.emergencies) || []).filter(e => !e.resolvedAt);
+  if (!term && !emg.length) return "";
+  const left = term ? Math.max(0, Math.round((Date.parse(term.end) - Date.parse(todayJST())) / 864e5)) : 0;
+  return '<div class="staff-banner">' + (term ? '<div class="sb-term">' + esc(term.name) + "　残り" + left + '日</div><div class="sb-slogan">' + esc(term.slogan.text) + "</div>" : "") +
+    (emg.length ? '<div class="sb-emg">参謀本部で緊急会議が ' + emg.length + " 件あります。省アプリで決めるまで消えません。</div>" : "") + "</div>";
+}
+
 function buildPlan(tasksDoc, settings, doneLocal, events){
+  const STAFF_FIRST = staffNames();
   const weights = (tasksDoc && tasksDoc.weights) || {};
   const W = Object.assign({ priority: 1, place: 3, mode: 2, reach: 3 }, settings.weights || {});
   const groups = classify(tasksDoc, doneLocal || new Set());
@@ -833,6 +862,7 @@ function buildPlan(tasksDoc, settings, doneLocal, events){
   function prio(x){
     if (x.isEvent) return 0;
     if (x.task.done) return -1000;              // 済みは残すが、並びは最後
+    if (STAFF_FIRST.has(x.task.name)) return 1e6;  // 参謀本部の目標に結びついたタスクは最優先
     const v = 10 * rawValue(x.task, x.c) / maxValue;
     return v * (x.task.reach ? Math.max(1, +W.reach || 1) : 1);
   }
@@ -1061,6 +1091,8 @@ function buildPlan(tasksDoc, settings, doneLocal, events){
 /* ───────── 描画:今日 ───────── */
 
 function renderToday(){
+  const sbBox = document.getElementById("staff-banner");
+  if (sbBox) sbBox.innerHTML = staffBanner();
   const doc = state.tasksDoc;
   const dateEl = document.getElementById("date");
   const notices = document.getElementById("notices");
@@ -2468,8 +2500,9 @@ async function loadAll(){
   st.classList.remove("err");
   st.textContent = "読み込んでいます…";
   try {
-    const [t, s, ev, pl, ps] = await Promise.all([readJson(TASKS_PATH), readJson(SETTINGS_PATH), readJson(EVENTS_PATH),
-                                                  readJson(PLAN_PATH), readJson(PLAN_STATUS_PATH)]);
+    const [t, s, ev, pl, ps, sf] = await Promise.all([readJson(TASKS_PATH), readJson(SETTINGS_PATH), readJson(EVENTS_PATH),
+                                                  readJson(PLAN_PATH), readJson(PLAN_STATUS_PATH), readJson(STAFF_PATH).catch(() => ({}))]);
+    state.staff = (sf && sf.data) || null;
     if (!t.data) throw new Error(TASKS_PATH + " がまだありません。Actions の Roadmap tasks を実行してください。");
     state.tasksDoc = t.data;
     state.settings = normalizeSettings(s.data);
@@ -2920,6 +2953,8 @@ function bind(){
       if (taskStates().some(x => x.def.name === f.name || (x.def.aliases || []).includes(f.name))) {
         st.classList.add("err"); st.textContent = "同じ名前のタスクがあります。別の名前にしてください。"; return;
       }
+      const term = staffTerm(), held = term ? f.ministries.filter(m => (term.restrain || []).includes(m)) : [];
+      if (held.length && !confirm("今の作戦期(" + term.name + ")では、" + held.join("・") + " は抑制中です。それでも足しますか。")) return;
       const D = taskDay();
       const id = await taskIdFor(f.name, D);
       const def = {
