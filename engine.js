@@ -199,6 +199,59 @@
     return { index: i, item: cycle.items[i], count: n };
   }
 
+  /*
+    アプリで変えたこと(overlay)を、取り込んだ定義に重ねる。アプリの画面と毎朝の計算の両方が使う。
+      edits        中身の変更(名前、時間帯、攻守、省、WAVE・STAGE、実行間隔、重み、目標回数、達成要件、1日の分量、型)
+      events       状況の変更(休止、再開、立て直し、アーカイブなど)
+      generations  世代を上げた記録
+    同じ変更がNotion経由でも入ってくることがあるが、2回効いても結果は同じになる。
+  */
+  const EDIT_KEYS = ["name", "slot", "stance", "interval", "weight", "requirement", "quota", "kind"];
+  function mergeOverlay(def, ov, today) {
+    ov = ov || {};
+    const e = ov.edits || {};
+    const out = Object.assign({}, def);
+    for (const k of EDIT_KEYS) if (e[k] !== undefined) out[k] = e[k];
+    if (Array.isArray(e.ministries)) out.ministries = e.ministries.slice();
+    if (Array.isArray(e.waves)) out.waves = e.waves.map(l => ({ label: l, url: "" }));
+    if (e.name && e.name !== def.name) out.aliases = Array.from(new Set((def.aliases || []).concat([def.name])));
+    const gens = (def.generations || []).map(g => Object.assign({}, g));
+    for (const g of ov.generations || []) if (!gens.some(x => x.gen === g.gen && x.from === g.from)) gens.push(Object.assign({}, g));
+    gens.sort((a, b) => (a.from < b.from ? -1 : 1));
+    if (e.target !== undefined && e.target !== null && e.target !== "") {
+      const cur = gens.filter(g => g.from <= today).pop();
+      if (cur) cur.target = +e.target; else gens.push({ gen: 1, from: def.created, target: +e.target });
+    }
+    out.generations = gens;
+    out.events = (def.events || []).concat(ov.events || []);
+    out.cycle = ov.cycle || def.cycle || null;
+    return out;
+  }
+
+  // 取り込んだタスクと、アプリで足したタスク(まだ取り込みに戻ってきていないもの)を合わせる
+  function allDefs(defsDoc, overlay) {
+    const defs = (defsDoc && defsDoc.tasks) || [];
+    const have = new Set(defs.map(d => d.id));
+    return defs.concat(((overlay && overlay.newTasks) || []).filter(t => !have.has(t.id)));
+  }
+
+  // その日の記録。アプリでつけたものがあれば、取り込んだものより優先する
+  function mergedLogFor(logs, applogs, id) {
+    return day => {
+      const m = day.slice(0, 7);
+      const a = (((logs || {})[m] || {})[day] || {})[id];
+      const b = (((applogs || {})[m] || {})[day] || {})[id];
+      if (!a && !b) return undefined;
+      return Object.assign({}, a || {}, b || {});
+    };
+  }
+
+  // その日の世代の目標回数
+  function targetAt(def, day) {
+    const g = (def.generations || []).filter(x => x.from <= day).sort((a, b) => (a.from < b.from ? -1 : 1)).pop();
+    return g && g.target != null ? +g.target : null;
+  }
+
   // 記録の束(月ごとのファイルを合わせたもの)から、logFor を作る
   function makeLogFor(logs, taskId) {
     return day => {
@@ -208,5 +261,5 @@
     };
   }
 
-  return { replay, makeLogFor, cycleIndex, nextStatus, isDue, addDays, daysBetween, DONE, EXCUSED, AUTO_DONE, GENERATED, RULES };
+  return { replay, makeLogFor, cycleIndex, mergeOverlay, allDefs, mergedLogFor, targetAt, nextStatus, isDue, addDays, daysBetween, DONE, EXCUSED, AUTO_DONE, GENERATED, RULES };
 });
