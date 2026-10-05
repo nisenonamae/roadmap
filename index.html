@@ -75,6 +75,17 @@ button,input,select{font:inherit;color:inherit}
 .stop.done .name{text-decoration:line-through;text-decoration-thickness:1px;color:var(--sub)}
 .stop.done .t{color:var(--sub);font-size:.8rem;letter-spacing:.1em}
 .stop.done .line::after{background:var(--c);border-color:var(--c)}
+.seg{display:flex;border:1px solid var(--rule);border-radius:4px;overflow:hidden;margin:0 0 1rem;width:max-content}
+.seg button{border:none;background:#fff;padding:.35rem 1rem;cursor:pointer;font:inherit;color:var(--sub)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:#fff}
+.audit-ok{border-left:4px solid #3D8A5A;background:#fff;padding:.6rem .8rem;margin:.5rem 0}
+.audit-ng{border-left:4px solid #B3283C;background:#fff;padding:.6rem .8rem;margin:.5rem 0}
+.audit-ok b,.audit-ng b{font-size:1.05rem}
+.chg{display:flex;justify-content:space-between;gap:.6rem;padding:.35rem 0;border-bottom:1px dashed var(--rule);font-size:.9rem}
+.chg span:last-child{color:var(--sub);font-size:.82rem;text-align:right}
+.days{display:flex;gap:.3rem;flex-wrap:wrap;margin:.3rem 0 .6rem}
+.days button{border:1px solid var(--rule);background:#fff;border-radius:3px;padding:.2rem .6rem;cursor:pointer;font:inherit;font-size:.84rem}
+.days button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
 .staff-banner{background:#1D2430;color:#EEF1F0;border-radius:4px;padding:.7rem .9rem;margin:0 0 1rem}
 .staff-banner .sb-term{font-size:.78rem;opacity:.75;letter-spacing:.1em}
 .staff-banner .sb-slogan{font-size:1.05rem;font-weight:700;line-height:1.4}
@@ -392,6 +403,9 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
       <h1>タスク</h1>
       <div class="date" id="tk-date">—</div>
     </header>
+    <div class="seg" role="tablist" aria-label="タスクの見方"><button type="button" data-tkview="list" aria-pressed="true">一覧</button><button type="button" data-tkview="audit" aria-pressed="false">更新の記録</button></div>
+    <div id="tk-audit" hidden></div>
+    <div id="tk-main">
     <div class="row" style="margin:0 0 .8rem"><button type="button" class="btn ghost" id="tk-new">タスクを足す</button></div>
     <div class="tk-bar">
       <input id="tk-q" type="search" placeholder="名前で探す" style="flex:1 1 9rem;min-width:8rem;padding:.3rem .5rem;border:1px solid var(--rule);border-radius:3px;font:inherit;background:#fff">
@@ -405,6 +419,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
     <div id="tk-list"></div>
     <details class="more" id="tk-waves-box"><summary>WAVE・STAGEのリンク</summary><div id="tk-waves"></div></details>
     <div id="tk-detail"></div>
+    </div>
     <span class="status tkst" id="tk-status"></span>
   </section>
 
@@ -508,7 +523,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-05 r38";
+const APP_VERSION = "2026-10-06 r39";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -823,7 +838,7 @@ function classify(tasksDoc, doneLocal){
 
 function staffTerm(){
   const sf = state.staff; if (!sf || !sf.terms) return null;
-  const d = todayJST();
+  const d = taskDay();
   return sf.terms.find(t => t.issuedAt && !t.closedAt && t.start <= d && d <= t.end) || null;
 }
 // 参謀本部の目標に結びついたタスク(最初の一歩と毎週の点検)。今日の一番上に置く
@@ -837,7 +852,7 @@ function staffNames(){
 function staffBanner(){
   const term = staffTerm(), emg = ((state.staff && state.staff.emergencies) || []).filter(e => !e.resolvedAt);
   if (!term && !emg.length) return "";
-  const left = term ? Math.max(0, Math.round((Date.parse(term.end) - Date.parse(todayJST())) / 864e5)) : 0;
+  const left = term ? Math.max(0, Math.round((Date.parse(term.end) - Date.parse(taskDay())) / 864e5)) : 0;
   return '<div class="staff-banner">' + (term ? '<div class="sb-term">' + esc(term.name) + "　残り" + left + '日</div><div class="sb-slogan">' + esc(term.slogan.text) + "</div>" : "") +
     (emg.length ? '<div class="sb-emg">参謀本部で緊急会議が ' + emg.length + " 件あります。省アプリで決めるまで消えません。</div>" : "") + "</div>";
 }
@@ -1807,6 +1822,7 @@ function taskStates(){
       check: row ? row.check : null,
       cycle: E.cycleIndex(def.cycle, rep.days, today),
       progress: lastProgress(rep.days).value,
+      days: rep.days,
       progressDate: lastProgress(rep.days).date,
     };
   });
@@ -1934,9 +1950,91 @@ function renderTasks(){
   renderWaveLinks(list);
   renderTaskDetail();
   renderRecordSheet();
+  if (!document.getElementById("tk-audit").hidden) renderAudit();
 }
 
 // 今日の記録:今日行が立っているタスクを時間帯ごとに。○を押すだけで完了
+
+/* ───────── 更新の記録:ルール通りに動いているかの検算 ─────────
+   計算のルール(engine.js)とは別に、ルールの表をそのまま書いた計算で、
+   前の日の行から次の日の行を出し直して比べる。同じ答えが出ればルール通り。 */
+const AUDIT_DONE = new Set(["完了", "超過完了", "不完全な完了"]);
+const NA = "今日は該当しない";
+function expectNext(prev){
+  const done = AUDIT_DONE.has(prev.check), na = prev.check === NA, dropped = !done && !na;
+  const total = prev.total + (done ? 1 : 0);
+  const streak = done ? prev.streak + 1 : (na ? prev.streak : 0);
+  const miss = done ? 0 : (na ? prev.miss : prev.miss + 1);
+  let status = prev.status, why = "";
+  if (prev.status === "新規") {
+    if (total >= 3) { status = "進行中"; why = "累計が3に届いた"; }
+    else if (miss >= 2) { status = "要再設定"; why = "2日続けて未実行"; }
+  } else if (prev.status === "進行中") {
+    if (miss >= 3) { status = "要再設定"; why = "3日続けて未実行"; }
+    else if (streak >= 14) { status = "定着"; why = "14日連続"; }
+  } else if (prev.status === "定着") {
+    if (dropped) { status = "進行中"; why = "1日落とした"; }
+    else if (streak >= 60) { status = "熟達"; why = "60日連続"; }
+  } else if (prev.status === "熟達") {
+    if (dropped) { status = "定着"; why = "落とした"; }
+  }
+  return { total, streak, miss, status, why };
+}
+function auditDay(day){
+  const rows = [], issues = [], changes = [];
+  let checked = 0;
+  for (const t of taskStates()) {
+    const ds = t.days || [];
+    const i = ds.findIndex(x => x.date === day);
+    if (i < 0) continue;
+    const cur = ds[i];
+    rows.push(t);
+    const manual = (t.def.events || []).some(e => e.date === day);
+    const gen = (t.def.generations || []).some(g => g.from === day && g.gen > 1);
+    if (i === 0) { if (manual) changes.push({ t, kind: "手", text: cur.status, why: "手で変えた" }); continue; }
+    const prev = ds[i - 1];
+    if (manual) { if (prev.status !== cur.status) changes.push({ t, kind: "手", text: prev.status + " → " + cur.status, why: "手で変えた" }); continue; }
+    const ex = expectNext(prev);
+    checked++;
+    const bad = [];
+    if (ex.total !== cur.total) bad.push("累計 " + cur.total + "(検算 " + ex.total + ")");
+    if (ex.streak !== cur.streak) bad.push("連続 " + cur.streak + "(検算 " + ex.streak + ")");
+    if (ex.miss !== cur.miss) bad.push("未実行連続 " + cur.miss + "(検算 " + ex.miss + ")");
+    if (ex.status !== cur.status) bad.push("状況 " + cur.status + "(検算 " + ex.status + ")");
+    if (bad.length) issues.push({ t, bad, prev });
+    else if (prev.status !== cur.status) {
+      const R = { "要再設定": 0, "新規": 1, "進行中": 2, "定着": 3, "熟達": 4 };
+      changes.push({ t, kind: (R[cur.status] ?? 1) > (R[prev.status] ?? 1) ? "上" : "下", text: prev.status + " → " + cur.status, why: ex.why });
+    }
+    if (gen) changes.push({ t, kind: "世", text: "世代" + cur.gen + "へ", why: "世代を上げた" });
+  }
+  return { rows, issues, changes, checked };
+}
+function renderAudit(){
+  const box = document.getElementById("tk-audit"); if (!box) return;
+  const today = taskDay();
+  const day = state.auditDay || today;
+  const doc = state.tasksDoc;
+  const ran = doc && doc.date === today;
+  const a = auditDay(day);
+  const label = d => (d === today ? "今日" : d === addDays(today, -1) ? "昨日" : (+d.slice(5, 7)) + "/" + (+d.slice(8, 10)));
+  const days = []; for (let k = 0; k < 7; k++) days.push(addDays(today, -k));
+  const group = (kind, title) => { const xs = a.changes.filter(c => c.kind === kind); return xs.length ? "<h3>" + title + " " + xs.length + "</h3>" +
+    xs.map(c => '<div class="chg"><span>' + esc(c.t.def.name) + "　" + esc(c.text) + "</span><span>" + esc(c.why) + "</span></div>").join("") : ""; };
+  box.innerHTML =
+    (ran ? '<div class="audit-ok"><b>✓ 毎朝の計算は動いています</b><br><span style="font-size:.84rem">今日(' + esc(today) + ")の一覧ができています。</span></div>"
+         : '<div class="audit-ng"><b>✕ 今日の一覧がまだありません</b><br><span style="font-size:.84rem">最新の一覧は ' + esc((doc && doc.date) || "—") + " のものです。notion-daily の Actions で App daily が緑になっているか確かめてください。</span></div>") +
+    '<div class="days" role="group" aria-label="日付">' + days.map(d => '<button type="button" data-audit-day="' + d + '" aria-pressed="' + (d === day) + '">' + label(d) + "</button>").join("") + "</div>" +
+    (a.issues.length
+      ? '<div class="audit-ng"><b>✕ 検算と食い違うタスクが ' + a.issues.length + " 件</b>" + a.issues.map(x => '<div class="chg"><span>' + esc(x.t.def.name) + "</span><span>" + esc(x.bad.join("、")) + "</span></div>").join("") + "</div>"
+      : '<div class="audit-ok"><b>✓ ルール通り</b><br><span style="font-size:.84rem">' + esc(label(day)) + "の行がある " + a.rows.length + " 件のうち、前の日から続く " + a.checked +
+        " 件すべてで、累計・連続・未実行連続・状況が検算と一致しました。</span></div>") +
+    group("上", "上がった") + group("下", "落ちた") + group("手", "手で変えた") + group("世", "世代が上がった") +
+    (!a.changes.length ? '<p style="color:var(--sub);font-size:.88rem">' + esc(label(day)) + "は、状況が変わったタスクはありませんでした。</p>" : "") +
+    '<details class="more"><summary>検算のルール</summary><p style="font-size:.84rem;line-height:1.8">前の日に済んでいれば累計と連続が1増え、未実行連続は0。「今日は該当しない」なら何も増えない。それ以外は連続が0に戻り、未実行連続が1増える。<br>' +
+      "新規は累計3で進行中、未実行2日で要再設定。進行中は未実行3日で要再設定、14日連続で定着。定着は落とすと進行中、60日連続で熟達。熟達は落とすと定着。手で変えた日は検算から外す。</p></details>";
+}
+
 // 優先度。行軍表と同じ物差し:重み × 省の重要度 × 手で付けた優先度 × リーチなら倍率
 function isReach(t){ return (t.status === "新規" && t.miss >= 1) || (t.status === "進行中" && t.miss >= 2); }
 function prioScore(t){
@@ -2767,6 +2865,18 @@ function bind(){
   document.getElementById("ck-sort").addEventListener("change", e => {
     lsSet(KEY_CKVIEW, { sort: e.target.value });
     renderTasks();
+  });
+
+  document.querySelectorAll("[data-tkview]").forEach(b => b.addEventListener("click", () => {
+    const audit = b.dataset.tkview === "audit";
+    document.querySelectorAll("[data-tkview]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    document.getElementById("tk-audit").hidden = !audit;
+    document.getElementById("tk-main").hidden = audit;
+    if (audit) renderAudit();
+  }));
+  document.getElementById("tk-audit").addEventListener("click", e => {
+    const b = e.target.closest("[data-audit-day]"); if (!b) return;
+    state.auditDay = b.dataset.auditDay; renderAudit();
   });
 
   document.getElementById("tk-new").addEventListener("click", () => {
