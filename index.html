@@ -503,7 +503,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-05 r36";
+const APP_VERSION = "2026-10-05 r37";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -576,6 +576,8 @@ const state = {
   cutover: null,
   taskMode: null,            // "settings" で設定の欄を開いておく、"new" でタスクを足す画面
   recordOpen: null,          // チェックのタブで開いている記録の画面
+  hallConfirm: null,         // 殿堂入りの確認を開いているタスク
+  demoteConfirm: null,       // 降格の確認を開いているタスク
 };
 
 function clone(o){ return JSON.parse(JSON.stringify(o)); }
@@ -2181,6 +2183,7 @@ const ACTIONS = {
   ondemand: ["随時にする", "随時"],
   normal:   ["通常に戻す", "進行中"],
   hall:     ["殿堂入りにする", "殿堂入り"],
+  demote:   ["降格する(熟達へ)", "熟達"],
   achieved: ["達成済みにする", "達成済み"],
   archive:  ["アーカイブする", "アーカイブ"],
   revive:   ["新規として戻す", "新規"],
@@ -2191,8 +2194,10 @@ function actionsFor(status){
   if (status === "休止中") return ["resume", "archive"];
   if (status === "実験") return ["trialEnd", "normal", "archive"];
   if (status === "随時") return ["normal", "pause", "archive"];
+  if (status === "殿堂入り") return ["demote", "revive"];
   return ["revive"];
 }
+const HALL_STREAK = 28;   // 殿堂入りの条件:4週間連続でトラブルがない
 
 function taskFormHtml(v, mode){
   const mins = ministryNames();
@@ -2228,12 +2233,37 @@ function readTaskForm(box){
 }
 
 function settingsHtml(t){
+  // 殿堂入りの確認(連続28日と、感覚の問い)
+  const hallBox = state.hallConfirm === t.def.id
+    ? '<div class="peditor" style="margin:.5rem 0;background:#fff"><h3 style="margin-top:0">殿堂入りにする前に</h3>' +
+      '<p style="margin:.2rem 0">' + (t.streak >= HALL_STREAK ? "✓" : "✕") + " 4週間連続でトラブル(漏れ・遅れ)がない:連続 <b>" + t.streak + "</b> / " + HALL_STREAK + "日</p>" +
+      '<label style="display:flex;gap:.5rem;align-items:flex-start;margin:.4rem 0"><input type="checkbox" data-hall-feel style="width:auto;margin-top:.3rem">' +
+      "<span>3日ほどこのタスクを見なくても、忘れる不安が一切ない</span></label>" +
+      '<div class="row"><button type="button" class="btn" data-hall-ok' + (t.streak >= HALL_STREAK ? "" : " disabled") + '>殿堂入りにする</button>' +
+      '<button type="button" class="btn ghost" data-hall-cancel>やめる</button></div>' +
+      (t.streak < HALL_STREAK ? '<p class="note" style="font-size:.78rem;color:var(--reach)">連続があと' + (HALL_STREAK - t.streak) + "日足りません。</p>" : "") + "</div>"
+    : "";
+  // 降格の確認(感覚と環境の問い)
+  const demoteBox = state.demoteConfirm === t.def.id
+    ? '<div class="peditor" style="margin:.5rem 0;background:#fff"><h3 style="margin-top:0">降格の理由</h3>' +
+      ["週の途中で何度も不安になって確認した", "環境が大きく変わった", "やり忘れが重なった"].map((q, i) =>
+        '<label style="display:flex;gap:.5rem;align-items:flex-start;margin:.3rem 0"><input type="checkbox" data-demote-why="' + i + '" style="width:auto;margin-top:.3rem"><span>' + q + "</span></label>").join("") +
+      '<div class="row"><button type="button" class="btn" data-demote-ok>熟達へ降格する</button><button type="button" class="btn ghost" data-demote-cancel>やめる</button></div></div>'
+    : "";
+  // 降格のカード(殿堂入りのタスクだけ)
+  const ov = (state.overlay.tasks || {})[t.def.id] || {};
+  const cards = (ov.cards || []).length;
+  const cardBox = t.status === "殿堂入り"
+    ? '<h3>やり忘れのカード</h3><p style="margin:.2rem 0">' + (cards ? "🟨".repeat(cards) + " イエローカード " + cards + "枚" : "カードはありません") + "</p>" +
+      '<p class="note" style="font-size:.78rem;color:var(--sub)">1回やり忘れたらイエローカード、直せば消せる。2枚たまるとレッドカードで熟達へ降格。</p>' +
+      '<div class="opts"><button type="button" data-card-add>やり忘れた</button>' + (cards ? '<button type="button" data-card-fix>直した(1枚消す)</button>' : "") + "</div>"
+    : "";
   const acts = actionsFor(t.status).map(a =>
     '<button type="button" data-act="' + a + '">' + esc(ACTIONS[a][0]) + "</button>").join("");
   const d = t.def;
   return '<details class="more" style="margin-top:1rem"' + (state.taskMode === "settings" ? " open" : "") + '><summary>タスクの設定を変える</summary>' +
     "<h3>状況(今は" + esc(t.status) + ")</h3>" +
-    '<div class="opts">' + acts + "</div>" +
+    '<div class="opts">' + acts + "</div>" + hallBox + demoteBox + cardBox +
     (actionsFor(t.status).includes("pause") ? '<div class="f" style="max-width:12rem"><label for="tk-resume">休止するときの再開日(空欄なら決めない)</label><input id="tk-resume" type="date"></div>' : "") +
     "<h3>世代(今は世代" + t.gen + ")</h3>" +
     '<div class="dur"><input data-genup-target type="number" min="1" step="1" placeholder="目標回数" value="' + esc(t.target || "") + '">回で' +
@@ -2775,7 +2805,57 @@ function bind(){
     if (e.target.closest("[data-tk-close]")) { state.taskOpen = null; state.taskMode = null; renderTaskDetail(); return; }
 
     // 状況の操作
+    if (e.target.closest("[data-hall-cancel]")) { state.hallConfirm = null; renderTaskDetail(); return; }
+    if (e.target.closest("[data-demote-cancel]")) { state.demoteConfirm = null; renderTaskDetail(); return; }
+    const hallOk = e.target.closest("[data-hall-ok]");
+    if (hallOk) {
+      const id = state.taskOpen; const feel = document.querySelector("#tk-detail [data-hall-feel]");
+      if (!feel || !feel.checked) { tkStatus("「忘れる不安が一切ない」に当てはまるときだけ殿堂入りにします。", true); return; }
+      const D = taskDay(); state.hallConfirm = null; state.taskMode = "settings";
+      await commitOverlay(() => {
+        const t = state.overlay.tasks[id] = Object.assign({}, state.overlay.tasks[id] || {});
+        t.events = (t.events || []).filter(x => x.date !== D).concat([{ date: D, status: "殿堂入り" }]);
+        t.cards = [];
+      });
+      return;
+    }
+    const demOk = e.target.closest("[data-demote-ok]");
+    if (demOk) {
+      const id = state.taskOpen;
+      const why = Array.from(document.querySelectorAll("#tk-detail [data-demote-why]:checked")).map(x => +x.dataset.demoteWhy);
+      if (!why.length) { tkStatus("降格の理由を1つ選んでください。", true); return; }
+      const D = taskDay(); state.demoteConfirm = null; state.taskMode = "settings";
+      await commitOverlay(() => {
+        const t = state.overlay.tasks[id] = Object.assign({}, state.overlay.tasks[id] || {});
+        t.events = (t.events || []).filter(x => x.date !== D).concat([{ date: D, status: "熟達", resume: true }]);
+        t.cards = [];
+      });
+      return;
+    }
+    if (e.target.closest("[data-card-add]") || e.target.closest("[data-card-fix]")) {
+      const id = state.taskOpen, add = !!e.target.closest("[data-card-add]"), D = taskDay();
+      const before = (((state.overlay.tasks || {})[id] || {}).cards || []).length;
+      state.taskMode = "settings";
+      await commitOverlay(() => {
+        const t = state.overlay.tasks[id] = Object.assign({}, state.overlay.tasks[id] || {});
+        const cards = (t.cards || []).slice();
+        if (add) cards.push({ date: D }); else cards.pop();
+        if (cards.length >= 2) {
+          // レッドカード:熟達へ降格し、カードは消す
+          t.events = (t.events || []).filter(x => x.date !== D).concat([{ date: D, status: "熟達", resume: true }]);
+          t.cards = [];
+        } else t.cards = cards;
+      });
+      if (add && before + 1 >= 2) tkStatus("レッドカード:熟達へ降格しました。");
+      return;
+    }
     const act = e.target.closest("[data-act]");
+    if (act && (act.dataset.act === "hall" || act.dataset.act === "demote")) {
+      state.hallConfirm = act.dataset.act === "hall" ? state.taskOpen : null;
+      state.demoteConfirm = act.dataset.act === "demote" ? state.taskOpen : null;
+      state.taskMode = "settings"; renderTaskDetail();
+      return;
+    }
     if (act) {
       const id = state.taskOpen; if (!id) return;
       const a = act.dataset.act, status = ACTIONS[a][1], D = taskDay();
