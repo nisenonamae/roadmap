@@ -389,6 +389,11 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
     </header>
     <div class="row" style="margin:0 0 .8rem"><button type="button" class="btn ghost" id="tk-new">タスクを足す</button></div>
     <div class="tk-bar">
+      <input id="tk-q" type="search" placeholder="名前で探す" style="flex:1 1 9rem;min-width:8rem;padding:.3rem .5rem;border:1px solid var(--rule);border-radius:3px;font:inherit;background:#fff">
+      <select id="tk-min"><option value="">すべての省</option></select>
+      <select id="tk-stat"><option value="">すべての状況</option></select>
+    </div>
+    <div class="tk-bar">
       <label>並べ方 <select id="tk-group"><option value="省">省ごと</option><option value="状況">状況ごと</option></select></label>
       <label>順番 <select id="tk-sort"><option value="name">名前順</option><option value="near">100%に近い順</option><option value="far">100%に遠い順</option></select></label>
     </div>
@@ -498,7 +503,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-05 r32";
+const APP_VERSION = "2026-10-05 r34";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -507,7 +512,8 @@ const PLAN_PATH = "roadmap/plan.json";
 const TASKDEFS_PATH = "roadmap/tasks/defs.json";
 const OVERLAY_PATH = "roadmap/tasks/overlay.json";     // アプリで足したもの。取り込み直しで消えない
 const TASKLOG_DIR = "roadmap/tasks/log";
-const APPLOG_DIR = "roadmap/tasks/applog";          // アプリでつけた記録。取り込みでは上書きされない
+const APPLOG_DIR = "roadmap/tasks/applog";
+const CUTOVER_PATH = "roadmap/tasks/cutover.json";   // 切り替え済みの印。あればNotionのタスク表はもう使っていない          // アプリでつけた記録。取り込みでは上書きされない
 const KEY_TKVIEW = "roadmap-tkview";
 const KEY_CKVIEW = "roadmap-ckview";
 const CHECK_SLOTS = ["朝", "昼", "一日中", "夜"];
@@ -566,6 +572,8 @@ const state = {
   overlay: { version: 1, tasks: {}, waveUrls: {}, newTasks: [] },
   overlaySha: null,
   taskOpen: null,
+  taskLoadError: null,
+  cutover: null,
   taskMode: null,            // "settings" で設定の欄を開いておく、"new" でタスクを足す画面
   recordOpen: null,          // チェックのタブで開いている記録の画面
 };
@@ -1661,38 +1669,16 @@ function waveKey(def, label){ return (((def.ministries || [])[0]) || "所属な�
 //   events       状況の変更(休止、再開、立て直し、アーカイブなど)。日付つきで積む
 //   generations  世代を上げた記録
 // 同じ変更が毎朝の取り込みでNotion側からも入ってくるが、2回効いても結果は同じになる
-const EDIT_KEYS = ["name", "slot", "stance", "interval", "weight", "requirement", "quota", "kind"];
 function effectiveDef(def){
   const ov = (state.overlay.tasks || {})[def.id] || {};
-  const e = ov.edits || {};
-  const out = Object.assign({}, def);
-  for (const k of EDIT_KEYS) if (e[k] !== undefined) out[k] = e[k];
-  if (Array.isArray(e.ministries)) out.ministries = e.ministries.slice();
-  if (Array.isArray(e.waves)) out.waves = e.waves.map(l => ({ label: l, url: "" }));
-  if (e.name && e.name !== def.name) out.aliases = Array.from(new Set((def.aliases || []).concat([def.name])));
-  const gens = (def.generations || []).map(g => Object.assign({}, g));
-  for (const g of ov.generations || []) if (!gens.some(x => x.gen === g.gen && x.from === g.from)) gens.push(Object.assign({}, g));
-  gens.sort((a, b) => a.from < b.from ? -1 : 1);
-  if (e.target !== undefined && e.target !== null && e.target !== "") {
-    const today = taskDay();
-    const cur = gens.filter(g => g.from <= today).pop();
-    if (cur) cur.target = +e.target; else gens.push({ gen: 1, from: def.created, target: +e.target });
-  }
-  out.generations = gens;
-  out.events = (def.events || []).concat(ov.events || []);
+  const out = window.TaskEngine.mergeOverlay(def, ov, taskDay());
   const urls = state.overlay.waveUrls || {};
   out.waves = (out.waves || []).map(w => ({ label: w.label, key: waveKey(out, w.label), url: urls[waveKey(out, w.label)] || w.url || "" }));
-  out.cycle = ov.cycle || def.cycle || null;
   return out;
 }
 
 // 取り込んだタスクと、アプリで足したタスク(まだNotionから戻ってきていないもの)を合わせる
-function allDefs(){
-  const defs = (state.taskDefs && state.taskDefs.tasks) || [];
-  const have = new Set(defs.map(d => d.id));
-  const extra = (state.overlay.newTasks || []).filter(t => !have.has(t.id));
-  return defs.concat(extra);
-}
+function allDefs(){ return window.TaskEngine.allDefs(state.taskDefs, state.overlay); }
 
 // タスクの番号。名前と作った日から決まる。取り込み(import_tasks.py)と同じ計算なので、
 // アプリで足したタスクがNotionを経由して戻ってきても同じ番号になる
@@ -1744,15 +1730,7 @@ function lastProgress(days){
 }
 
 // その日の記録。アプリでつけたものがあれば、取り込んだものより優先する
-function mergedLogFor(id){
-  return day => {
-    const m = day.slice(0, 7);
-    const a = ((state.taskLogs[m] || {})[day] || {})[id];
-    const b = ((state.appLogs[m] || {})[day] || {})[id];
-    if (!a && !b) return undefined;
-    return Object.assign({}, a || {}, b || {});
-  };
-}
+function mergedLogFor(id){ return window.TaskEngine.mergedLogFor(state.taskLogs, state.appLogs, id); }
 
 // 行軍表の今日のタブから、名前でタスクを引く(改名前の名前でも引ける)
 function taskByName(name){
@@ -1775,28 +1753,51 @@ function renderTasks(){
   const box = document.getElementById("tk-list");
   if (!box) return;
   const defs = state.taskDefs;
-  document.getElementById("tk-date").textContent = defs ? ("取り込み " + defs.importedUntil) : "—";
+  document.getElementById("tk-date").textContent = defs ? (state.cutover ? ("アプリで管理(" + state.cutover.date + "から)") : ("取り込み " + defs.importedUntil)) : "—";
   if (!defs) {
-    box.innerHTML = '<div class="empty">まだ取り込んでいません。notion-daily の Actions で Import tasks を動かしてください。</div>';
+    const why = state.taskLoadError ? '<p class="notice warn">読み込みに失敗しました:' + esc(state.taskLoadError) + "</p>" : "";
+    box.innerHTML = why + '<div class="empty">まだ取り込んでいません。毎朝5:20と7:20に自動で取り込みますが、今すぐ始めることもできます。</div>' +
+      '<div class="row"><button type="button" class="btn" data-import-now>今すぐ取り込む</button><span class="status" id="import-status"></span></div>' +
+      '<p class="hint" style="color:var(--sub);font-size:.82rem;margin-top:.5rem">取り込みには2〜3分かかります。終わったら接続タブの「データを読み込み直す」を押してください。</p>';
     document.getElementById("tk-detail").innerHTML = "";
-    document.getElementById("tk-today").innerHTML = "";
+    document.getElementById("tk-today").innerHTML = '<div class="empty">まだ取り込んでいません。タスクのタブから取り込めます。</div>';
     document.getElementById("tk-waves").innerHTML = "";
     return;
   }
+  state.taskLoadError = null;
   const ck = document.getElementById("ck-date");
   if (ck) ck.textContent = taskDay();
   const v = tkView();
   document.getElementById("tk-group").value = v.group;
   document.getElementById("tk-sort").value = v.sort;
-  const list = taskStates();
-  renderTodayRecords(list);
+  const order = { "熟達": 0, "定着": 1, "進行中": 2, "新規": 3, "実験": 4, "随時": 5, "要再設定": 6 };
+  const all = taskStates();
+  renderTodayRecords(all);
+
+  // 絞り込み:名前・省・状況
+  const q = (document.getElementById("tk-q").value || "").trim().toLowerCase();
+  const fm = document.getElementById("tk-min"), fs = document.getElementById("tk-stat");
+  const mins = Array.from(new Set(all.flatMap(t => t.def.ministries || []))).sort((a, b) => a.localeCompare(b, "ja"));
+  const stats = Array.from(new Set(all.map(t => t.status)));
+  const keep = (sel, opts) => {
+    const cur = sel.value;
+    sel.innerHTML = sel.options[0].outerHTML + opts.map(o => '<option' + (o === cur ? " selected" : "") + ">" + esc(o) + "</option>").join("");
+    if (!opts.includes(cur)) sel.value = "";
+  };
+  keep(fm, mins); keep(fs, stats.sort((a, b) => (order[a] ?? 9) - (order[b] ?? 9)));
+  const hit = t => (!q || t.def.name.toLowerCase().includes(q) || (t.def.aliases || []).some(a => a.toLowerCase().includes(q))) &&
+                   (!fm.value || (t.def.ministries || []).includes(fm.value)) &&
+                   (!fs.value || t.status === fs.value);
+  const list = all.filter(hit);
+  const filtering = !!(q || fm.value || fs.value);
 
   const live = list.filter(t => LIVE.includes(t.status));
   const count = st => list.filter(t => t.status === st).length;
   let html = '<div class="tk-sum">' + ["新規", "進行中", "定着", "熟達", "要再設定"].map(st =>
-    "<span>" + st + " <b>" + count(st) + "</b></span>").join("") + "</div>";
+    "<span>" + st + " <b>" + count(st) + "</b></span>").join("") +
+    (filtering ? '<span>絞り込み <b>' + list.length + "</b>件</span>" : "") + "</div>";
+  if (filtering && !list.length) html += '<div class="empty">一致するタスクがありません。</div>';
 
-  const order = { "熟達": 0, "定着": 1, "進行中": 2, "新規": 3, "実験": 4, "随時": 5, "要再設定": 6 };
   // 順番:名前、100%に近い順、遠い順。目標の無いものは後ろ
   const sorter = (a, b) => {
     if (v.sort !== "name") {
@@ -1821,9 +1822,9 @@ function renderTasks(){
         .concat(groups["所属なし"] ? ["所属なし"] : []);
   for (const g of names) {
     const arr = groups[g].sort(sorter);
-    const active = v.group === "状況" ? arr : arr.filter(t => t.status !== "要再設定");
-    const fallen = v.group === "状況" ? [] : arr.filter(t => t.status === "要再設定");
-    const body = (v.group === "状況" && g === "要再設定")
+    const active = (v.group === "状況" || filtering) ? arr : arr.filter(t => t.status !== "要再設定");
+    const fallen = (v.group === "状況" || filtering) ? [] : arr.filter(t => t.status === "要再設定");
+    const body = (v.group === "状況" && g === "要再設定" && !filtering)
       ? '<details class="more"><summary>開く</summary>' + active.map(taskRowHtml).join("") + "</details>"
       : active.map(taskRowHtml).join("");
     html += '<div class="tk-group"><h2>' + esc(g) + "<span>" + active.length + "件</span></h2>" + body +
@@ -2182,7 +2183,7 @@ function settingsHtml(t){
     taskFormHtml({ name: d.name, slot: d.slot, stance: d.stance, kind: d.kind, target: t.target, interval: d.interval,
                    weight: d.weight, quota: d.quota, requirement: d.requirement, ministries: d.ministries, waves: d.waves }, "edit") +
     '<div class="row"><button type="button" class="btn" data-edit-save>中身を保存する</button></div>' +
-    '<p class="note" style="font-size:.78rem;color:var(--sub)">変えたことは毎朝4:40にNotionへも書き写されます。</p>' +
+    (state.cutover ? "" : '<p class="note" style="font-size:.78rem;color:var(--sub)">変えたことは毎朝4:40にNotionへも書き写されます。</p>') +
     "</details>";
 }
 
@@ -2191,7 +2192,7 @@ function newTaskHtml(){
     taskFormHtml({ slot: "一日中", stance: "守", kind: "習慣型", target: 10 }, "new") +
     '<div class="row"><button type="button" class="btn" data-new-save>足す</button>' +
     '<button type="button" class="btn ghost" data-tk-close>やめる</button></div>' +
-    '<p class="note" style="font-size:.78rem;color:var(--sub)">今日から新規として始まります。毎朝4:40にNotionにも作られます。</p></div>';
+    '<p class="note" style="font-size:.78rem;color:var(--sub)">今日から新規として始まります。' + (state.cutover ? "" : "毎朝4:40にNotionにも作られます。") + "</p></div>";
 }
 
 async function commitOverlay(mutate){
@@ -2413,8 +2414,9 @@ async function loadAll(){
 
 async function loadTaskData(){
   try {
-    const [d, o, files, appFiles] = await Promise.all([
-      readJson(TASKDEFS_PATH), readJson(OVERLAY_PATH), listDir(TASKLOG_DIR), listDir(APPLOG_DIR)]);
+    const [d, o, files, appFiles, cut] = await Promise.all([
+      readJson(TASKDEFS_PATH), readJson(OVERLAY_PATH), listDir(TASKLOG_DIR), listDir(APPLOG_DIR), readJson(CUTOVER_PATH)]);
+    state.cutover = cut.data || null;
     if (!d.data) return;
     // 月ごとのファイルは、前回と同じ版(sha)なら手元に残したものを使う。重さを抑えるため
     const sync = async (dir, list, data, shas) => {
@@ -2456,8 +2458,29 @@ async function loadTaskData(){
     state.overlaySha = o.sha;
     taskCache.key = null;
   } catch (e) {
-    const st = document.getElementById("tk-status");
+    state.taskLoadError = e.message;
+    tkStatus(e.message, true);
+  }
+}
+
+// GitHubに「Import tasks を動かして」と頼む。トークンに Actions の権限が要る
+async function triggerImport(){
+  const st = document.getElementById("import-status");
+  if (!state.conn) { if (st) { st.classList.add("err"); st.textContent = "先に接続してください。"; } return false; }
+  if (st) { st.classList.remove("err"); st.textContent = "頼んでいます…"; }
+  const c = state.conn;
+  const url = "https://api.github.com/repos/" + encodeURIComponent(c.owner) + "/" + encodeURIComponent(c.repo) +
+              "/actions/workflows/import-tasks.yml/dispatches";
+  try {
+    const r = await fetch(url, { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }),
+                                 body: JSON.stringify({ ref: c.branch || "main" }) });
+    if (r.status === 204) { if (st) st.textContent = "取り込みを始めました。2〜3分後に接続タブで「データを読み込み直す」を押してください。"; return true; }
+    if (r.status === 403 || r.status === 401) throw new Error("トークンに Actions の権限がありません。GitHubのトークンの設定で「Actions: Read and write」を足してください。");
+    if (r.status === 404) throw new Error("import-tasks.yml が notion-daily の .github/workflows に見つかりません。");
+    throw new Error("GitHubとの通信に失敗しました(" + r.status + ")。");
+  } catch (e) {
     if (st) { st.classList.add("err"); st.textContent = e.message; }
+    return false;
   }
 }
 
@@ -2620,6 +2643,13 @@ function bind(){
     const f = toastUndo; toastUndo = null;
     document.getElementById("toast").hidden = true;
     if (f) f();
+  });
+
+  // 絞り込み
+  document.getElementById("tk-q").addEventListener("input", renderTasks);
+  ["tk-min", "tk-stat"].forEach(id => document.getElementById(id).addEventListener("change", renderTasks));
+  document.getElementById("tk-list").addEventListener("click", e => {
+    if (e.target.closest("[data-import-now]")) triggerImport();
   });
 
   // 並べ方
