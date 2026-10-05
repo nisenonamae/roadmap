@@ -388,6 +388,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
       <h1>チェック</h1>
       <div class="date" id="ck-date">—</div>
     </header>
+    <div class="seg" role="group" aria-label="記録する日"><button type="button" data-ckday="0" aria-pressed="true">今日</button><button type="button" data-ckday="1" aria-pressed="false">昨日</button></div>
     <div class="tk-bar">
       <label>並べ方 <select id="ck-sort">
         <option value="slot">時間帯</option><option value="prio">優先度順</option><option value="settle">定着度順</option>
@@ -523,7 +524,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-06 r39";
+const APP_VERSION = "2026-10-06 r40";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -2048,17 +2049,29 @@ function prioScore(t){
 const SETTLE_RANK = { "熟達": 6, "定着": 5, "進行中": 4, "新規": 3, "実験": 2, "随時": 2, "要再設定": 1 };
 function settleScore(t){ return (SETTLE_RANK[t.status] || 0) * 1e6 + t.streak * 1000 + t.best; }
 
+// チェックのタブで記録する日。今日か昨日(昨日の直しのため)
+function checkDay(){ return state.checkDayOffset ? addDays(taskDay(), -1) : taskDay(); }
+// その日の行で見たタスクの状態
+function dayView(t, day){
+  if (day === taskDay()) return t;
+  const row = (t.days || []).find(x => x.date === day) || null;
+  return row ? Object.assign({}, t, { row, check: row.check, status: row.status, streak: row.streak, miss: row.miss, cycle: null }) : Object.assign({}, t, { row: null });
+}
+
 function renderTodayRecords(list){
   const box = document.getElementById("tk-today");
   const sortSel = document.getElementById("ck-sort");
   const mode = Object.assign({ sort: "slot" }, lsGet(KEY_CKVIEW, {})).sort;
   if (sortSel) sortSel.value = mode;
-  const today = list.filter(t => t.row && LIVE.includes(t.status));
-  if (!today.length) { box.innerHTML = '<div class="empty">今日のタスクはありません。</div>'; return; }
+  const day = checkDay(), yday = day !== taskDay();
+  const today = list.map(t => dayView(t, day)).filter(t => t.row && LIVE.includes(t.status));
+  if (!today.length) { box.innerHTML = '<div class="empty">' + (yday ? "昨日" : "今日") + "のタスクはありません。</div>"; return; }
   const isDone = t => window.TaskEngine.DONE.has(t.check);
-  const open = today.filter(t => !isDone(t)), fin = today.filter(isDone);
-  let html = '<div class="rec-list"><h2>今日の記録　<span style="font-size:.8rem;color:var(--sub);font-weight:400">' +
-             fin.length + " / " + today.length + "</span></h2>";
+  // 済みにしても、その場に✓で残す(折りたたむのは今日のタブの行軍表だけ)
+  const open = today, fin = today.filter(isDone);
+  let html = '<div class="rec-list"><h2>' + (yday ? "昨日(" + day.slice(5).replace("-", "/") + ")の記録" : "今日の記録") + '　<span style="font-size:.8rem;color:var(--sub);font-weight:400">' +
+             fin.length + " / " + today.length + "</span></h2>" +
+             (yday ? '<p class="notice" style="font-size:.84rem">昨日の記録を直しています。直すと、今日の累計・連続・状況もすぐに数え直されます。国力には明日の朝の計算から入ります。</p>' : "");
   const recRow = t => {
     const done = isDone(t), miss = t.check === "不実行";
     const sub = [t.check || "未着手"];
@@ -2083,11 +2096,6 @@ function renderTodayRecords(list){
   } else {
     const score = mode === "prio" ? prioScore : settleScore;
     html += open.slice().sort((a, b) => (score(b) - score(a)) || byName(a, b)).map(recRow).join("");
-  }
-  if (!open.length) html += '<div class="empty">今日の分はすべて済みました。</div>';
-  if (fin.length) {
-    html += '<details class="more done-box"><summary>済み　' + fin.length + "件</summary>" +
-      fin.sort(byName).map(recRow).join("") + "</details>";
   }
   box.innerHTML = html + "</div>";
   if (flashTargetId) {
@@ -2143,7 +2151,8 @@ function taskRowHtml(t){
 function renderRecordSheet(){
   const box = document.getElementById("ck-detail");
   if (!box) return;
-  const t = state.recordOpen && taskStates().find(x => x.def.id === state.recordOpen);
+  const t0 = state.recordOpen && taskStates().find(x => x.def.id === state.recordOpen);
+  const t = t0 && dayView(t0, checkDay());
   if (!t || !t.row) { box.innerHTML = ""; return; }
   const d = t.def;
   let rec = "";
@@ -2857,9 +2866,17 @@ function bind(){
       const pg = val("progress");
       patch.progress = pg === "" ? null : Math.max(0, Math.min(100, +pg));
     }
-    const today = taskDay();
+    const today = checkDay();
     await commitAppLog(today, () => setAppRecord(today, id, patch));
   });
+
+  // 今日/昨日
+  document.querySelectorAll("[data-ckday]").forEach(b => b.addEventListener("click", () => {
+    state.checkDayOffset = +b.dataset.ckday;
+    document.querySelectorAll("[data-ckday]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    state.recordOpen = null;
+    renderTasks();
+  }));
 
   // チェックの並べ方
   document.getElementById("ck-sort").addEventListener("change", e => {
@@ -2909,18 +2926,18 @@ function bind(){
   document.getElementById("tk-today").addEventListener("click", async e => {
     const q = e.target.closest("[data-quick]");
     const r = e.target.closest("[data-record]");
-    const today = taskDay();
+    const today = checkDay();
     if (q) {
       const id = q.dataset.quick;
-      const t = taskStates().find(x => x.def.id === id);
-      const on = !(t && window.TaskEngine.DONE.has(t.check));
+      const t0 = taskStates().find(x => x.def.id === id);
+      const t = t0 && dayView(t0, today);
+      if (!t || !t.row) return;
+      const on = !window.TaskEngine.DONE.has(t.check);
       const before = (((state.appLogs[today.slice(0, 7)] || {})[today] || {})[id] || {}).check || null;
-      if (!on) { flashTargetId = id; await commitAppLog(today, () => setAppRecord(today, id, { check: uncheckValue(today, t) })); return; }
-      // いったん✓にして一呼吸おいてから、済みの折りたたみへ移す
-      q.classList.add("on"); q.textContent = "✓";
-      const timer = setTimeout(() => commitAppLog(today, () => setAppRecord(today, id, { check: "完了" })), DONE_DELAY());
+      if (!on) { await commitAppLog(today, () => setAppRecord(today, id, { check: uncheckValue(today, t) })); return; }
+      await commitAppLog(today, () => setAppRecord(today, id, { check: "完了" }));
       showToast("「" + t.def.name + "」を完了にしました", () => {
-        clearTimeout(timer); flashTargetId = id;
+        flashTargetId = id;
         commitAppLog(today, () => setAppRecord(today, id, { check: before }));
       });
       return;
