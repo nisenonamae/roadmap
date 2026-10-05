@@ -503,7 +503,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-05 r34";
+const APP_VERSION = "2026-10-05 r35";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -665,9 +665,27 @@ function authHeaders(extra){
   }, extra || {});
 }
 
+// 通信が途中で落ちたら(スマホの回線で起きやすい)、少し待って取り直す
+async function fetchRetry(url, opts, tries){
+  tries = tries || 3;
+  let last;
+  for (let i = 0; i < tries; i++) {
+    try { return await fetch(url, opts); }
+    catch (e) { last = e; await new Promise(r => setTimeout(r, 600 * (i + 1))); }
+  }
+  throw last;
+}
+function netError(path, e){
+  const err = new Error(path + " を読めませんでした(" + (e && e.message ? e.message : "通信の失敗") + ")。電波のよい所で「データを読み込み直す」を押してください。");
+  err.network = true;
+  return err;
+}
+
 async function readJson(path){
   const url = apiUrl(path) + "?ref=" + encodeURIComponent(state.conn.branch);
-  const r = await fetch(url, { headers: authHeaders(), cache: "no-store" });
+  let r;
+  try { r = await fetchRetry(url, { headers: authHeaders(), cache: "no-store" }); }
+  catch (e) { throw netError(path, e); }
   if (r.status === 404) return { data: null, sha: null };
   if (!r.ok) throw new Error(describeHttp(r.status, path));
   const meta = await r.json();
@@ -675,17 +693,28 @@ async function readJson(path){
   if (meta.content) {
     text = b64decode(meta.content);
   } else {
-    // 1MBを超えるとcontentが省かれる。そのときは中身だけ取り直す
-    const raw = await fetch(url, { headers: authHeaders({ "Accept": "application/vnd.github.raw+json" }), cache: "no-store" });
-    if (!raw.ok) throw new Error(describeHttp(raw.status, path));
-    text = await raw.text();
+    // 1MBを超えるとcontentが省かれる。そのときは中身だけ取り直す。だめなら直接のリンクから
+    try {
+      const raw = await fetchRetry(url, { headers: authHeaders({ "Accept": "application/vnd.github.raw+json" }), cache: "no-store" });
+      if (!raw.ok) throw new Error(describeHttp(raw.status, path));
+      text = await raw.text();
+    } catch (e) {
+      if (!meta.download_url) throw netError(path, e);
+      try {
+        const raw2 = await fetchRetry(meta.download_url, { cache: "no-store" });
+        if (!raw2.ok) throw new Error(describeHttp(raw2.status, path));
+        text = await raw2.text();
+      } catch (e2) { throw netError(path, e2); }
+    }
   }
   return { data: JSON.parse(text), sha: meta.sha };
 }
 
 async function listDir(path){
   const url = apiUrl(path) + "?ref=" + encodeURIComponent(state.conn.branch);
-  const r = await fetch(url, { headers: authHeaders(), cache: "no-store" });
+  let r;
+  try { r = await fetchRetry(url, { headers: authHeaders(), cache: "no-store" }); }
+  catch (e) { throw netError(path, e); }
   if (r.status === 404) return [];
   if (!r.ok) throw new Error(describeHttp(r.status, path));
   const list = await r.json();
@@ -2422,12 +2451,18 @@ async function loadTaskData(){
     const sync = async (dir, list, data, shas) => {
       const months = list.filter(f => /^\d{4}-\d{2}\.json$/.test(f.name));
       const outData = {}, outSha = {};
-      await Promise.all(months.map(async f => {
-        const m = f.name.slice(0, 7);
-        if (shas[m] && shas[m] === f.sha && data[m]) { outData[m] = data[m]; outSha[m] = f.sha; return; }
-        const got = await readJson(dir + "/" + f.name);
-        outData[m] = got.data || {}; outSha[m] = got.sha;
-      }));
+      // 一度にたくさん取りに行くとスマホの回線で落ちやすいので、2つずつ
+      const queue = months.slice();
+      const worker = async () => {
+        while (queue.length) {
+          const f = queue.shift();
+          const m = f.name.slice(0, 7);
+          if (shas[m] && shas[m] === f.sha && data[m]) { outData[m] = data[m]; outSha[m] = f.sha; continue; }
+          const got = await readJson(dir + "/" + f.name);
+          outData[m] = got.data || {}; outSha[m] = got.sha;
+        }
+      };
+      await Promise.all([worker(), worker()]);
       return [outData, outSha];
     };
     const [logs, logShas] = await sync(TASKLOG_DIR, files, state.taskLogs, state.taskLogShas);
