@@ -229,10 +229,14 @@
   }
 
   // 取り込んだタスクと、アプリで足したタスク(まだ取り込みに戻ってきていないもの)を合わせる
-  function allDefs(defsDoc, overlay) {
+  // 削除の印を付けたものは除く(戻せるように、印だけで消す)
+  function allDefs(defsDoc, overlay, withDeleted) {
     const defs = (defsDoc && defsDoc.tasks) || [];
     const have = new Set(defs.map(d => d.id));
-    return defs.concat(((overlay && overlay.newTasks) || []).filter(t => !have.has(t.id)));
+    const all = defs.concat(((overlay && overlay.newTasks) || []).filter(t => !have.has(t.id)));
+    if (withDeleted) return all;
+    const ov = (overlay && overlay.tasks) || {};
+    return all.filter(d => !(ov[d.id] && ov[d.id].deleted));
   }
 
   // その日の記録。アプリでつけたものがあれば、取り込んだものより優先する
