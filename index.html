@@ -530,7 +530,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-06 r41";
+const APP_VERSION = "2026-10-06 r42";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -1966,6 +1966,9 @@ function renderTasks(){
     html += '<details class="more"><summary>休止中・終わったもの　' + rest.length + "件</summary>" +
       rest.sort((a, b) => a.def.name.localeCompare(b.def.name, "ja")).map(taskRowHtml).join("") + "</details>";
   }
+  const gone = window.TaskEngine.allDefs(state.taskDefs, state.overlay, true).filter(d => ((state.overlay.tasks || {})[d.id] || {}).deleted);
+  if (gone.length) html += '<details class="more" style="margin-top:1rem"><summary>削除したタスク ' + gone.length + "件</summary>" +
+    gone.map(d => '<div class="chg"><span>' + esc(((state.overlay.tasks || {})[d.id].edits || {}).name || d.name) + '</span><span><button type="button" class="btn ghost" data-task-restore="' + esc(d.id) + '">戻す</button></span></div>').join("") + "</details>";
   box.innerHTML = html;
   renderWaveLinks(list);
   renderTaskDetail();
@@ -2432,6 +2435,8 @@ function settingsHtml(t){
                    weight: d.weight, quota: d.quota, requirement: d.requirement, ministries: d.ministries, waves: d.waves }, "edit") +
     '<div class="row"><button type="button" class="btn" data-edit-save>中身を保存する</button></div>' +
     (state.cutover ? "" : '<p class="note" style="font-size:.78rem;color:var(--sub)">変えたことは毎朝4:40にNotionへも書き写されます。</p>') +
+    '<h3>削除</h3><p class="note" style="font-size:.78rem;color:var(--sub)">間違えて作った・二重にできたタスク向け。記録ごと国力の計算から外れます。やめただけのタスクは、状況の「アーカイブ」を使ってください。削除したあとも、一覧の一番下から戻せます。</p>' +
+    '<button type="button" class="btn ghost" data-task-delete style="border-color:#B3283C;color:#B3283C">このタスクを削除する</button>' +
     "</details>";
 }
 
@@ -2933,8 +2938,12 @@ function bind(){
   // 絞り込み
   document.getElementById("tk-q").addEventListener("input", renderTasks);
   ["tk-min", "tk-stat"].forEach(id => document.getElementById(id).addEventListener("change", renderTasks));
-  document.getElementById("tk-list").addEventListener("click", e => {
+  document.getElementById("tk-list").addEventListener("click", async e => {
     if (e.target.closest("[data-import-now]")) triggerImport();
+    const rb = e.target.closest("[data-task-restore]");
+    if (rb) { const id = rb.dataset.taskRestore;
+      await commitOverlay(() => { const o = state.overlay.tasks[id] = Object.assign({}, state.overlay.tasks[id] || {}); delete o.deleted; delete o.deletedAt; });
+      tkStatus("戻しました"); }
   });
 
   // 並べ方
@@ -2986,6 +2995,13 @@ function bind(){
     if (e.target.closest("[data-tk-close]")) { state.taskOpen = null; state.taskMode = null; renderTaskDetail(); return; }
 
     // 状況の操作
+    if (e.target.closest("[data-task-delete]")) {
+      const id = state.taskOpen, t = taskStates().find(x => x.def.id === id); if (!t) return;
+      if (!confirm("「" + t.def.name + "」を削除しますか。記録ごと国力の計算から外れます(一覧の一番下から戻せます)。")) return;
+      await commitOverlay(() => { const o = state.overlay.tasks[id] = Object.assign({}, state.overlay.tasks[id] || {}); o.deleted = true; o.deletedAt = taskDay(); });
+      state.taskOpen = null; state.taskMode = null; renderTasks(); tkStatus("削除しました。一覧の一番下から戻せます。");
+      return;
+    }
     if (e.target.closest("[data-hall-cancel]")) { state.hallConfirm = null; renderTaskDetail(); return; }
     if (e.target.closest("[data-demote-cancel]")) { state.demoteConfirm = null; renderTaskDetail(); return; }
     const hallOk = e.target.closest("[data-hall-ok]");
