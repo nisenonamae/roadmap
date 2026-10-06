@@ -124,6 +124,8 @@
       // 取り込んだ最後の日に、ルールでは行が立つはずなのにNotionに行が無かったタスクは、
       // Notionでもうやめていたもの。切り替えのあとは行を立てず、アーカイブとして扱う
       // (実行間隔で休みの日だったものは、行が無くて当然なので当てはまらない)
+      // STAGE・WAVEが「進行中」でない日は、そのタスクの行を立てない(切り替えた日から効く。過去は書き換えない)
+      if (def.gate && day >= def.gate.start && !gateOpen(def.gate, day) && !rec) continue;
       if (imported && day === imported && !rec && !def.noDrop && GENERATED.has(st.status) && isDue(def.interval, day, st.lastDone)) {
         st.status = "アーカイブ"; st.dropped = imported;
         continue;
@@ -272,5 +274,36 @@
     };
   }
 
-  return { replay, makeLogFor, cycleIndex, mergeOverlay, allDefs, mergedLogFor, targetAt, nextStatus, isDue, addDays, daysBetween, DONE, EXCUSED, AUTO_DONE, GENERATED, RULES };
+
+  // ── STAGE・WAVEの状態で、タスクを効かせるかどうか ──
+  // ページの状態の記録(statusLog)から「進行中」の期間を出し、結びついたタスクに gate を付ける
+  function gateOpen(g, day){ return g.ranges.some(([a, z]) => day >= a && (!z || day < z)); }
+  const normSt = s => (s === "未着手" || !s) ? "作成中" : s;
+  function applyGates(defs, pagesDoc){
+    const ps = ((pagesDoc && pagesDoc.pages) || []).filter(p => !p.deleted && !p.imported && (p.kind === "STAGE" || p.kind === "WAVE"));
+    if (!ps.length) return defs;
+    const all = (pagesDoc.pages || []);
+    const tagOf = p => { let c = p, g = 0; while (c && g++ < 50) { if (String(c.parent).indexOf("m:") === 0) return c.parent.slice(2); const pid = c.parent; c = all.find(x => x.id === pid); } return null; };
+    const byId = new Map(ps.map(p => [p.id, p]));
+    const byKey = new Map(ps.map(p => [tagOf(p) + "|" + String(p.label).toUpperCase(), p]));
+    return defs.map(d => {
+      const linked = [];
+      for (const w of d.waves || []) {
+        const m = /#page=([\w-]+)/.exec((w && w.url) || "");
+        let p = m ? byId.get(m[1]) : null;
+        if (!p) { const lab = String((w && w.label) || w || "").replace(/\s+/g, "").toUpperCase(); for (const t of d.ministries || []) { p = byKey.get(t + "|" + lab); if (p) break; } }
+        if (p && linked.indexOf(p) < 0) linked.push(p);
+      }
+      if (!linked.length) return d;
+      const ranges = []; let start = null;
+      for (const p of linked) {
+        const log = (p.statusLog && p.statusLog.length ? p.statusLog : [{ date: p.created || "2000-01-01", status: p.status }]).slice().sort((a, b) => a.date < b.date ? -1 : 1);
+        if (!start || log[0].date < start) start = log[0].date;
+        log.forEach((x, i) => { if (normSt(x.status) === "進行中") ranges.push([x.date, log[i + 1] ? log[i + 1].date : null]); });
+      }
+      return Object.assign({}, d, { gate: { start, ranges } });
+    });
+  }
+
+  return { applyGates, gateOpen, replay, makeLogFor, cycleIndex, mergeOverlay, allDefs, mergedLogFor, targetAt, nextStatus, isDue, addDays, daysBetween, DONE, EXCUSED, AUTO_DONE, GENERATED, RULES };
 });
