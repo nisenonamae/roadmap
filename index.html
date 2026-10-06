@@ -92,6 +92,20 @@ button,input,select{font:inherit;color:inherit}
 .rem-box .rb-i span{font-size:.82rem;color:var(--sub)}
 .rem-box .rb-i.over span{color:#B3283C}
 .rem-box .rb-f{font-size:.72rem;color:var(--sub);margin-top:.2rem}
+.flowtag{color:#2F6E8A;border:1px solid #2F6E8A;border-radius:3px;padding:0 .35rem;font-size:.72rem}
+.flow-card{border:1px solid var(--rule);border-radius:4px;padding:.6rem .7rem;margin:.5rem 0;background:#fff}
+.flow-card .steps{display:flex;flex-wrap:wrap;gap:.3rem;align-items:center;margin:.4rem 0}
+.flow-card .step{border:1px solid #2F6E8A;border-radius:4px;padding:.15rem .4rem;display:flex;flex-wrap:wrap;gap:.25rem;align-items:center}
+.flow-card .chip{background:#EEF4F7;border-radius:3px;padding:0 .35rem;font-size:.84rem}
+.flow-card .chip button{border:none;background:none;cursor:pointer;color:var(--sub);padding:0 0 0 .2rem}
+.flow-card .arrow{color:var(--sub)}
+.flow-rate{border:1px solid #2F6E8A;background:#EEF4F7;border-radius:4px;padding:.5rem .8rem;margin:0 0 1rem}
+.flow-rate button{border:1px solid #2F6E8A;background:#fff;border-radius:3px;margin-right:.25rem;padding:.15rem .55rem;cursor:pointer;font:inherit}
+.now-line{display:flex;align-items:center;gap:.5rem;margin:.3rem 0;color:#B3283C;font-size:.78rem;font-weight:700}
+.now-line::before,.now-line::after{content:"";flex:1;height:2px;background:#B3283C}
+.stop.now{background:#FFF4E5;border-radius:4px;box-shadow:inset 3px 0 0 #B3283C}
+.late{color:#fff;background:#B3283C;border-radius:3px;padding:0 .35rem;font-size:.72rem}
+.over-today{opacity:.85}
 .staff-banner{background:#1D2430;color:#EEF1F0;border-radius:4px;padding:.7rem .9rem;margin:0 0 1rem}
 .staff-banner .sb-term{font-size:.78rem;opacity:.75;letter-spacing:.1em}
 .staff-banner .sb-slogan{font-size:1.05rem;font-weight:700;line-height:1.4}
@@ -441,6 +455,15 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
     </div>
 
     <div class="sec">
+      <h2>流れ</h2>
+      <p class="hint">続けやすい一連の型を組みます。1つの段に複数のタスクを入れると同時にやり、段は上から順に続けます。時刻表の中ではひとまとまりとして置かれます。</p>
+      <div id="flows-edit"></div>
+      <button class="btn ghost" id="add-flow" type="button" style="margin-top:.6rem">流れを作る</button>
+      <h3 style="margin-top:1.2rem;font-size:.95rem">見つかった流れの候補</h3>
+      <div id="flow-finds"></div>
+    </div>
+
+    <div class="sec">
       <h2>よく使う用事</h2>
       <p class="hint">登録すると、今日の画面のボタン1つで入れられます。曜日を選ぶと、その曜日は何もしなくても自動で入ります。</p>
       <div id="presets-edit"></div>
@@ -530,7 +553,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-06 r43";
+const APP_VERSION = "2026-10-06 r45";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -869,6 +892,19 @@ function remindersHtml(){
     '<div class="rb-f">済みにするのは思案のアプリで</div></div>';
 }
 
+// 流れを通しで回せた日は、疲れにくさを聞く
+function flowRateHtml(){
+  const d = taskDay(), recs = ((state.appLogs[d.slice(0, 7)] || {})[d]) || {};
+  const byName = new Map(taskStates().map(t => [t.def.name, t]));
+  return (state.settings.flows || []).filter(f => f.enabled !== false).map(f => {
+    const ts = f.steps.flat().map(n => byName.get(n)).filter(t => t && t.row);
+    if (!ts.length || !ts.every(t => window.TaskEngine.DONE.has(t.check)) || (recs["__flow:" + f.id] || {}).ease) return "";
+    return '<div class="flow-rate">「' + esc(f.name) + "」を通しで回せました。疲れにくさは?　" +
+      [1, 2, 3, 4, 5].map(n => '<button type="button" data-flow-ease="' + esc(f.id) + ":" + n + '">' + n + "</button>").join("") +
+      '<div style="font-size:.74rem;color:var(--sub)">5がいちばん楽</div></div>';
+  }).join("");
+}
+
 function staffBanner(){
   const term = staffTerm(), emg = ((state.staff && state.staff.emergencies) || []).filter(e => !e.resolvedAt);
   if (!term && !emg.length) return "";
@@ -877,7 +913,8 @@ function staffBanner(){
     (emg.length ? '<div class="sb-emg">参謀本部で緊急会議が ' + emg.length + " 件あります。省アプリで決めるまで消えません。</div>" : "") + "</div>";
 }
 
-function buildPlan(tasksDoc, settings, doneLocal, events){
+function buildPlan(tasksDoc, settings, doneLocal, events, nowMin){
+  const REAL = nowMin != null;
   const STAFF_FIRST = staffNames();
   const GONE = deletedNames();
   if (GONE.size && tasksDoc && tasksDoc.tasks) tasksDoc = Object.assign({}, tasksDoc, { tasks: tasksDoc.tasks.filter(t => !GONE.has(t.name)) });
@@ -966,14 +1003,39 @@ function buildPlan(tasksDoc, settings, doneLocal, events){
   const byBlock = {}; blockNames.forEach(n => byBlock[n] = []);
   const flex = [];
   const all = [];
+  // 設定で所要時間などを決めていないタスクは、時刻表に入れない(やってもやらなくてもいい扱い)
+  // ただし流れに入れたタスクは、流れの一部として時刻表に入れる
+  const FLOWS = (settings.flows || []).filter(f => f.enabled !== false && (f.steps || []).some(st => st.length));
+  const inFlow = new Set(FLOWS.flatMap(f => f.steps.flat()));
+  const loose = [];
   for (const t of groups.schedulable) {
     const x = { task: t, c: cfgOf(settings, t.name) };
     all.push(x);
+    if (!t.done && !x.c.configured && !inFlow.has(t.name)) { loose.push(x); continue; }
     if (byBlock[t.slot]) byBlock[t.slot].push(x); else flex.push(x);
   }
 
   // 「この後に続ける」で繋いだタスクは、ひとつながりとして動かす。
   // 軽いほうを先に踏めば、重いほうもそのまま続けられるため。
+  // 流れ:段ごとに、いちばん長いタスクを主にし、同じ段の残りは同時(ながら)に。段と段は「続ける」で繋ぐ
+  {
+    const xBy = new Map(all.map(x => [x.task.name, x]));
+    for (const f of FLOWS) {
+      const steps = f.steps.map(st => st.map(n => xBy.get(n)).filter(x => x && !x.task.done)).filter(st => st.length);
+      if (!steps.length) continue;
+      steps.forEach(st => st.sort((a, b) => b.c.min - a.c.min));
+      steps.forEach((st, k) => {
+        const p = st[0];
+        p.c = Object.assign({}, p.c, { next: steps[k + 1] ? steps[k + 1][0].task.name : (p.c.next || ""), configured: true });
+        p.flow = { name: f.name, step: k + 1, of: steps.length };
+        p.flowCompanions = st.slice(1);
+        st.slice(1).forEach(cx => { cx.flowCompanion = true; cx.c = Object.assign({}, cx.c, { configured: true }); });
+      });
+    }
+    const dropCompanions = pool => { for (let i = pool.length - 1; i >= 0; i--) if (pool[i].flowCompanion) pool.splice(i, 1); };
+    [flex].concat(Object.values(byBlock)).forEach(dropCompanions);
+  }
+  const withCompanions = (it, x) => { if (x.flowCompanions && x.flowCompanions.length) it.nagara = x.flowCompanions.concat(it.nagara || []); it.flow = x.flow || null; return it; };
   const byName = new Map(all.map(x => [x.task.name, x]));
   const chained = new Set();
   for (const x of all) {
@@ -1023,7 +1085,7 @@ function buildPlan(tasksDoc, settings, doneLocal, events){
   function mkItem(x, at){
     const s = x.isEvent ? toMin(x.ev.start) : at;
     const e = x.isEvent ? toMin(x.ev.end) : at + x.c.min;
-    return { task: x.task, c: x.c, start: s, end: e, nagara: [], transferFrom: null,
+    return { task: x.task, c: x.c, start: s, end: e, nagara: [], transferFrom: null, late: !!x.late,
              isEvent: !!x.isEvent, ev: x.ev || null, sequential: false };
   }
   function transfer(prev, x){
@@ -1039,23 +1101,38 @@ function buildPlan(tasksDoc, settings, doneLocal, events){
   });
 
   const blocks = [];
+  const carry = [];          // 今の時刻で、前の枠からあふれた・遅れたタスク
   for (const b of ordered) {
-    const pool = byBlock[b.name] || [];
-    let fixed = pool.filter(x => x.c.fixed).concat(evInBlock[b.name])
+    let pool = byBlock[b.name] || [];
+    if (REAL) {
+      if (b.end <= nowMin) {
+        // 終わった枠:済んでいないものは遅れとして後ろへ回す(済んだものはこの枠に残す)
+        for (const x of pool) if (!x.task.done) { x.late = true; carry.push(x); }
+        pool = pool.filter(x => x.task.done);
+      } else {
+        // 時刻を過ぎた固定のタスクは、固定を外して今から
+        pool.forEach(x => { if (!x.task.done && x.c.fixed && toMin(x.c.fixed) < nowMin) { x.c = Object.assign({}, x.c, { fixed: "" }); x.late = true; } });
+        // 前の枠から回ってきたものも、この枠の候補に入れる
+        while (carry.length) pool.push(carry.shift());
+      }
+    }
+    let fixed = pool.filter(x => x.c.fixed).concat(REAL && b.end <= nowMin ? [] : evInBlock[b.name])
       .sort((p, q) => toMin(p.c.fixed) - toMin(q.c.fixed));
     const rest = pool.filter(x => !x.c.fixed);
     const items = [];
-    let cursor = b.start, prev = null;
+    let cursor = REAL ? Math.max(b.start, Math.min(b.end, nowMin)) : b.start, prev = null;
+    if (REAL && b.end <= nowMin) cursor = b.end;
+    const roomOk = x => !REAL || chainLen(x) <= b.end - cursor;
 
     const place = (x, at) => {
-      const it = mkItem(x, at);
+      const it = withCompanions(mkItem(x, at), x);
       it.transferFrom = transfer(prev, x);
       if (x.isEvent) attachSeq(it, [rest, flex]); else attach(it, [rest, flex]);
       items.push(it);
       if (!x.task.done) { prev = x; cursor = Math.max(cursor, it.end); }
       // 続けるタスクを、そのまま後ろに繋げる
       for (const nx of chainList(x)) {
-        const nit = mkItem(nx, cursor);
+        const nit = withCompanions(mkItem(nx, cursor), nx);
         nit.afterChain = true;
         attach(nit, [rest, flex]);
         items.push(nit);
@@ -1070,7 +1147,7 @@ function buildPlan(tasksDoc, settings, doneLocal, events){
       const fAt = nf ? toMin(nf.c.fixed) : Infinity;
       if (nf && fAt <= cursor) { fixed.shift(); place(nf, Math.max(cursor, fAt)); continue; }
       const gap = fAt - cursor;
-      const pick = pickBest(rest, prev, x => chainLen(x) <= gap);
+      const pick = pickBest(rest, prev, x => x.task.done || (chainLen(x) <= gap && roomOk(x)));
       if (!pick) {
         if (nf) { fixed.shift(); place(nf, fAt); continue; }
         break;
@@ -1078,9 +1155,12 @@ function buildPlan(tasksDoc, settings, doneLocal, events){
       rest.splice(rest.indexOf(pick), 1);
       place(pick, cursor);
     }
+    // 今の時刻で入りきらなかったものは、後の枠へ(優先度の高いものから詰めたので、残るのは低いもの)
+    if (REAL) for (const x of rest) { if (!x.task.done) { carry.push(x); } else place(x, cursor); }
     // 枠に空きがあれば「一日中」のタスクで埋める
     while (true) {
       const room = b.end - cursor;
+      if (REAL && b.end <= nowMin) break;
       const pick = pickBest(flex, prev, x => !x.c.fixed && chainLen(x) <= room);
       if (!pick) break;
       flex.splice(flex.indexOf(pick), 1);
@@ -1096,19 +1176,23 @@ function buildPlan(tasksDoc, settings, doneLocal, events){
                   used: cursor - b.start, overflow: Math.max(0, cursor - b.end) });
   }
 
+  // 今の時刻で、どの枠にも入りきらなかったもの(優先度の低いもの)
+  const overflowToday = REAL ? carry.splice(0).concat(flex.filter(x => !x.task.done && ordered.length && ordered[ordered.length - 1].end <= nowMin))
+    .map(x => ({ task: x.task, c: x.c, nagara: [], late: !!x.late })) : [];
+  if (REAL && ordered.length && ordered[ordered.length - 1].end <= nowMin) for (let i = flex.length - 1; i >= 0; i--) if (!flex[i].task.done) flex.splice(i, 1);
   // 入りきらなかった「一日中」は、場所と型がつながる順に並べる
   const leftover = [];
   let prev = null;
   while (flex.length) {
     const pick = pickBest(flex, prev);
     flex.splice(flex.indexOf(pick), 1);
-    const it = { task: pick.task, c: pick.c, nagara: [], transferFrom: transfer(prev, pick) };
+    const it = withCompanions({ task: pick.task, c: pick.c, nagara: [], transferFrom: transfer(prev, pick) }, pick);
     attach(it, [flex]);
     leftover.push(it);
     prev = pick;
     for (const nx of chainList(pick)) {
       take(nx, flex);
-      const nit = { task: nx.task, c: nx.c, nagara: [], transferFrom: null, afterChain: true };
+      const nit = withCompanions({ task: nx.task, c: nx.c, nagara: [], transferFrom: null, afterChain: true }, nx);
       attach(nit, [flex]);
       leftover.push(nit);
       prev = nx;
@@ -1120,16 +1204,22 @@ function buildPlan(tasksDoc, settings, doneLocal, events){
     .concat(alone.map(it => ({ type: "event", start: it.start, item: it })))
     .sort((p, q) => p.start - q.start);
 
-  const unconfigured = groups.schedulable.filter(t => !t.done && !(settings.tasks || {})[t.name]).length;
+  const unconfigured = loose.length;
   return { blocks, alone, sections, leftover, done: groups.done, reset: groups.reset,
-           ondemand: groups.ondemand, unconfigured };
+           ondemand: groups.ondemand, unconfigured, loose: loose.map(x => x.task), overflowToday };
 }
 
 /* ───────── 描画:今日 ───────── */
 
+function nowHM(){ const t = new Date(Date.now() + 9 * 3600e3); return window.__roadmapNowHM || t.toISOString().slice(11, 16); }
+function nowMinutes(){
+  const t = new Date(Date.now() + 9 * 3600e3), h = t.getUTCHours(), m = t.getUTCMinutes();
+  return window.__roadmapNowMin != null ? window.__roadmapNowMin : (h < 5 ? h + 24 : h) * 60 + m;
+}
+
 function renderToday(){
   const sbBox = document.getElementById("staff-banner");
-  if (sbBox) sbBox.innerHTML = staffBanner() + remindersHtml();
+  if (sbBox) sbBox.innerHTML = staffBanner() + remindersHtml() + flowRateHtml();
   const doc = state.tasksDoc;
   const dateEl = document.getElementById("date");
   const notices = document.getElementById("notices");
@@ -1157,7 +1247,10 @@ function renderToday(){
   for (const t of taskStates()) {
     if (t.row && window.TaskEngine.DONE.has(t.check)) { done.add(t.def.name); (t.def.aliases || []).forEach(a => done.add(a)); }
   }
-  const plan = buildPlan(doc, state.settings, done, events);
+  // 今日の一覧なら、今の時刻で組み直す
+  const real = doc.date === taskDay() && state.settings.realtime !== false && window.__roadmapRealtime !== false;
+  const nowMin = real ? nowMinutes() : null;
+  const plan = buildPlan(doc, state.settings, done, events, nowMin);
   const places = state.settings.places || [];
 
   const over = plan.blocks.filter(b => b.overflow > 0);
@@ -1166,10 +1259,7 @@ function renderToday(){
       over.map(b => esc(b.name) + "は" + dur(b.overflow) + "あふれています").join("。") +
       "。枠を広げるか、タスクを減らしてください。</p>");
   }
-  if (plan.unconfigured > 0) {
-    notices.insertAdjacentHTML("beforeend", '<p class="notice">まだ設定していないタスクが' +
-      plan.unconfigured + "件あります。設定タブで所要時間と場所を入れると、組み立てが正確になります。</p>");
-  }
+
 
   let html = "";
   const finished = [];
@@ -1187,11 +1277,26 @@ function renderToday(){
             (b.overflow > 0 ? '<span class="over">' + dur(b.used) + " / " + dur(b.end - b.start) + "</span>"
                             : dur(b.used) + " / " + dur(b.end - b.start)) +
             "</span></div>";
-    for (const it of b.items) html += stopHtml(it, fmt(it.start), places);
+    let nowShown = false;
+    for (const it of b.items) {
+      // 今の時刻の線:今やるタスクを目立たせ、まだ始まっていなければその手前に線を引く
+      if (real && !nowShown && b.start <= nowMin && nowMin < b.end && !it.isEvent && it.start >= nowMin) {
+        html += '<div class="now-line"><span>いま ' + fmt(nowMin) + "</span></div>"; nowShown = true;
+      }
+      let one = stopHtml(it, fmt(it.start), places);
+      if (real && it.start <= nowMin && nowMin < it.end) { one = one.replace('class="stop', 'class="stop now'); nowShown = true; }
+      html += one;
+    }
     html += "</div>";
   }
   finished.push(...plan.leftover.filter(it => it.task && it.task.done));
   plan.leftover = plan.leftover.filter(it => !(it.task && it.task.done));
+  if (plan.overflowToday && plan.overflowToday.length) {
+    html += '<div class="block over-today"><div class="block-head"><h2>今日は入りきらない</h2><span class="span">優先度の低いものから</span></div>' +
+      '<p class="note" style="font-size:.8rem;color:var(--sub);margin:.2rem 0 .4rem">残りの枠に入りきらなかったタスクです。時間ができたらどうぞ。</p>';
+    for (const it of plan.overflowToday) html += stopHtml(it, "", places);
+    html += "</div>";
+  }
   if (plan.leftover.length) {
     const total = plan.leftover.reduce((s, it) => s + it.c.min, 0);
     html += '<div class="block"><div class="block-head"><h2>空いた時間に</h2>' +
@@ -1207,6 +1312,7 @@ function renderToday(){
         '">戻す</button></li>').join("") + "</ul></details>";
   }
   const extra = [];
+  if (plan.loose && plan.loose.length) extra.push(['時間を決めていないタスク(やってもやらなくても)', plan.loose]);
   if (plan.ondemand.length) extra.push(['随時(条件が来たら)', plan.ondemand]);
   if (plan.reset.length) extra.push(['要再設定', plan.reset]);
 
@@ -1245,6 +1351,8 @@ function stopHtml(it, time, places){
   }
   const done = !it.isEvent && it.task.done;
   const meta = [];
+  if (it.late && !done) meta.push('<span class="late">遅れ</span>');
+  if (it.flow) meta.push('<span class="flowtag">流れ:' + esc(it.flow.name) + " " + it.flow.step + "/" + it.flow.of + "</span>");
   meta.push('<span class="pl">' + esc(c.place) + "</span>");
   if (it.isEvent) {
     meta.push('<span class="span-t">' + fmt(it.start) + "–" + fmt(it.end) + "</span>");
@@ -2301,6 +2409,12 @@ function setAppRecord(day, id, patch){
   const month = state.appLogs[m] = state.appLogs[m] || {};
   const d = month[day] = month[day] || {};
   const cur = Object.assign({}, d[id] || {});
+  // 済みにした時刻を残す(今日の分だけ)。流れを見つけるのに使う
+  if ("check" in patch) {
+    patch = Object.assign({}, patch);
+    if (window.TaskEngine.DONE.has(patch.check)) { if (day === taskDay() && !cur.at) patch.at = nowHM(); }
+    else patch.at = null;
+  }
   for (const [k, v] of Object.entries(patch)) {
     if (v === null || v === "" || v === undefined) delete cur[k]; else cur[k] = v;
   }
@@ -2507,6 +2621,7 @@ function allTodayNames(){
 }
 
 function renderSettings(){
+  renderFlows();
   const s = state.settings;
   const tasks = allTodayNames();
   const box = document.getElementById("task-edits");
@@ -2815,6 +2930,117 @@ async function saveSettings(){
   }
 }
 
+
+/* ───────── 流れ ───────── */
+const FLOW_DONE = () => window.TaskEngine.DONE;
+function flowTaskNames(){
+  const set = new Set();
+  for (const t of taskStates()) if (LIVE.includes(t.status) || ["随時", "実験"].includes(t.status)) set.add(t.def.name);
+  ((state.tasksDoc && state.tasksDoc.tasks) || []).forEach(t => set.add(t.name));
+  return Array.from(set).sort((a, b) => a.localeCompare(b, "ja"));
+}
+// 流れの成績:通しで回せた日の割合と、疲れにくさの平均(直近30日)
+function flowStats(f){
+  const names = f.steps.flat(), byName = new Map(taskStates().map(t => [t.def.name, t]));
+  const ts = names.map(n => byName.get(n)).filter(Boolean);
+  if (!ts.length) return null;
+  let full = 0, done = 0, eases = [];
+  for (let k = 0; k < 30; k++) {
+    const d = addDays(taskDay(), -k);
+    const rows = ts.map(t => (t.days || []).find(x => x.date === d));
+    if (rows.some(r => !r)) continue;
+    full++;
+    if (rows.every(r => FLOW_DONE().has(r.check))) done++;
+    const e = ((((state.appLogs[d.slice(0, 7)] || {})[d] || {})["__flow:" + f.id]) || {}).ease;
+    if (e) eases.push(+e);
+  }
+  return { full, done, ease: eases.length ? eases.reduce((a, b) => a + b, 0) / eases.length : null };
+}
+// 流れを見つける。押した時刻があれば同時と順番まで、なければ同じ日に一緒に済ませている組
+function findFlows(){
+  const byId = new Map(taskStates().map(t => [t.def.id, t]));
+  const taken = new Set(((state.settings.flows || []).flatMap(f => f.steps.flat())));
+  const timedDays = [];
+  for (let k = 0; k < 30; k++) {
+    const d = addDays(taskDay(), -k), recs = ((state.appLogs[d.slice(0, 7)] || {})[d]) || {};
+    const list = Object.entries(recs).filter(([id, r]) => byId.has(id) && r.at && FLOW_DONE().has(r.check))
+      .map(([id, r]) => ({ name: byId.get(id).def.name, min: +r.at.slice(0, 2) * 60 + +r.at.slice(3, 5) })).sort((a, b) => a.min - b.min);
+    if (list.length >= 2) timedDays.push(list);
+  }
+  const timed = [];
+  if (timedDays.length >= 3) {
+    const count = new Map();
+    for (const list of timedDays) {
+      // 30分以上あいたら別の流れ。3分以内に済ませたものは同時とみなす
+      const sessions = []; let cur = [];
+      list.forEach((x, i) => { if (i && x.min - list[i - 1].min > 30) { sessions.push(cur); cur = []; } cur.push(x); });
+      if (cur.length) sessions.push(cur);
+      const seen = new Set();
+      for (const ses of sessions) {
+        const steps = []; ses.forEach((x, i) => { if (i && x.min - ses[i - 1].min <= 3) steps[steps.length - 1].push(x.name); else steps.push([x.name]); });
+        const sig = steps.map(st => st.slice().sort()); 
+        for (let a = 0; a < sig.length; a++) for (let len = 2; len <= 3 && a + len <= sig.length; len++) {
+          const part = sig.slice(a, a + len), key = part.map(st => st.join("+")).join(" → ");
+          if (!seen.has(key)) { seen.add(key); const c = count.get(key) || { steps: part, days: 0 }; c.days++; count.set(key, c); }
+        }
+        // 1つの段に2つ以上あれば、それだけでも候補(同時の組)
+        for (const st of sig) if (st.length >= 2) { const key = st.join("+"); if (!seen.has(key)) { seen.add(key); const c = count.get(key) || { steps: [st], days: 0 }; c.days++; count.set(key, c); } }
+      }
+    }
+    for (const [key, c] of count) if (c.days >= 3 && !c.steps.flat().every(n => taken.has(n))) timed.push({ key, steps: c.steps, days: c.days });
+    timed.sort((a, b) => b.days - a.days || b.steps.flat().length - a.steps.flat().length);
+  }
+  // 同じ時間帯で、同じ日に一緒に済ませていることが多い組(直近21日)
+  const live = taskStates().filter(t => LIVE.includes(t.status));
+  const doneDays = new Map(), rowDays = new Map();
+  for (const t of live) {
+    const rs = (t.days || []).filter(x => x.date >= addDays(taskDay(), -21) && x.date < taskDay());
+    rowDays.set(t.def.id, new Set(rs.map(x => x.date)));
+    doneDays.set(t.def.id, new Set(rs.filter(x => FLOW_DONE().has(x.check)).map(x => x.date)));
+  }
+  const pairs = [];
+  for (let i = 0; i < live.length; i++) for (let j = i + 1; j < live.length; j++) {
+    const a = live[i], b = live[j];
+    if ((a.def.slot || "一日中") !== (b.def.slot || "一日中")) continue;
+    if (taken.has(a.def.name) && taken.has(b.def.name)) continue;
+    const ra = rowDays.get(a.def.id), rb = rowDays.get(b.def.id), da = doneDays.get(a.def.id), db = doneDays.get(b.def.id);
+    const shared = [...ra].filter(d => rb.has(d));
+    if (shared.length < 5) continue;
+    const both = shared.filter(d => da.has(d) && db.has(d)).length;
+    if (both / shared.length >= 0.7) pairs.push({ a: a.def.name, b: b.def.name, rate: both / shared.length, n: shared.length, both });
+  }
+  pairs.sort((x, y) => y.both - x.both || y.rate - x.rate);
+  return { timed: timed.slice(0, 5), pairs: pairs.slice(0, 5), timedDays: timedDays.length };
+}
+function renderFlows(){
+  const box = document.getElementById("flows-edit"); if (!box) return;
+  const flows = state.settings.flows || [];
+  const names = flowTaskNames();
+  box.innerHTML = flows.length ? flows.map((f, fi) => {
+    const st = flowStats(f);
+    return '<div class="flow-card"><div style="display:flex;gap:.5rem;align-items:center"><input data-fl-name="' + fi + '" value="' + esc(f.name) + '" style="flex:1;padding:.3rem .45rem;border:1px solid var(--rule);border-radius:3px;font:inherit">' +
+      '<label style="font-size:.82rem;white-space:nowrap"><input type="checkbox" data-fl-on="' + fi + '"' + (f.enabled !== false ? " checked" : "") + "> 使う</label></div>" +
+      '<div class="steps">' + f.steps.map((step, si) => (si ? '<span class="arrow">→</span>' : "") + '<span class="step">' +
+        step.map((n, ti) => '<span class="chip">' + esc(n) + '<button type="button" data-fl-del-task="' + fi + ":" + si + ":" + ti + '" aria-label="外す">×</button></span>').join('<span class="arrow">+</span>') +
+        '<select data-fl-pick="' + fi + ":" + si + '" style="max-width:8rem;font-size:.8rem"><option value="">' + (step.length ? "+同時に" : "タスクを選ぶ") + "</option>" +
+        names.filter(n => !step.includes(n)).map(n => "<option>" + esc(n) + "</option>").join("") + "</select>" +
+        (step.length ? "" : '<button type="button" class="btn ghost" data-fl-del-step="' + fi + ":" + si + '" style="padding:0 .4rem;font-size:.75rem">段を消す</button>') + "</span>").join("") +
+        '<button type="button" class="btn ghost" data-fl-add-step="' + fi + '" style="padding:.1rem .5rem;font-size:.8rem">→ 段を足す</button></div>' +
+      (st ? '<div style="font-size:.8rem;color:var(--sub)">直近30日:通しで回せた日 ' + st.done + " / " + st.full + "日" + (st.ease != null ? "　疲れにくさ " + st.ease.toFixed(1) + " / 5" : "") + "</div>" : "") +
+      '<button type="button" class="btn ghost" data-fl-del="' + fi + '" style="margin-top:.4rem;font-size:.8rem;border-color:#B3283C;color:#B3283C">この流れを消す</button></div>';
+  }).join("") : '<div class="empty">まだ流れはありません。下の候補から作るか、「流れを作る」で組んでください。</div>';
+  const fd = document.getElementById("flow-finds"); if (!fd) return;
+  const F = findFlows();
+  const stepTxt = steps => steps.map(st => st.join(" + ")).join(" → ");
+  fd.innerHTML = (F.timed.length
+      ? '<p class="hint">押した時刻から見つけた流れ(3分以内に済ませたものは同時)</p>' + F.timed.map((c, i) => '<div class="chg"><span>' + esc(stepTxt(c.steps)) + '</span><span>' + c.days + '日　<button type="button" class="btn ghost" data-fl-from="t' + i + '" style="padding:0 .5rem">流れにする</button></span></div>').join("")
+      : '<p class="hint">押した時刻が' + F.timedDays + "日分たまっています。3日分そろうと、同時と順番まで含めた候補が出ます。</p>") +
+    (F.pairs.length ? '<p class="hint" style="margin-top:.6rem">同じ時間帯に、同じ日に一緒に済ませていることが多い組(直近3週間)</p>' + F.pairs.map((p, i) => '<div class="chg"><span>' + esc(p.a) + "　と　" + esc(p.b) + "</span><span>" +
+      Math.round(p.rate * 100) + "%(" + p.n + '日中)　<button type="button" class="btn ghost" data-fl-from="p' + i + '" style="padding:0 .5rem">流れにする</button></span></div>').join("") : "");
+  state.lastFinds = F;
+}
+function flowsChanged(){ markDirty(); renderFlows(); }
+
 /* ───────── 取り消しの表示 ───────── */
 
 let toastTimer = null, toastUndo = null;
@@ -2941,6 +3167,13 @@ function bind(){
     renderTaskDetail();
     const box = document.getElementById("tk-detail");
     if (box.scrollIntoView) box.scrollIntoView({ block: "nearest" });
+  });
+
+  document.getElementById("staff-banner").addEventListener("click", async e => {
+    const b = e.target.closest("[data-flow-ease]"); if (!b) return;
+    const [id, n] = b.dataset.flowEase.split(":"), d = taskDay();
+    await commitAppLog(d, () => setAppRecord(d, "__flow:" + id, { ease: +n }));
+    renderToday();
   });
 
   document.getElementById("toast-undo").addEventListener("click", () => {
@@ -3316,6 +3549,33 @@ function bind(){
       markDirty(); renderSettings();
     }
   });
+  document.getElementById("add-flow").addEventListener("click", () => {
+    state.settings.flows = (state.settings.flows || []).concat([{ id: uid(), name: "新しい流れ", steps: [[]], enabled: true }]);
+    flowsChanged();
+  });
+  const flowBox = document.getElementById("flows-edit");
+  flowBox.addEventListener("input", e => { const el = e.target.closest("[data-fl-name]"); if (!el) return; state.settings.flows[+el.dataset.flName].name = el.value; markDirty(); });
+  flowBox.addEventListener("change", e => {
+    const on = e.target.closest("[data-fl-on]");
+    if (on) { state.settings.flows[+on.dataset.flOn].enabled = on.checked; flowsChanged(); return; }
+    const pk = e.target.closest("[data-fl-pick]");
+    if (pk && pk.value) { const [fi, si] = pk.dataset.flPick.split(":").map(Number); state.settings.flows[fi].steps[si].push(pk.value); flowsChanged(); }
+  });
+  flowBox.addEventListener("click", e => {
+    const q = s => e.target.closest(s); let b;
+    if ((b = q("[data-fl-add-step]"))) { state.settings.flows[+b.dataset.flAddStep].steps.push([]); flowsChanged(); return; }
+    if ((b = q("[data-fl-del-task]"))) { const [fi, si, ti] = b.dataset.flDelTask.split(":").map(Number); state.settings.flows[fi].steps[si].splice(ti, 1); flowsChanged(); return; }
+    if ((b = q("[data-fl-del-step]"))) { const [fi, si] = b.dataset.flDelStep.split(":").map(Number); state.settings.flows[fi].steps.splice(si, 1); flowsChanged(); return; }
+    if ((b = q("[data-fl-del]"))) { if (!confirm("この流れを消しますか。")) return; state.settings.flows.splice(+b.dataset.flDel, 1); flowsChanged(); return; }
+  });
+  document.getElementById("flow-finds").addEventListener("click", e => {
+    const b = e.target.closest("[data-fl-from]"); if (!b || !state.lastFinds) return;
+    const k = b.dataset.flFrom, F = state.lastFinds;
+    const steps = k[0] === "t" ? F.timed[+k.slice(1)].steps.map(st => st.slice()) : [[F.pairs[+k.slice(1)].a], [F.pairs[+k.slice(1)].b]];
+    state.settings.flows = (state.settings.flows || []).concat([{ id: uid(), name: steps.flat().slice(0, 2).join("→") + "の流れ", steps, enabled: true }]);
+    flowsChanged();
+  });
+
   document.getElementById("add-preset").addEventListener("click", () => {
     state.settings.presets = (state.settings.presets || []).concat([{
       id: uid(), name: "新しい用事", start: "17:00", end: "21:00", place: "外",
@@ -3407,6 +3667,11 @@ function bind(){
   });
 }
 
+// 今日のタブを開いているあいだは、1分ごとに今の時刻で組み直す
+setInterval(() => {
+  const v = document.getElementById("view-today");
+  if (v && !v.hidden && state.tasksDoc && !document.querySelector("#events-panel input:focus")) renderToday();
+}, 60000);
 function boot(){
   // アプリとしてインストールできるようにする。通信できるときは常に最新を取る作り
   if ("serviceWorker" in navigator) {
@@ -3450,7 +3715,7 @@ function boot(){
   }
 }
 
-window.__roadmap = { buildPlan, cfgOf, classify, state, loadAll, saveSettings, saveEvents, eventsFor,
+window.__roadmap = { findFlows, flowStats, buildPlan, cfgOf, classify, state, loadAll, saveSettings, saveEvents, eventsFor,
                      togglePreset, setPreset, removeEvent, editEventTime, setDone, getDone, commitEvents,
                      commitPlan, normalizePlan, validatePlanItem, newItem, taskStates, commitOverlay,
                      commitAppLog, setAppRecord, taskDay, taskIdFor,
