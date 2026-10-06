@@ -307,9 +307,14 @@
         log.forEach((x, i) => { if (normSt(x.status) === "進行中") ranges.push([x.date, log[i + 1] ? log[i + 1].date : null]); });
       }
       if (!start) return d;
-      return Object.assign({}, d, { gate: { start, ranges } });
+      return Object.assign({}, d, { gate: { start, ranges, pages: linked.map(({ p }) => ({ id: p.id, label: p.label, title: p.title || "", status: normSt(p.status) })) } });
     });
   }
 
-  return { applyGates, gateOpen, replay, makeLogFor, cycleIndex, mergeOverlay, allDefs, mergedLogFor, targetAt, nextStatus, isDue, addDays, daysBetween, DONE, EXCUSED, AUTO_DONE, GENERATED, RULES };
+  // 今日、STAGE・WAVEを待っていて効力の無いタスクか。待っているもの(進行中でないページ)を返す
+  function waitingOn(def, day){
+    const g = def && def.gate; if (!g || day < g.start || gateOpen(g, day)) return null;
+    return (g.pages || []).filter(p => p.status !== "進行中");
+  }
+  return { waitingOn, applyGates, gateOpen, replay, makeLogFor, cycleIndex, mergeOverlay, allDefs, mergedLogFor, targetAt, nextStatus, isDue, addDays, daysBetween, DONE, EXCUSED, AUTO_DONE, GENERATED, RULES };
 });
