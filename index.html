@@ -617,7 +617,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-06 r56";
+const APP_VERSION = "2026-10-07 r57";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -2163,11 +2163,11 @@ function taskStates(){
   const defs = state.taskDefs;
   if (!defs || !window.TaskEngine) return [];
   const today = taskDay();
+  // 記録を付けたときは、そのタスクだけを計算し直す(全部やり直すとスマホで重い)。保存が済んだだけでは計算し直さない
   const key = today + "|" + (state.overlaySha || "") + "|" + JSON.stringify(state.taskLogShas) + "|" + allDefs().length + "|" +
-              JSON.stringify(state.appLogShas) + "|" + defs.importedUntil + "|" + taskCache.bump;
-  if (taskCache.key === key) return taskCache.list;
+              defs.importedUntil + "|" + (taskCache.bump || 0);
   const E = window.TaskEngine;
-  const list = allDefs().map(raw => {
+  const build = raw => {
     const def = effectiveDef(raw);
     const rep = E.replay(def, mergedLogFor(def.id), today);
     const row = rep.days.length && rep.days[rep.days.length - 1].date === today ? rep.days[rep.days.length - 1] : null;
@@ -2176,7 +2176,7 @@ function taskStates(){
     const s = row || rep.next;
     const wait = window.TaskEngine.waitingOn ? window.TaskEngine.waitingOn(def, today) : null;
     return {
-      def, rep, row,
+      raw, def, rep, row,
       status: s.status,
       waiting: wait,                 // STAGE・WAVEが進行中でないため、今日は効力の無いタスク(記録の状況はそのまま)
       gen: row ? row.gen : rep.gen,
@@ -2188,8 +2188,16 @@ function taskStates(){
       days: rep.days,
       progressDate: lastProgress(rep.days).date,
     };
-  });
-  taskCache = { key, list };
+  };
+  if (taskCache.key === key && taskCache.list) {
+    if (taskCache.dirty && taskCache.dirty.size) {
+      const ids = taskCache.dirty; taskCache.dirty = new Set();
+      taskCache.list = taskCache.list.map(t => ids.has(t.def.id) ? build(t.raw) : t);
+    }
+    return taskCache.list;
+  }
+  const list = allDefs().map(build);
+  taskCache = { key, list, bump: taskCache.bump || 0, dirty: new Set() };
   return list;
 }
 
@@ -2641,6 +2649,7 @@ const DONE_DELAY = () => (window.__roadmapDoneDelay != null ? window.__roadmapDo
 
 // アプリでつけた記録を保存する。月ごとのファイルに、日付・タスクごとに入れる
 function setAppRecord(day, id, patch){
+  (taskCache.dirty = taskCache.dirty || new Set()).add(id);
   const m = day.slice(0, 7);
   const month = state.appLogs[m] = state.appLogs[m] || {};
   const d = month[day] = month[day] || {};
@@ -2667,7 +2676,6 @@ async function commitAppLog(day, mutate){
   const path = APPLOG_DIR + "/" + m + ".json";
   const status = tkStatus;
   mutate();
-  taskCache.bump++; taskCache.key = null;
   renderTasks(); renderToday();
   if (!state.conn) return false;
   status("保存しています…");
@@ -3226,7 +3234,7 @@ async function loadTaskData(){
     const [apps, appShas] = await sync(APPLOG_DIR, appFiles, state.appLogs, state.appLogShas);
     state.taskDefs = d.data;
     state.taskLogs = logs; state.taskLogShas = logShas;
-    state.appLogs = apps; state.appLogShas = appShas;
+    state.appLogs = apps; state.appLogShas = appShas; taskCache.key = null;
     const ov = (o.data && o.data.tasks) ? o.data : { version: 1, tasks: {} };
     ov.waveUrls = ov.waveUrls || {};
     ov.newTasks = ov.newTasks || [];
@@ -4177,7 +4185,7 @@ function boot(){
     state.taskDefs = cache.taskDefs || null;
     state.taskLogs = cache.taskLogs || {};
     state.taskLogShas = cache.taskLogShas || {};
-    state.appLogs = cache.appLogs || {};
+    state.appLogs = cache.appLogs || {}; taskCache.key = null;
     state.appLogShas = cache.appLogShas || {};
     state.overlay = cache.overlay || { version: 1, tasks: {}, waveUrls: {} };
     state.overlaySha = cache.overlaySha || null;
