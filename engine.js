@@ -121,6 +121,13 @@
       }
 
       let rec = logFor(day);
+      // 取り込んだ最後の日に、ルールでは行が立つはずなのにNotionに行が無かったタスクは、
+      // Notionでもうやめていたもの。切り替えのあとは行を立てず、アーカイブとして扱う
+      // (実行間隔で休みの日だったものは、行が無くて当然なので当てはまらない)
+      if (imported && day === imported && !rec && !def.noDrop && GENERATED.has(st.status) && isDue(def.interval, day, st.lastDone)) {
+        st.status = "アーカイブ"; st.dropped = imported;
+        continue;
+      }
       // 取り込んだ期間は、Notionに行があった日がそのまま行の立つ日
       const generated = (imported && day <= imported)
         ? !!rec
