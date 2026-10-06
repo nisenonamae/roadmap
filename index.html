@@ -118,6 +118,9 @@ details.task-edit h4{margin:.6rem 0 .25rem;font-size:.8rem;color:var(--sub);lett
 .te-group{font-size:.8rem;color:var(--sub);margin:.8rem 0 .2rem}
 .ev-with{font-size:.8rem;color:var(--sub);flex-basis:100%;margin-top:.2rem}
 .ev-with summary{cursor:pointer}
+.chip.s-待機中{background:#fff;color:var(--sub);border:1px dashed var(--sub)}
+.wait-why{font-size:.76rem;color:var(--sub)}
+.sum-wait{color:var(--sub)}
 .wvchips{display:flex;flex-wrap:wrap;gap:.3rem;margin:.15rem 0 .35rem}
 .wvchip{font-size:.8rem;border:1px solid var(--rule);border-radius:3px;padding:0 .4rem;background:#fff}
 .wvchip.k-STAGE{border-color:#B3283C}.wvchip.k-WAVE{border-color:#2F5D8A}
@@ -614,7 +617,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-06 r55";
+const APP_VERSION = "2026-10-06 r56";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -2171,9 +2174,11 @@ function taskStates(){
     const gens = (def.generations || []).slice().sort((a, b) => a.from < b.from ? -1 : 1);
     const curGen = gens.filter(g => g.from <= today).pop() || { gen: 1, target: null };
     const s = row || rep.next;
+    const wait = window.TaskEngine.waitingOn ? window.TaskEngine.waitingOn(def, today) : null;
     return {
       def, rep, row,
       status: s.status,
+      waiting: wait,                 // STAGE・WAVEが進行中でないため、今日は効力の無いタスク(記録の状況はそのまま)
       gen: row ? row.gen : rep.gen,
       genTotal: s.genTotal, total: s.total, streak: s.streak, best: s.best, miss: s.miss, lastDone: s.lastDone,
       target: curGen.target != null ? +curGen.target : null,
@@ -2238,7 +2243,7 @@ function renderTasks(){
   const v = tkView();
   document.getElementById("tk-group").value = v.group;
   document.getElementById("tk-sort").value = v.sort;
-  const order = { "熟達": 0, "定着": 1, "進行中": 2, "新規": 3, "実験": 4, "随時": 5, "要再設定": 6 };
+  const order = { "熟達": 0, "定着": 1, "進行中": 2, "新規": 3, "実験": 4, "随時": 5, "待機中": 6, "要再設定": 7 };
   const all = taskStates();
   renderTodayRecords(all);
 
@@ -2246,7 +2251,7 @@ function renderTasks(){
   const q = (document.getElementById("tk-q").value || "").trim().toLowerCase();
   const fm = document.getElementById("tk-min"), fs = document.getElementById("tk-stat");
   const mins = Array.from(new Set(all.flatMap(t => t.def.ministries || []))).sort((a, b) => a.localeCompare(b, "ja"));
-  const stats = Array.from(new Set(all.map(t => t.status)));
+  const stats = Array.from(new Set(all.map(t => t.waiting ? "待機中" : t.status)));
   const keep = (sel, opts) => {
     const cur = sel.value;
     sel.innerHTML = sel.options[0].outerHTML + opts.map(o => '<option' + (o === cur ? " selected" : "") + ">" + esc(o) + "</option>").join("");
@@ -2255,14 +2260,16 @@ function renderTasks(){
   keep(fm, mins); keep(fs, stats.sort((a, b) => (order[a] ?? 9) - (order[b] ?? 9)));
   const hit = t => (!q || t.def.name.toLowerCase().includes(q) || (t.def.aliases || []).some(a => a.toLowerCase().includes(q))) &&
                    (!fm.value || (t.def.ministries || []).includes(fm.value)) &&
-                   (!fs.value || t.status === fs.value);
+                   (!fs.value || (t.waiting ? "待機中" : t.status) === fs.value);
   const list = all.filter(hit);
   const filtering = !!(q || fm.value || fs.value);
 
   const live = list.filter(t => LIVE.includes(t.status));
   const count = st => list.filter(t => t.status === st).length;
+  const waitN = list.filter(t => t.waiting).length;
   let html = '<div class="tk-sum">' + ["新規", "進行中", "定着", "熟達", "要再設定"].map(st =>
-    "<span>" + st + " <b>" + count(st) + "</b></span>").join("") +
+    "<span>" + st + " <b>" + list.filter(t => t.status === st && !t.waiting).length + "</b></span>").join("") +
+    (waitN ? '<span class="sum-wait">待機中 <b>' + waitN + "</b></span>" : "") +
     (filtering ? '<span>絞り込み <b>' + list.length + "</b>件</span>" : "") + "</div>";
   if (filtering && !list.length) html += '<div class="empty">一致するタスクがありません。</div>';
 
@@ -2281,7 +2288,7 @@ function renderTasks(){
 
   const groups = {};
   for (const t of live) {
-    const g = v.group === "状況" ? t.status : ((t.def.ministries && t.def.ministries[0]) || "所属なし");
+    const g = v.group === "状況" ? (t.waiting ? "待機中" : t.status) : ((t.def.ministries && t.def.ministries[0]) || "所属なし");
     (groups[g] = groups[g] || []).push(t);
   }
   const names = v.group === "状況"
@@ -2500,8 +2507,11 @@ function renderWaveLinks(list){
     '<div class="row" style="margin-top:.4rem"><button type="button" class="btn" data-wavelinks-save>リンクを保存する</button></div>';
 }
 
+const waitText = t => t.waiting && t.waiting.length ? t.waiting.map(p => p.label + (p.title ? " " + p.title : "") + "が" + p.status).join("、") : "";
 function taskRowHtml(t){
-  const meta = ['<span class="chip s-' + esc(t.status) + '">' + esc(t.status) + "</span>"];
+  const meta = t.waiting
+    ? ['<span class="chip s-待機中" title="' + esc(waitText(t)) + '">待機中</span>', '<span class="wait-why">' + esc(waitText(t)) + "(" + esc(t.status) + "のまま)</span>"]
+    : ['<span class="chip s-' + esc(t.status) + '">' + esc(t.status) + "</span>"];
   if (t.target) {
     const pct = Math.min(100, Math.round(t.genTotal / t.target * 100));
     meta.push("<span>世代" + t.gen + "　" + t.genTotal + "/" + t.target + ' <span class="bar"><i style="width:' + pct + '%"></i></span></span>');
