@@ -110,6 +110,7 @@ details.task-edit .te-body{padding:0 .7rem .7rem}
 details.task-edit h4{margin:.6rem 0 .25rem;font-size:.8rem;color:var(--sub);letter-spacing:.08em}
 .tbadge{font-size:.7rem;border-radius:3px;padding:0 .3rem;margin-left:.25rem}
 .tbadge.unset{background:#FCEFD9;color:#8A5A00}.tbadge.no{background:#F6E0E3;color:#B3283C}.tbadge.pref{background:#E2EFE6;color:#2F6E44}
+.pair-msg{font-size:.8rem;color:#2F6E44;background:#E2EFE6;border-radius:3px;padding:.2rem .5rem;margin:.4rem 0 0}
 .pchips{display:flex;flex-wrap:wrap;gap:.25rem;margin:.15rem 0 .3rem}
 .pchip{font-size:.8rem;border-radius:3px;padding:0 .35rem}
 .pchip.pair{background:#E2EFE6;color:#2F6E44}.pchip.avoid{background:#F6E0E3;color:#B3283C}
@@ -609,7 +610,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-06 r51";
+const APP_VERSION = "2026-10-06 r52";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -892,7 +893,7 @@ function describeHttp(status, path){
 
 function cfgOf(settings, name){
   const c = (settings.tasks || {})[name];
-  const configured = !!c;
+  const configured = !!c && ("min" in c || "place" in c || "organs" in c);
   const s = c || {};
   return {
     min: (+s.min > 0) ? +s.min : 15,
@@ -2848,7 +2849,7 @@ function renderSettings(){
   } else {
     // 今日の組み立てに効く未設定 → それ以外の未設定(随時・済み) → 設定済み → 要再設定
     const rank = t => {
-      const set = !!s.tasks[t.name];
+      const set = cfgOf(s, t.name).configured;
       if (t.status === "要再設定") return 3;
       if (set) return 2;
       const doneToday = DONE.includes(t.check) && !AUTO.includes(t.status);
@@ -3015,8 +3016,19 @@ function pairPicker(name, kind, label, allNames){
   return '<div class="f" style="margin-top:.5rem"><label>' + label + '</label><div class="pchips">' + (chips || '<span style="font-size:.8rem;color:var(--sub)">なし</span>') + "</div>" +
     '<select data-add-list="' + kind + '"><option value="">+ 選ぶ</option>' + opts + "</select></div>";
 }
+// 選んだあと、そのタスクの行が見えるように合わせ、何をしたかを出す
+function afterPairEdit(name, msg){
+  const row = Array.from(document.querySelectorAll("#task-edits details.task-edit")).find(r => r.dataset.name === name);
+  if (!row) return;
+  row.open = true; (state.teOpen = state.teOpen || new Set()).add(name);
+  if (row.scrollIntoView) row.scrollIntoView({ block: "nearest" });
+  const body = row.querySelector(".te-body");
+  if (body) { const n = document.createElement("div"); n.className = "pair-msg"; n.textContent = msg; body.insertBefore(n, body.firstChild); }
+}
 function setPairRule(name, other, kind, on){
-  const s = state.settings, a = ensureTask(name);
+  const s = state.settings;
+  s.tasks = s.tasks || {};
+  const a = s.tasks[name] = s.tasks[name] || {};     // 設定していないタスクは、組み合わせだけを持たせる(設定ずみにはしない)
   const opp = kind === "pair" ? "avoid" : "pair";
   a[kind] = Array.isArray(a[kind]) ? a[kind] : [];
   if (on) {
@@ -3040,6 +3052,11 @@ function updateTaskSummary(row){
 
 function ensureTask(name){
   const s = state.settings;
+  // 組み合わせだけを持っているタスクを設定するときは、ほかの項目をふつうの値で埋める(組み合わせは残す)
+  if (s.tasks[name] && !("min" in s.tasks[name])) {
+    const keep = s.tasks[name], c = cfgOf({ tasks: {} }, name);
+    s.tasks[name] = Object.assign({ min: c.min, place: c.place, organs: c.organs, mode: c.mode, priority: c.priority, fixed: c.fixed, next: c.next, nagara: c.nagara }, keep);
+  }
   if (!s.tasks[name]) {
     const c = cfgOf(s, name);
     s.tasks[name] = { min: c.min, place: c.place, organs: c.organs, mode: c.mode,
@@ -3927,7 +3944,12 @@ function bind(){
   edits.addEventListener("change", e => {
     const row = e.target.closest(".task-edit"); if (!row) return;
     const al = e.target.dataset.addList;
-    if (al && e.target.value) { setPairRule(row.dataset.name, e.target.value, al, true); markDirty(); renderSettings(); return; }
+    if (al && e.target.value) {
+      const name = row.dataset.name, other = e.target.value;
+      setPairRule(name, other, al, true); markDirty(); renderSettings();
+      afterPairEdit(name, "「" + other + "」を" + (al === "pair" ? "一緒にやりたいタスク" : "一緒にしないタスク") + "にしました");
+      return;
+    }
     const k = e.target.dataset.k; if (!k) return;
     const t = ensureTask(row.dataset.name);
     if (k === "min") t.min = Math.max(1, +e.target.value || 1);
@@ -3953,7 +3975,7 @@ function bind(){
   });
   edits.addEventListener("click", e => {
     const rm = e.target.closest("[data-rm-list]");
-    if (rm) { const row = rm.closest(".task-edit"); setPairRule(row.dataset.name, rm.dataset.rmName, rm.dataset.rmList, false); markDirty(); renderSettings(); return; }
+    if (rm) { const row = rm.closest(".task-edit"), name = row.dataset.name; setPairRule(name, rm.dataset.rmName, rm.dataset.rmList, false); markDirty(); renderSettings(); afterPairEdit(name, "外しました"); return; }
     const b = e.target.closest("[data-organ]"); if (!b) return;
     const row = b.closest(".task-edit");
     const t = ensureTask(row.dataset.name);
