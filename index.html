@@ -110,7 +110,21 @@ details.task-edit .te-body{padding:0 .7rem .7rem}
 details.task-edit h4{margin:.6rem 0 .25rem;font-size:.8rem;color:var(--sub);letter-spacing:.08em}
 .tbadge{font-size:.7rem;border-radius:3px;padding:0 .3rem;margin-left:.25rem}
 .tbadge.unset{background:#FCEFD9;color:#8A5A00}.tbadge.no{background:#F6E0E3;color:#B3283C}.tbadge.pref{background:#E2EFE6;color:#2F6E44}
+.pchips{display:flex;flex-wrap:wrap;gap:.25rem;margin:.15rem 0 .3rem}
+.pchip{font-size:.8rem;border-radius:3px;padding:0 .35rem}
+.pchip.pair{background:#E2EFE6;color:#2F6E44}.pchip.avoid{background:#F6E0E3;color:#B3283C}
+.pchip button{border:none;background:none;cursor:pointer;color:inherit;padding:0 0 0 .2rem}
 .te-group{font-size:.8rem;color:var(--sub);margin:.8rem 0 .2rem}
+.timeline{border-left:3px solid var(--rule);margin-left:.3rem}
+.timeline .block.zone{margin:0;border-radius:0;border:none;padding:.35rem .7rem .5rem}
+.zone.z-asa{background:#FFF7E3}.zone.z-hiru{background:#EAF4FB}.zone.z-yoru{background:#EFEBF8}.zone.z-etc{background:#F3F3EE}
+.zone.gap{background:transparent}
+.zone.gap .block-head h2{font-size:.82rem;color:var(--sub);font-weight:600}
+.zone .block-head h2{font-size:.95rem}
+.move-big{display:flex;align-items:center;gap:.5rem;margin:.4rem 0;padding:.35rem .6rem;border:1px dashed var(--ink);border-radius:4px;background:#fff;font-weight:700;font-size:.9rem}
+.move-big .mv-ico{font-size:1.1rem}
+.move-big .mv-min{margin-left:auto;font-weight:400;font-size:.8rem;color:var(--sub)}
+.outwin{color:#8A5A00;background:#FCEFD9;border-radius:3px;padding:0 .35rem;font-size:.72rem}
 .flowtag{color:#2F6E8A;border:1px solid #2F6E8A;border-radius:3px;padding:0 .35rem;font-size:.72rem}
 .flow-card{border:1px solid var(--rule);border-radius:4px;padding:.6rem .7rem;margin:.5rem 0;background:#fff}
 .flow-card .steps{display:flex;flex-wrap:wrap;gap:.3rem;align-items:center;margin:.4rem 0}
@@ -489,13 +503,25 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
     </details>
 
     <details class="sec fold-sec blocks-edit" data-sec="時間の枠"><summary><h2>時間の枠</h2></summary>
-      <p class="hint">朝・昼・夜のタスクはこの枠に入ります。「一日中」のタスクは枠の空きに入り、入りきらないぶんは最後に並びます。</p>
+      <p class="hint">1日は「始まり〜終わり」の1本のタイムラインで、朝・昼・夜のタスクはそれぞれの枠の中だけに入ります。「一日中」のタスクは、枠の残りと、枠の間の空き時間(用事の無いところ)に入ります。</p>
+      <div class="grid2" style="margin-bottom:.6rem">
+        <div class="f"><label for="day-start">1日の始まり(起きる)</label><input id="day-start" type="time"></div>
+        <div class="f"><label for="day-end">1日の終わり(寝る)</label><input id="day-end" type="time"></div>
+      </div>
       <div id="blocks-edit"></div>
     </details>
 
     <details class="sec fold-sec" data-sec="場所"><summary><h2>場所</h2></summary>
       <p class="hint">読点かカンマで区切ります。「どこでも」は他のどの場所のタスクとも組めます。</p>
       <div class="f"><input id="places" type="text"></div>
+      <h3 style="font-size:.9rem;margin:.9rem 0 .3rem">エリアと移動の時間</h3>
+      <p class="hint">場所ごとにエリア(家・学校・外など)を決めます。違うエリアへの移動は大きく表示し、移動の時間もタイムラインに確保します。同じエリアの中の移動は小さく表示します。</p>
+      <div id="areas-edit"></div>
+      <div class="grid2" style="margin-top:.5rem">
+        <div class="f"><label for="tv-within">同じエリアの中の移動(分)</label><input id="tv-within" type="number" min="0" step="1"></div>
+        <div class="f"><label for="tv-between">違うエリアへの移動(分)</label><input id="tv-between" type="number" min="0" step="1"></div>
+      </div>
+      <div id="tv-pairs"></div>
     </details>
 
     <details class="sec fold-sec" data-sec="並べ方の重み"><summary><h2>並べ方の重み</h2></summary>
@@ -568,7 +594,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-06 r46";
+const APP_VERSION = "2026-10-06 r48";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -862,6 +888,11 @@ function cfgOf(settings, name){
     fixed: toMin(s.fixed) !== null ? s.fixed : "",
     next: s.next || "",            // この後に続けるタスク。踏み台にするときに使う
     nagara: s.nagara || "",        // ながら:""=ふつう、"no"=ながらにしない、"pref"=ながらを優先
+    avoid: Array.isArray(s.avoid) ? s.avoid.slice() : [],   // 一緒にしないタスク(相手の側にも効く)
+    pair: Array.isArray(s.pair) ? s.pair.slice() : [],      // 一緒にやりたいタスク(相手の側にも効く)
+    win: (toMin(s.winStart) !== null && toMin(s.winEnd) !== null && toMin(s.winEnd) > toMin(s.winStart))
+      ? { start: toMin(s.winStart), end: toMin(s.winEnd) } : null,    // このタスクだけの時間の枠
+    winStart: s.winStart || "", winEnd: s.winEnd || "",
     configured: configured,
   };
 }
@@ -962,12 +993,16 @@ function buildPlan(tasksDoc, settings, doneLocal, events, nowMin){
     if (prev && x.c.mode && x.c.mode === prev.c.mode) s += W.mode;
     return s;
   }
+  // 組の相手がまだ残っていて、その相手に乗せてもらえる見込みがあるか
+  const hostWaiting = (x, pool) => pool.some(p => p !== x && !p.task.done && p.c.nagara !== "no" && p.c.min >= x.c.min &&
+    (x.c.place === ANYWHERE || x.c.place === p.c.place) && (p.c.pair.includes(x.task.name) || x.c.pair.includes(p.task.name)));
   function pickBest(pool, prev, fits){
     for (const allowPref of [false, true]) {
       let best = null, bestScore = -Infinity;
       for (const x of pool) {
         if (fits && !fits(x)) continue;
-        if (!allowPref && x.c.nagara === "pref" && !x.task.done) continue;
+        // ながらを優先するもの・組の相手を待っているものは、乗せる側が決まるまで後回し
+        if (!allowPref && !x.task.done && (x.c.nagara === "pref" || hostWaiting(x, pool))) continue;
         const s = score(x, prev);
         if (s > bestScore) { best = x; bestScore = s; }
       }
@@ -989,19 +1024,25 @@ function buildPlan(tasksDoc, settings, doneLocal, events, nowMin){
   }
 
   // 主タスクに、使う器官が重ならず場所の合うものを同時に重ねる
+  // 組み合わせの相性(どちらか一方に設定してあれば効く)
+  const avoids = (a, b) => a.c.avoid.includes(b.task.name) || b.c.avoid.includes(a.task.name);
+  const pairs = (a, b) => a.c.pair.includes(b.task.name) || b.c.pair.includes(a.task.name);
   function attach(item, pools){
     const used = new Set(item.c.organs);
     if (item.c.nagara === "no") return;            // ながらにしないタスクには重ねない
-    // ながらを優先するタスクから先に乗せる
-    const cands = candidates(pools); cands.sort((a, b) => (b.x.c.nagara === "pref") - (a.x.c.nagara === "pref"));
+    // 一緒にやりたい組 → ながらを優先するタスク → そのほかの順に乗せる
+    const rank = x => (pairs(item, x) ? 2 : 0) + (x.c.nagara === "pref" ? 1 : 0);
+    const cands = candidates(pools); cands.sort((a, b) => rank(b.x) - rank(a.x));
     for (const { x, pool } of cands) {
       if (item.nagara.length >= 2) break;
       if (!item.c.configured || !x.c.configured) continue;
       if (x.c.nagara === "no") continue;
+      if (avoids(item, x) || item.nagara.some(y => avoids(x, y))) continue;
+      const wanted = pairs(item, x);
       if (x.task.done || x.c.fixed || follower(x)) continue;
       if (x.c.min > item.c.min) continue;
       if (!(x.c.place === ANYWHERE || x.c.place === item.c.place)) continue;
-      if (x.c.organs.some(o => used.has(o))) continue;
+      if (!wanted && x.c.organs.some(o => used.has(o))) continue;   // 自分で決めた組は、器官が重なっていても重ねる
       if (!take(x, pool)) continue;
       x.c.organs.forEach(o => used.add(o));
       item.nagara.push(x);
@@ -1014,6 +1055,7 @@ function buildPlan(tasksDoc, settings, doneLocal, events, nowMin){
     for (const { x, pool } of cands) {
       if (item.nagara.length >= 4) break;
       if (x.c.nagara === "no") continue;
+      if (item.nagara.some(y => avoids(x, y))) continue;
       if (!x.c.configured || x.c.fixed || x.task.done || follower(x)) continue;
       if (x.c.min > budget) continue;
       if (!(x.c.place === ANYWHERE || x.c.place === item.c.place)) continue;
@@ -1086,13 +1128,51 @@ function buildPlan(tasksDoc, settings, doneLocal, events, nowMin){
   const dropFollowers = pool => { for (let i = pool.length - 1; i >= 0; i--) if (follower(pool[i])) pool.splice(i, 1); };
   [flex].concat(Object.values(byBlock)).forEach(dropFollowers);
 
-  const ordered = blockNames
+  const blocksOnly = blockNames
     .map(n => ({ name: n, start: toMin(settings.blocks[n].start), end: toMin(settings.blocks[n].end) }))
     .filter(b => b.start !== null && b.end !== null)
     .sort((a, b) => a.start - b.start);
+  // 1日を、枠と空き時間がすき間なくつながった区間に分ける(1日の始まりと終わりの間)
+  const dayCfg = settings.day || {};
+  const dStart = toMin(dayCfg.start) !== null ? toMin(dayCfg.start) : (blocksOnly.length ? blocksOnly[0].start : 6 * 60);
+  const dEnd = toMin(dayCfg.end) !== null ? toMin(dayCfg.end) : (blocksOnly.length ? blocksOnly[blocksOnly.length - 1].end : 23 * 60);
+  const ordered = [];
+  { let t0 = dStart, g = 0;
+    for (const b of blocksOnly) {
+      if (b.start > t0) ordered.push({ name: "空き" + (++g), start: t0, end: b.start, gap: true });
+      ordered.push(Object.assign({}, b, { gap: false }));
+      t0 = Math.max(t0, b.end);
+    }
+    if (dEnd > t0) ordered.push({ name: "空き" + (++g), start: t0, end: dEnd, gap: true });
+  }
+  // 時刻を固定した「一日中」のタスクは、その時刻の区間に入れる
+  for (let i = flex.length - 1; i >= 0; i--) {
+    const x = flex[i], f = toMin(x.c.fixed);
+    if (f === null) continue;
+    const seg = ordered.find(g => f >= g.start && f < g.end);
+    if (seg) { (byBlock[seg.name] = byBlock[seg.name] || []).push(x); flex.splice(i, 1); }
+  }
+  // 場所の移動にかかる時間(エリアが違えば大きな移動)
+  const areaOf = p => ((settings.areas || {})[p]) || "家";
+  const tv = settings.travel || {};
+  function travelMin(prev, x){
+    if (!prev || !x || prev.isEvent || x.isEvent) return 0;
+    const a = prev.c.place, b = x.c.place;
+    if (a === b || a === ANYWHERE || b === ANYWHERE) return 0;
+    const A = areaOf(a), Z = areaOf(b);
+    if (A === Z) return +tv.within || 0;
+    const pairs = tv.pairs || {};
+    const v = pairs[A + "|" + Z] != null ? pairs[A + "|" + Z] : pairs[Z + "|" + A];
+    return v != null ? +v : (tv.between != null ? +tv.between : 20);
+  }
+  const bigMove = (prev, x) => !!prev && !!x && !prev.isEvent && !x.isEvent && prev.c.place !== ANYWHERE && x.c.place !== ANYWHERE && areaOf(prev.c.place) !== areaOf(x.c.place);
+  // このタスクだけの時間の枠に収まるか
+  const winOk = (x, at) => !x.c.win || (at >= x.c.win.start && at + chainLen(x) <= x.c.win.end);
+  let lastPrev = null;
 
   // 用事は動かせない区間。時刻が重なる枠に入れ、どの枠にも重ならなければ単独で置く
   const evInBlock = {}; ordered.forEach(b => evInBlock[b.name] = []);
+  // (空き時間の区間にも用事は入る。区間の外の用事だけが単独になる)
   const evAlone = [];
   for (const e of (events || [])) {
     const a = toMin(e.start), z = toMin(e.end);
@@ -1104,7 +1184,8 @@ function buildPlan(tasksDoc, settings, doneLocal, events, nowMin){
            organs: Array.isArray(e.organs) ? e.organs.slice() : ORGANS.slice(),
            mode: "", priority: 0, fixed: e.start, configured: true },
     };
-    const b = ordered.find(b => a < b.end && z > b.start);
+    // 朝・昼・夜の枠に重なればその枠に、重ならなければ空き時間の区間に
+    const b = ordered.find(b => !b.gap && a < b.end && z > b.start) || ordered.find(b => a < b.end && z > b.start);
     if (b) evInBlock[b.name].push(x); else evAlone.push(x);
   }
 
@@ -1126,6 +1207,9 @@ function buildPlan(tasksDoc, settings, doneLocal, events, nowMin){
     return it;
   });
 
+  // 空き時間の用事(通学など)には、一日中のタスクを先に乗せておく(朝の枠の空きを埋める前に)
+  const preEvents = new Map();
+  for (const g of ordered) if (g.gap) for (const ev of evInBlock[g.name] || []) { const it = mkItem(ev); attachSeq(it, [flex]); preEvents.set(ev, it); }
   const blocks = [];
   const carry = [];          // 今の時刻で、前の枠からあふれた・遅れたタスク
   for (const b of ordered) {
@@ -1146,14 +1230,19 @@ function buildPlan(tasksDoc, settings, doneLocal, events, nowMin){
       .sort((p, q) => toMin(p.c.fixed) - toMin(q.c.fixed));
     const rest = pool.filter(x => !x.c.fixed);
     const items = [];
-    let cursor = REAL ? Math.max(b.start, Math.min(b.end, nowMin)) : b.start, prev = null;
+    let cursor = REAL ? Math.max(b.start, Math.min(b.end, nowMin)) : b.start, prev = lastPrev;
     if (REAL && b.end <= nowMin) cursor = b.end;
     const roomOk = x => !REAL || chainLen(x) <= b.end - cursor;
 
     const place = (x, at) => {
-      const it = withCompanions(mkItem(x, at), x);
+      // 場所が変われば、移動の時間を先に確保する
+      const tm = (!x.task.done && !x.isEvent) ? travelMin(prev, x) : 0;
+      const pre = x.isEvent ? preEvents.get(x) : null;      // 空き時間の用事は、先に乗せる仲間を決めてある
+      const it = pre || withCompanions(mkItem(x, at + tm), x);
       it.transferFrom = transfer(prev, x);
-      if (x.isEvent) attachSeq(it, [rest, flex]); else attach(it, [rest, flex]);
+      if (it.transferFrom) { it.travel = tm; it.moveBig = bigMove(prev, x); }
+      if (x.c.win && !x.task.done && !winOk(x, it.start)) it.outWin = true;
+      if (!pre) { if (x.isEvent) attachSeq(it, [rest, flex]); else attach(it, [rest, flex]); }
       items.push(it);
       if (!x.task.done) { prev = x; cursor = Math.max(cursor, it.end); }
       // 続けるタスクを、そのまま後ろに繋げる
@@ -1173,8 +1262,12 @@ function buildPlan(tasksDoc, settings, doneLocal, events, nowMin){
       const fAt = nf ? toMin(nf.c.fixed) : Infinity;
       if (nf && fAt <= cursor) { fixed.shift(); place(nf, Math.max(cursor, fAt)); continue; }
       const gap = fAt - cursor;
-      const pick = pickBest(rest, prev, x => x.task.done || (chainLen(x) <= gap && roomOk(x)));
+      const pick = pickBest(rest, prev, x => x.task.done || (travelMin(prev, x) + chainLen(x) <= gap && roomOk(x) && winOk(x, cursor + travelMin(prev, x))));
       if (!pick) {
+        // 枠の中でも、時間の枠が後ろで始まるタスクがあれば、そこまで進めて置く
+        const later = rest.filter(x => x.c.win && !x.task.done && x.c.win.start > cursor && x.c.win.start < fAt &&
+          x.c.win.start + chainLen(x) <= Math.min(b.end, x.c.win.end, fAt)).sort((p, q) => p.c.win.start - q.c.win.start)[0];
+        if (later) { cursor = later.c.win.start; continue; }
         if (nf) { fixed.shift(); place(nf, fAt); continue; }
         break;
       }
@@ -1183,12 +1276,20 @@ function buildPlan(tasksDoc, settings, doneLocal, events, nowMin){
     }
     // 今の時刻で入りきらなかったものは、後の枠へ(優先度の高いものから詰めたので、残るのは低いもの)
     if (REAL) for (const x of rest) { if (!x.task.done) { carry.push(x); } else place(x, cursor); }
+    // 時間の枠に入らず残ったものは、はみ出して置く(どうしようもないときははみ出してもいい)
+    else for (const x of rest.splice(0)) place(x, cursor);
     // 枠に空きがあれば「一日中」のタスクで埋める
     while (true) {
       const room = b.end - cursor;
       if (REAL && b.end <= nowMin) break;
-      const pick = pickBest(flex, prev, x => !x.c.fixed && chainLen(x) <= room);
-      if (!pick) break;
+      const pick = pickBest(flex, prev, x => !x.c.fixed && travelMin(prev, x) + chainLen(x) <= room && winOk(x, cursor + travelMin(prev, x)));
+      if (!pick) {
+        // 今は置けなくても、この区間の後ろで時間の枠が始まるタスクがあれば、そこまで進めて置く
+        const later = flex.filter(x => x.c.win && !x.task.done && !x.c.fixed && x.c.win.start > cursor &&
+          x.c.win.start + chainLen(x) <= Math.min(b.end, x.c.win.end)).sort((p, q) => p.c.win.start - q.c.win.start)[0];
+        if (later) { cursor = later.c.win.start; continue; }
+        break;
+      }
       flex.splice(flex.indexOf(pick), 1);
       place(pick, cursor);
     }
@@ -1198,10 +1299,20 @@ function buildPlan(tasksDoc, settings, doneLocal, events, nowMin){
     const fin = items.filter(i => i.task && i.task.done);
     fin.forEach(i => { i.transferFrom = null; i.afterChain = false; });
     const sorted = live.concat(fin);
-    blocks.push({ name: b.name, start: b.start, end: b.end, items: sorted,
-                  used: cursor - b.start, overflow: Math.max(0, cursor - b.end) });
+    blocks.push({ name: b.name, start: b.start, end: b.end, items: sorted, gap: !!b.gap,
+                  used: cursor - b.start, overflow: b.gap ? 0 : Math.max(0, cursor - b.end), cursor });
+    lastPrev = prev;
   }
 
+  for (let i = flex.length - 1; i >= 0; i--) {
+    const x = flex[i]; if (!x.c.win || x.task.done) continue;
+    const seg = blocks.find(g => g.end > x.c.win.start && (!REAL || g.end > nowMin)) || blocks[blocks.length - 1];
+    if (!seg) continue;
+    const at = Math.max(seg.cursor, seg.start);
+    const it = withCompanions(mkItem(x, at), x); it.outWin = true;
+    seg.items.push(it); seg.cursor = it.end; seg.used = seg.cursor - seg.start;
+    flex.splice(i, 1);
+  }
   // 今の時刻で、どの枠にも入りきらなかったもの(優先度の低いもの)
   const overflowToday = REAL ? carry.splice(0).concat(flex.filter(x => !x.task.done && ordered.length && ordered[ordered.length - 1].end <= nowMin))
     .map(x => ({ task: x.task, c: x.c, nagara: [], late: !!x.late })) : [];
@@ -1297,12 +1408,15 @@ function renderToday(){
     const b = Object.assign({}, sec.block);
     finished.push(...b.items.filter(it => it.task && it.task.done));
     b.items = b.items.filter(it => !(it.task && it.task.done));
-    if (!b.items.length) continue;
-    html += '<div class="block"><div class="block-head"><h2>' + esc(b.name) + '</h2>' +
-            '<span class="span">' + fmt(b.start) + "–" + fmt(b.end) + "　" +
+    const nowHere = real && b.start <= nowMin && nowMin < b.end;
+    if (!b.items.length && !(nowHere && !b.gap)) continue;
+    const zc = b.gap ? "gap" : ({ "朝": "z-asa", "昼": "z-hiru", "夜": "z-yoru" }[b.name] || "z-etc");
+    html += '<div class="block zone ' + zc + '"><div class="block-head"><h2>' + (b.gap ? "空き時間" : esc(b.name)) + '</h2>' +
+            '<span class="span">' + fmt(b.start) + "–" + fmt(b.end) + (b.gap ? "" : "　" +
             (b.overflow > 0 ? '<span class="over">' + dur(b.used) + " / " + dur(b.end - b.start) + "</span>"
-                            : dur(b.used) + " / " + dur(b.end - b.start)) +
+                            : dur(b.used) + " / " + dur(b.end - b.start))) +
             "</span></div>";
+    if (!b.items.length && nowHere) html += '<div class="now-line"><span>いま ' + fmt(nowMin) + "</span></div>";
     let nowShown = false;
     for (const it of b.items) {
       // 今の時刻の線:今やるタスクを目立たせ、まだ始まっていなければその手前に線を引く
@@ -1330,6 +1444,7 @@ function renderToday(){
     for (const it of plan.leftover) html += stopHtml(it, "", places);
     html += "</div>";
   }
+  if (html) html = '<div class="timeline">' + html + "</div>";
   if (!html) html = '<div class="empty">今日やることは残っていません。</div>';
 
   if (finished.length) {
@@ -1368,16 +1483,21 @@ function stopHtml(it, time, places){
   const c = it.c;
   const color = placeColor(c.place, places);
   let pre = "";
-  if (it.afterChain) {
+  if (it.afterChain && !it.transferFrom) {
     pre = '<div class="transfer chain" style="--c:' + color + '"><span></span><span class="line"></span>' +
           '<span class="txt">そのまま続ける</span></div>';
+  } else if (it.transferFrom && it.moveBig) {
+    // 別のエリアへの大きな移動
+    pre = '<div class="move-big"><span class="mv-ico">🚶</span><span>' + esc(it.transferFrom) + " → " + esc(c.place) + "</span>" +
+          (it.travel ? '<span class="mv-min">移動 ' + dur(it.travel) + "</span>" : "") + "</div>";
   } else if (it.transferFrom) {
     pre = '<div class="transfer"><span></span><span class="line"></span><span class="txt">' +
-          esc(it.transferFrom) + "から" + esc(c.place) + "へ</span></div>";
+          esc(it.transferFrom) + "から" + esc(c.place) + "へ" + (it.travel ? "(" + dur(it.travel) + ")" : "") + "</span></div>";
   }
   const done = !it.isEvent && it.task.done;
   const meta = [];
   if (it.late && !done) meta.push('<span class="late">遅れ</span>');
+  if (it.outWin && !done) meta.push('<span class="outwin">時間の枠からはみ出し</span>');
   if (it.flow) meta.push('<span class="flowtag">流れ:' + esc(it.flow.name) + " " + it.flow.step + "/" + it.flow.of + "</span>");
   meta.push('<span class="pl">' + esc(c.place) + "</span>");
   if (it.isEvent) {
@@ -2689,6 +2809,7 @@ function renderSettings(){
     const live = sorted.filter(t => !isReset(t));
     const fallen = sorted.filter(isReset);
     const NAG = [["", "ふつう(器官が空いていれば)"], ["no", "ながらにしない"], ["pref", "ながらを優先"]];
+    const allNames = tasks.map(t => t.name).sort((a, b) => a.localeCompare(b, "ja"));
     const q = (state.teQ || "").trim().toLowerCase(), f = state.teF || "";
     const hit = t => { const c = cfgOf(s, t.name);
       return (!q || t.name.toLowerCase().includes(q)) && (!f || (f === "unset" ? !c.configured : c.nagara === f)); };
@@ -2701,7 +2822,7 @@ function renderSettings(){
       const prOpts = [-2,-1,0,1,2].map(v => '<option value="' + v + '"' + (v === c.priority ? " selected" : "") + ">" + (v > 0 ? "+" + v : v) + "</option>").join("");
       const organs = ORGANS.map(o => '<button type="button" aria-pressed="' + (c.organs.includes(o)) + '" data-organ="' + o + '">' + o + "</button>").join("");
       const nagOpts = NAG.map(([v, l]) => '<option value="' + v + '"' + (v === c.nagara ? " selected" : "") + ">" + l + "</option>").join("");
-      const sum = c.configured ? c.min + "分・" + c.place + "・" + c.organs.join("") + (c.fixed ? "・" + c.fixed : "") : (t.slot || "時間帯なし");
+      const sum = c.configured ? c.min + "分・" + c.place + "・" + c.organs.join("") + (c.fixed ? "・" + c.fixed : "") + (c.win ? "・" + c.winStart + "〜" + c.winEnd : "") : (t.slot || "時間帯なし");
       const open = (state.teOpen || new Set()).has(t.name);
       return '<details class="task-edit" data-name="' + esc(t.name) + '"' + (open ? " open" : "") + '><summary><span class="tn2">' + esc(t.name) +
           (c.configured ? "" : '<span class="tbadge unset">未設定</span>') + (c.nagara === "no" ? '<span class="tbadge no">ながらにしない</span>' : "") +
@@ -2713,6 +2834,9 @@ function renderSettings(){
           '<div class="f"><label for="' + id + 'p">場所</label><select id="' + id + 'p" data-k="place">' + opts + "</select></div>" +
           '<div class="f"><label for="' + id + 'f">固定の時刻</label><input id="' + id + 'f" data-k="fixed" type="time" value="' + esc(c.fixed) + '"></div>' +
         "</div>" +
+        '<div class="grid2" style="margin-top:.4rem"><div class="f"><label for="' + id + 'ws">このタスクだけの時間の枠(から)</label><input id="' + id + 'ws" data-k="winStart" type="time" value="' + esc(c.winStart) + '"></div>' +
+          '<div class="f"><label for="' + id + 'we">(まで)</label><input id="' + id + 'we" data-k="winEnd" type="time" value="' + esc(c.winEnd) + '"></div></div>' +
+        '<p class="hint" style="margin:.1rem 0 0">この時間の中に入れるのを優先し、どうしても入らなければはみ出して置きます。</p>' +
         "<h4>並べ方</h4>" +
         '<div class="grid2">' +
           '<div class="f"><label for="' + id + 'r">優先度</label><select id="' + id + 'r" data-k="priority">' + prOpts + "</select></div>" +
@@ -2721,7 +2845,8 @@ function renderSettings(){
         '<div class="f" style="margin-top:.5rem"><label for="' + id + 'x">この後に続ける</label>' +
         '<select id="' + id + 'x" data-k="next"><option value="">なし</option>' + nextOpts(t.name, c.next) + "</select></div>" +
         "<h4>ながら</h4>" +
-        '<div class="f"><label for="' + id + 'n">ながらの扱い</label><select id="' + id + 'n" data-k="nagara">' + nagOpts + "</select></div>" +
+        '<div class="f"><label for="' + id + 'n">ながらの扱い(どのタスクとも)</label><select id="' + id + 'n" data-k="nagara">' + nagOpts + "</select></div>" +
+        pairPicker(t.name, "pair", "一緒にやりたいタスク", allNames) + pairPicker(t.name, "avoid", "一緒にしないタスク", allNames) +
         '<div class="organs" role="group" aria-label="使う器官">' + organs + "</div>" +
         "</div></details>";
     };
@@ -2736,6 +2861,24 @@ function renderSettings(){
         : "");
   }
 
+  // 1日の始まりと終わり
+  document.getElementById("day-start").value = (s.day || {}).start || "";
+  document.getElementById("day-end").value = (s.day || {}).end || "";
+  // エリアと移動の時間
+  const ae = document.getElementById("areas-edit");
+  if (ae) {
+    const pls = (s.places || []).filter(p => p !== ANYWHERE), areas = s.areas || {};
+    const names = Array.from(new Set(["家"].concat(Object.values(areas))));
+    ae.innerHTML = '<datalist id="area-list">' + names.map(n => "<option>" + esc(n) + "</option>").join("") + "</datalist>" +
+      pls.map(p => '<div class="row3"><strong>' + esc(p) + '</strong><div class="f"><input data-area="' + esc(p) + '" list="area-list" value="' + esc(areas[p] || "家") + '" aria-label="' + esc(p) + 'のエリア"></div></div>').join("");
+    const tvv = s.travel || {};
+    document.getElementById("tv-within").value = tvv.within != null ? tvv.within : 0;
+    document.getElementById("tv-between").value = tvv.between != null ? tvv.between : 20;
+    const used = Array.from(new Set(pls.map(p => areas[p] || "家")));
+    const prs = []; for (let i = 0; i < used.length; i++) for (let j = i + 1; j < used.length; j++) prs.push([used[i], used[j]]);
+    document.getElementById("tv-pairs").innerHTML = prs.length ? '<p class="hint" style="margin-top:.5rem">エリアの組ごとの移動(空欄なら上の「違うエリアへの移動」)</p><div class="grid2">' +
+      prs.map(([a, z]) => { const v = (tvv.pairs || {})[a + "|" + z]; return '<div class="f"><label>' + esc(a) + " ⇄ " + esc(z) + '(分)</label><input data-tvpair="' + esc(a + "|" + z) + '" type="number" min="0" step="1" value="' + (v != null ? v : "") + '"></div>'; }).join("") + "</div>" : "";
+  }
   // 時間の枠
   const be = document.getElementById("blocks-edit");
   be.innerHTML = Object.keys(s.blocks).map(n =>
@@ -2776,11 +2919,36 @@ function renderSettings(){
   updateSaveBar();
 }
 
+// 組み合わせの相手を選ぶところ。相手の側に設定してあるものも並べる(どちらに設定しても効くため)
+function pairPicker(name, kind, label, allNames){
+  const s = state.settings, mine = cfgOf(s, name)[kind];
+  const theirs = allNames.filter(n => n !== name && cfgOf(s, n)[kind].includes(name));
+  const list = Array.from(new Set(mine.concat(theirs)));
+  const chips = list.map(n => '<span class="pchip ' + kind + '">' + esc(n) + '<button type="button" data-rm-list="' + kind + '" data-rm-name="' + esc(n) + '" aria-label="外す">×</button></span>').join("");
+  const opts = allNames.filter(n => n !== name && !list.includes(n)).map(n => "<option>" + esc(n) + "</option>").join("");
+  return '<div class="f" style="margin-top:.5rem"><label>' + label + '</label><div class="pchips">' + (chips || '<span style="font-size:.8rem;color:var(--sub)">なし</span>') + "</div>" +
+    '<select data-add-list="' + kind + '"><option value="">+ 選ぶ</option>' + opts + "</select></div>";
+}
+function setPairRule(name, other, kind, on){
+  const s = state.settings, a = ensureTask(name);
+  const opp = kind === "pair" ? "avoid" : "pair";
+  a[kind] = Array.isArray(a[kind]) ? a[kind] : [];
+  if (on) {
+    if (!a[kind].includes(other)) a[kind].push(other);
+    // 一緒にやりたい と 一緒にしない は両立しないので、反対側からは外す(相手の側も)
+    a[opp] = (a[opp] || []).filter(n => n !== other);
+    if (s.tasks[other] && Array.isArray(s.tasks[other][opp])) s.tasks[other][opp] = s.tasks[other][opp].filter(n => n !== name);
+  } else {
+    a[kind] = a[kind].filter(n => n !== other);
+    if (s.tasks[other] && Array.isArray(s.tasks[other][kind])) s.tasks[other][kind] = s.tasks[other][kind].filter(n => n !== name);
+  }
+}
+
 // タスクの行の要約(「15分・机・目手」と印)だけを書き換える。一覧は描き直さない
 function updateTaskSummary(row){
   const c = cfgOf(state.settings, row.dataset.name);
   const ts = row.querySelector("summary .ts"), tn = row.querySelector("summary .tn2");
-  if (ts) ts.textContent = c.min + "分・" + c.place + "・" + c.organs.join("") + (c.fixed ? "・" + c.fixed : "");
+  if (ts) ts.textContent = c.min + "分・" + c.place + "・" + c.organs.join("") + (c.fixed ? "・" + c.fixed : "") + (c.win ? "・" + c.winStart + "〜" + c.winEnd : "");
   if (tn) tn.innerHTML = esc(row.dataset.name) + (c.nagara === "no" ? '<span class="tbadge no">ながらにしない</span>' : "") + (c.nagara === "pref" ? '<span class="tbadge pref">ながら優先</span>' : "");
 }
 
@@ -2789,7 +2957,8 @@ function ensureTask(name){
   if (!s.tasks[name]) {
     const c = cfgOf(s, name);
     s.tasks[name] = { min: c.min, place: c.place, organs: c.organs, mode: c.mode,
-                      priority: c.priority, fixed: c.fixed, next: c.next, nagara: c.nagara };
+                      priority: c.priority, fixed: c.fixed, next: c.next, nagara: c.nagara, avoid: c.avoid, pair: c.pair,
+                      winStart: c.winStart, winEnd: c.winEnd };
   }
   return s.tasks[name];
 }
@@ -3112,6 +3281,7 @@ function showView(name){
   document.querySelectorAll(".view").forEach(v => v.hidden = (v.id !== "view-" + name));
   if (name === "today") renderToday();
   if (name === "plan") renderPlan();
+  if (name === "settings") renderSettings();
   if (name === "tasks" || name === "check") renderTasks();
   document.querySelectorAll("nav.tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.view === name)));
   window.scrollTo(0, 0);
@@ -3641,6 +3811,8 @@ function bind(){
   const edits = document.getElementById("task-edits");
   edits.addEventListener("change", e => {
     const row = e.target.closest(".task-edit"); if (!row) return;
+    const al = e.target.dataset.addList;
+    if (al && e.target.value) { setPairRule(row.dataset.name, e.target.value, al, true); markDirty(); renderSettings(); return; }
     const k = e.target.dataset.k; if (!k) return;
     const t = ensureTask(row.dataset.name);
     if (k === "min") t.min = Math.max(1, +e.target.value || 1);
@@ -3665,6 +3837,8 @@ function bind(){
     d.addEventListener("toggle", () => { const v = lsGet(SEC_KEY, {}); v[d.dataset.sec] = d.open; lsSet(SEC_KEY, v); });
   });
   edits.addEventListener("click", e => {
+    const rm = e.target.closest("[data-rm-list]");
+    if (rm) { const row = rm.closest(".task-edit"); setPairRule(row.dataset.name, rm.dataset.rmName, rm.dataset.rmList, false); markDirty(); renderSettings(); return; }
     const b = e.target.closest("[data-organ]"); if (!b) return;
     const row = b.closest(".task-edit");
     const t = ensureTask(row.dataset.name);
@@ -3682,6 +3856,26 @@ function bind(){
     const row = e.target.closest("[data-block]"); if (!row) return;
     const k = e.target.dataset.bk; if (!k || toMin(e.target.value) === null) return;
     state.settings.blocks[row.dataset.block][k] = e.target.value;
+    markDirty();
+  });
+  ["day-start", "day-end"].forEach(id => document.getElementById(id).addEventListener("change", e => {
+    state.settings.day = Object.assign({}, state.settings.day || {}, { [id === "day-start" ? "start" : "end"]: e.target.value });
+    markDirty();
+  }));
+  document.getElementById("areas-edit").addEventListener("change", e => {
+    const el = e.target.closest("[data-area]"); if (!el) return;
+    state.settings.areas = Object.assign({}, state.settings.areas || {}, { [el.dataset.area]: el.value.trim() || "家" });
+    markDirty(); renderSettings();
+  });
+  ["tv-within", "tv-between"].forEach(id => document.getElementById(id).addEventListener("change", e => {
+    state.settings.travel = Object.assign({}, state.settings.travel || {}, { [id === "tv-within" ? "within" : "between"]: Math.max(0, +e.target.value || 0) });
+    markDirty();
+  }));
+  document.getElementById("tv-pairs").addEventListener("change", e => {
+    const el = e.target.closest("[data-tvpair]"); if (!el) return;
+    const tvv = state.settings.travel = Object.assign({}, state.settings.travel || {});
+    tvv.pairs = Object.assign({}, tvv.pairs || {});
+    if (el.value === "") delete tvv.pairs[el.dataset.tvpair]; else tvv.pairs[el.dataset.tvpair] = Math.max(0, +el.value || 0);
     markDirty();
   });
   document.getElementById("places").addEventListener("change", e => {
