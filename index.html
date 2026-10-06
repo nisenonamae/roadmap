@@ -92,6 +92,25 @@ button,input,select{font:inherit;color:inherit}
 .rem-box .rb-i span{font-size:.82rem;color:var(--sub)}
 .rem-box .rb-i.over span{color:#B3283C}
 .rem-box .rb-f{font-size:.72rem;color:var(--sub);margin-top:.2rem}
+details.fold-sec{border-top:1px solid var(--rule);padding:.2rem 0}
+details.fold-sec>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:.5rem;padding:.5rem 0}
+details.fold-sec>summary::-webkit-details-marker{display:none}
+details.fold-sec>summary::before{content:"▸";color:var(--sub);transition:transform .15s}
+details.fold-sec[open]>summary::before{transform:rotate(90deg)}
+details.fold-sec>summary h2{margin:0;font-size:1rem}
+.te-bar{display:flex;gap:.4rem;margin:.3rem 0 .6rem}
+.te-bar input{flex:1;min-width:0;padding:.35rem .5rem;border:1px solid var(--rule);border-radius:3px;font:inherit}
+.te-bar select{padding:.3rem;border:1px solid var(--rule);border-radius:3px;font:inherit}
+details.task-edit{border:1px solid var(--rule);border-radius:4px;margin:.35rem 0;background:#fff}
+details.task-edit>summary{cursor:pointer;list-style:none;padding:.5rem .7rem;display:flex;justify-content:space-between;gap:.6rem;align-items:baseline}
+details.task-edit>summary::-webkit-details-marker{display:none}
+details.task-edit>summary .tn2{font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+details.task-edit>summary .ts{font-size:.76rem;color:var(--sub);white-space:nowrap}
+details.task-edit .te-body{padding:0 .7rem .7rem}
+details.task-edit h4{margin:.6rem 0 .25rem;font-size:.8rem;color:var(--sub);letter-spacing:.08em}
+.tbadge{font-size:.7rem;border-radius:3px;padding:0 .3rem;margin-left:.25rem}
+.tbadge.unset{background:#FCEFD9;color:#8A5A00}.tbadge.no{background:#F6E0E3;color:#B3283C}.tbadge.pref{background:#E2EFE6;color:#2F6E44}
+.te-group{font-size:.8rem;color:var(--sub);margin:.8rem 0 .2rem}
 .flowtag{color:#2F6E8A;border:1px solid #2F6E8A;border-radius:3px;padding:0 .35rem;font-size:.72rem}
 .flow-card{border:1px solid var(--rule);border-radius:4px;padding:.6rem .7rem;margin:.5rem 0;background:#fff}
 .flow-card .steps{display:flex;flex-wrap:wrap;gap:.3rem;align-items:center;margin:.4rem 0}
@@ -447,43 +466,39 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
   <section class="view" id="view-settings" hidden>
     <header class="head"><h1>設定</h1><div class="date">組み立ての材料</div></header>
 
-    <div class="sec">
-      <h2>タスク</h2>
+    <details class="sec fold-sec" data-sec="タスク"><summary><h2>タスク</h2></summary>
       <p class="hint">所要時間・場所・使う器官を入れると、ながらの組み合わせと順番が正確になります。まだ設定していないものが上に並びます。<br>
       「この後に続ける」を指定すると、2つが必ず隣り合います。軽いほうを先に置いて、重いほうへの踏み台にするときに使います。</p>
+      <div class="te-bar"><input id="te-q" type="search" placeholder="名前で探す"><select id="te-f">
+        <option value="">すべて</option><option value="unset">未設定だけ</option><option value="no">ながらにしない</option><option value="pref">ながらを優先</option></select></div>
       <div id="task-edits"></div>
-    </div>
+    </details>
 
-    <div class="sec">
-      <h2>流れ</h2>
+    <details class="sec fold-sec" data-sec="流れ"><summary><h2>流れ</h2></summary>
       <p class="hint">続けやすい一連の型を組みます。1つの段に複数のタスクを入れると同時にやり、段は上から順に続けます。時刻表の中ではひとまとまりとして置かれます。</p>
       <div id="flows-edit"></div>
       <button class="btn ghost" id="add-flow" type="button" style="margin-top:.6rem">流れを作る</button>
       <h3 style="margin-top:1.2rem;font-size:.95rem">見つかった流れの候補</h3>
       <div id="flow-finds"></div>
-    </div>
+    </details>
 
-    <div class="sec">
-      <h2>よく使う用事</h2>
+    <details class="sec fold-sec" data-sec="よく使う用事"><summary><h2>よく使う用事</h2></summary>
       <p class="hint">登録すると、今日の画面のボタン1つで入れられます。曜日を選ぶと、その曜日は何もしなくても自動で入ります。</p>
       <div id="presets-edit"></div>
       <button class="btn ghost" id="add-preset" type="button" style="margin-top:.6rem">よく使う用事を足す</button>
-    </div>
+    </details>
 
-    <div class="sec blocks-edit">
-      <h2>時間の枠</h2>
+    <details class="sec fold-sec blocks-edit" data-sec="時間の枠"><summary><h2>時間の枠</h2></summary>
       <p class="hint">朝・昼・夜のタスクはこの枠に入ります。「一日中」のタスクは枠の空きに入り、入りきらないぶんは最後に並びます。</p>
       <div id="blocks-edit"></div>
-    </div>
+    </details>
 
-    <div class="sec">
-      <h2>場所</h2>
+    <details class="sec fold-sec" data-sec="場所"><summary><h2>場所</h2></summary>
       <p class="hint">読点かカンマで区切ります。「どこでも」は他のどの場所のタスクとも組めます。</p>
       <div class="f"><input id="places" type="text"></div>
-    </div>
+    </details>
 
-    <div class="sec">
-      <h2>並べ方の重み</h2>
+    <details class="sec fold-sec" data-sec="並べ方の重み"><summary><h2>並べ方の重み</h2></summary>
       <p class="hint">大きいほど、その法則を強く効かせます。タスクの価値は 重み × 省の重要度 で、今日落とすと要再設定になるもの(リーチ)はそこに倍率が掛かります。</p>
       <div class="grid2">
         <div class="f"><label for="w-place">同じ場所を続ける</label><input id="w-place" type="number" step="0.5" min="0"></div>
@@ -491,7 +506,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
         <div class="f"><label for="w-priority">タスクの価値</label><input id="w-priority" type="number" step="0.5" min="0"></div>
         <div class="f"><label for="w-reach">リーチの倍率</label><input id="w-reach" type="number" step="0.5" min="1"></div>
       </div>
-    </div>
+    </details>
 
     <div class="savebar">
       <button class="btn" id="save" disabled>保存する</button>
@@ -553,7 +568,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-06 r45";
+const APP_VERSION = "2026-10-06 r46";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -846,6 +861,7 @@ function cfgOf(settings, name){
     priority: +s.priority || 0,
     fixed: toMin(s.fixed) !== null ? s.fixed : "",
     next: s.next || "",            // この後に続けるタスク。踏み台にするときに使う
+    nagara: s.nagara || "",        // ながら:""=ふつう、"no"=ながらにしない、"pref"=ながらを優先
     configured: configured,
   };
 }
@@ -947,13 +963,17 @@ function buildPlan(tasksDoc, settings, doneLocal, events, nowMin){
     return s;
   }
   function pickBest(pool, prev, fits){
-    let best = null, bestScore = -Infinity;
-    for (const x of pool) {
-      if (fits && !fits(x)) continue;
-      const s = score(x, prev);
-      if (s > bestScore) { best = x; bestScore = s; }
+    for (const allowPref of [false, true]) {
+      let best = null, bestScore = -Infinity;
+      for (const x of pool) {
+        if (fits && !fits(x)) continue;
+        if (!allowPref && x.c.nagara === "pref" && !x.task.done) continue;
+        const s = score(x, prev);
+        if (s > bestScore) { best = x; bestScore = s; }
+      }
+      if (best) return best;
     }
-    return best;
+    return null;
   }
   function candidates(pools){
     const cands = [];
@@ -971,9 +991,13 @@ function buildPlan(tasksDoc, settings, doneLocal, events, nowMin){
   // 主タスクに、使う器官が重ならず場所の合うものを同時に重ねる
   function attach(item, pools){
     const used = new Set(item.c.organs);
-    for (const { x, pool } of candidates(pools)) {
+    if (item.c.nagara === "no") return;            // ながらにしないタスクには重ねない
+    // ながらを優先するタスクから先に乗せる
+    const cands = candidates(pools); cands.sort((a, b) => (b.x.c.nagara === "pref") - (a.x.c.nagara === "pref"));
+    for (const { x, pool } of cands) {
       if (item.nagara.length >= 2) break;
       if (!item.c.configured || !x.c.configured) continue;
+      if (x.c.nagara === "no") continue;
       if (x.task.done || x.c.fixed || follower(x)) continue;
       if (x.c.min > item.c.min) continue;
       if (!(x.c.place === ANYWHERE || x.c.place === item.c.place)) continue;
@@ -986,8 +1010,10 @@ function buildPlan(tasksDoc, settings, doneLocal, events, nowMin){
   // 用事には、空いている器官でできるタスクを順番に詰める。長い用事ほど多く乗る
   function attachSeq(item, pools){
     let budget = item.c.min;
-    for (const { x, pool } of candidates(pools)) {
+    const cands = candidates(pools); cands.sort((a, b) => (b.x.c.nagara === "pref") - (a.x.c.nagara === "pref"));
+    for (const { x, pool } of cands) {
       if (item.nagara.length >= 4) break;
+      if (x.c.nagara === "no") continue;
       if (!x.c.configured || x.c.fixed || x.task.done || follower(x)) continue;
       if (x.c.min > budget) continue;
       if (!(x.c.place === ANYWHERE || x.c.place === item.c.place)) continue;
@@ -2662,6 +2688,10 @@ function renderSettings(){
     const isReset = t => t.status === "要再設定";
     const live = sorted.filter(t => !isReset(t));
     const fallen = sorted.filter(isReset);
+    const NAG = [["", "ふつう(器官が空いていれば)"], ["no", "ながらにしない"], ["pref", "ながらを優先"]];
+    const q = (state.teQ || "").trim().toLowerCase(), f = state.teF || "";
+    const hit = t => { const c = cfgOf(s, t.name);
+      return (!q || t.name.toLowerCase().includes(q)) && (!f || (f === "unset" ? !c.configured : c.nagara === f)); };
     const card = (t, i) => {
       const c = cfgOf(s, t.name);
       const id = "t" + i;
@@ -2670,24 +2700,39 @@ function renderSettings(){
       const modeOpts = MODES.map(([v, l]) => '<option value="' + v + '"' + (v === c.mode ? " selected" : "") + ">" + (l || "なし") + "</option>").join("");
       const prOpts = [-2,-1,0,1,2].map(v => '<option value="' + v + '"' + (v === c.priority ? " selected" : "") + ">" + (v > 0 ? "+" + v : v) + "</option>").join("");
       const organs = ORGANS.map(o => '<button type="button" aria-pressed="' + (c.organs.includes(o)) + '" data-organ="' + o + '">' + o + "</button>").join("");
-      return '<div class="task-edit" data-name="' + esc(t.name) + '">' +
-        '<div class="tn">' + esc(t.name) + "<small>" + esc(t.slot || "時間帯なし") + (c.configured ? "" : "・未設定") + "</small></div>" +
+      const nagOpts = NAG.map(([v, l]) => '<option value="' + v + '"' + (v === c.nagara ? " selected" : "") + ">" + l + "</option>").join("");
+      const sum = c.configured ? c.min + "分・" + c.place + "・" + c.organs.join("") + (c.fixed ? "・" + c.fixed : "") : (t.slot || "時間帯なし");
+      const open = (state.teOpen || new Set()).has(t.name);
+      return '<details class="task-edit" data-name="' + esc(t.name) + '"' + (open ? " open" : "") + '><summary><span class="tn2">' + esc(t.name) +
+          (c.configured ? "" : '<span class="tbadge unset">未設定</span>') + (c.nagara === "no" ? '<span class="tbadge no">ながらにしない</span>' : "") +
+          (c.nagara === "pref" ? '<span class="tbadge pref">ながら優先</span>' : "") + '</span><span class="ts">' + esc(sum) + "</span></summary>" +
+        '<div class="te-body">' +
+        "<h4>基本</h4>" +
         '<div class="grid2">' +
           '<div class="f"><label for="' + id + 'm">所要(分)</label><input id="' + id + 'm" data-k="min" type="number" min="1" step="1" value="' + c.min + '"></div>' +
           '<div class="f"><label for="' + id + 'p">場所</label><select id="' + id + 'p" data-k="place">' + opts + "</select></div>" +
-          '<div class="f"><label for="' + id + 'd">集中の型</label><select id="' + id + 'd" data-k="mode">' + modeOpts + "</select></div>" +
-          '<div class="f"><label for="' + id + 'r">優先度</label><select id="' + id + 'r" data-k="priority">' + prOpts + "</select></div>" +
           '<div class="f"><label for="' + id + 'f">固定の時刻</label><input id="' + id + 'f" data-k="fixed" type="time" value="' + esc(c.fixed) + '"></div>' +
+        "</div>" +
+        "<h4>並べ方</h4>" +
+        '<div class="grid2">' +
+          '<div class="f"><label for="' + id + 'r">優先度</label><select id="' + id + 'r" data-k="priority">' + prOpts + "</select></div>" +
+          '<div class="f"><label for="' + id + 'd">集中の型</label><select id="' + id + 'd" data-k="mode">' + modeOpts + "</select></div>" +
         "</div>" +
         '<div class="f" style="margin-top:.5rem"><label for="' + id + 'x">この後に続ける</label>' +
         '<select id="' + id + 'x" data-k="next"><option value="">なし</option>' + nextOpts(t.name, c.next) + "</select></div>" +
+        "<h4>ながら</h4>" +
+        '<div class="f"><label for="' + id + 'n">ながらの扱い</label><select id="' + id + 'n" data-k="nagara">' + nagOpts + "</select></div>" +
         '<div class="organs" role="group" aria-label="使う器官">' + organs + "</div>" +
-      "</div>";
+        "</div></details>";
     };
-    box.innerHTML = live.map(card).join("") +
-      (fallen.length
-        ? '<details class="more"><summary>要再設定　' + fallen.length +
-          "件</summary>" + fallen.map((t, i) => card(t, live.length + i)).join("") + "</details>"
+    const shown = live.filter(hit), unset = shown.filter(t => !cfgOf(s, t.name).configured), setd = shown.filter(t => cfgOf(s, t.name).configured);
+    const fall = fallen.filter(hit);
+    box.innerHTML = (!shown.length && !fall.length ? '<div class="empty">当てはまるタスクはありません。</div>' : "") +
+      (unset.length ? '<div class="te-group">まだ設定していない ' + unset.length + "件</div>" + unset.map(card).join("") : "") +
+      (setd.length ? '<div class="te-group">設定ずみ ' + setd.length + "件</div>" + setd.map((t, i) => card(t, unset.length + i)).join("") : "") +
+      (fall.length
+        ? '<details class="more"><summary>要再設定　' + fall.length +
+          "件</summary>" + fall.map((t, i) => card(t, shown.length + i)).join("") + "</details>"
         : "");
   }
 
@@ -2731,12 +2776,20 @@ function renderSettings(){
   updateSaveBar();
 }
 
+// タスクの行の要約(「15分・机・目手」と印)だけを書き換える。一覧は描き直さない
+function updateTaskSummary(row){
+  const c = cfgOf(state.settings, row.dataset.name);
+  const ts = row.querySelector("summary .ts"), tn = row.querySelector("summary .tn2");
+  if (ts) ts.textContent = c.min + "分・" + c.place + "・" + c.organs.join("") + (c.fixed ? "・" + c.fixed : "");
+  if (tn) tn.innerHTML = esc(row.dataset.name) + (c.nagara === "no" ? '<span class="tbadge no">ながらにしない</span>' : "") + (c.nagara === "pref" ? '<span class="tbadge pref">ながら優先</span>' : "");
+}
+
 function ensureTask(name){
   const s = state.settings;
   if (!s.tasks[name]) {
     const c = cfgOf(s, name);
     s.tasks[name] = { min: c.min, place: c.place, organs: c.organs, mode: c.mode,
-                      priority: c.priority, fixed: c.fixed, next: c.next };
+                      priority: c.priority, fixed: c.fixed, next: c.next, nagara: c.nagara };
   }
   return s.tasks[name];
 }
@@ -3593,8 +3646,23 @@ function bind(){
     if (k === "min") t.min = Math.max(1, +e.target.value || 1);
     else if (k === "priority") t.priority = +e.target.value;
     else t[k] = e.target.value;
-    if (k === "next") renderSettings();
     markDirty();
+    if (k === "next") renderSettings(); else updateTaskSummary(row);
+  });
+  // 開いている編集を覚えておく(描き直しても閉じない)
+  edits.addEventListener("toggle", e => {
+    const d = e.target.closest && e.target.closest("details.task-edit"); if (!d) return;
+    state.teOpen = state.teOpen || new Set();
+    d.open ? state.teOpen.add(d.dataset.name) : state.teOpen.delete(d.dataset.name);
+  }, true);
+  document.getElementById("te-q").addEventListener("input", e => { state.teQ = e.target.value; renderSettings(); });
+  document.getElementById("te-f").addEventListener("change", e => { state.teF = e.target.value; renderSettings(); });
+  // 各欄の開閉を覚えておく
+  const SEC_KEY = "roadmap-secs";
+  const secOpen = lsGet(SEC_KEY, { "タスク": true });
+  document.querySelectorAll("details.fold-sec").forEach(d => {
+    d.open = !!secOpen[d.dataset.sec];
+    d.addEventListener("toggle", () => { const v = lsGet(SEC_KEY, {}); v[d.dataset.sec] = d.open; lsSet(SEC_KEY, v); });
   });
   edits.addEventListener("click", e => {
     const b = e.target.closest("[data-organ]"); if (!b) return;
@@ -3607,6 +3675,7 @@ function bind(){
     on ? set.add(o) : set.delete(o);
     t.organs = ORGANS.filter(x => set.has(x));
     markDirty();
+    updateTaskSummary(row);
   });
 
   document.getElementById("blocks-edit").addEventListener("change", e => {
