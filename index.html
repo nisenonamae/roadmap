@@ -610,7 +610,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-06 r52";
+const APP_VERSION = "2026-10-06 r53";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -2863,18 +2863,18 @@ function renderSettings(){
     const chainable = tasks.filter(t =>
       t.status !== "要再設定" && t.status !== "随時" &&
       !(DONE.includes(t.check) && !AUTO.includes(t.status)));
+    // 続ける先の候補:今日これからやるタスク(同じ場所 → 場所が違う)と、今日の時刻表に無いタスクに分けて並べる
     const nextOpts = (self, cur) => {
       const here = cfgOf(s, self).place;
-      const pool = chainable.filter(t => t.name !== self);
-      const near = pool.filter(t => {
-        const p = cfgOf(s, t.name).place;
-        return p === here || p === ANYWHERE || here === ANYWHERE;
-      }).map(t => t.name);
-      const far = pool.filter(t => !near.includes(t.name)).map(t => t.name);
+      const todayNames = new Set(chainable.map(t => t.name));
+      const all = partnerNames().filter(n => n !== self);
+      const nearP = n => { const p = cfgOf(s, n).place; return p === here || p === ANYWHERE || here === ANYWHERE; };
+      const near = all.filter(n => todayNames.has(n) && nearP(n)), far = all.filter(n => todayNames.has(n) && !nearP(n)), other = all.filter(n => !todayNames.has(n));
       const opt = n => '<option' + (n === cur ? " selected" : "") + ">" + esc(n) + "</option>";
       let html = near.map(opt).join("");
       if (far.length) html += '<optgroup label="場所が違う">' + far.map(opt).join("") + "</optgroup>";
-      if (cur && !pool.some(t => t.name === cur)) html += opt(cur);
+      if (other.length) html += '<optgroup label="今日の時刻表に無いタスク">' + other.map(opt).join("") + "</optgroup>";
+      if (cur && !all.includes(cur)) html += opt(cur);
       return html;
     };
     const isReset = t => t.status === "要再設定";
@@ -3951,12 +3951,21 @@ function bind(){
       return;
     }
     const k = e.target.dataset.k; if (!k) return;
+    if (k === "next") {
+      const name = row.dataset.name, v = e.target.value;
+      const st = state.settings; st.tasks = st.tasks || {};
+      const t0 = st.tasks[name] = st.tasks[name] || {};      // 設定していないタスクは、続ける先だけを持たせる
+      t0.next = v;
+      markDirty(); renderSettings();
+      afterPairEdit(name, v ? "この後に「" + v + "」を続けるようにしました" : "続けるタスクを外しました");
+      return;
+    }
     const t = ensureTask(row.dataset.name);
     if (k === "min") t.min = Math.max(1, +e.target.value || 1);
     else if (k === "priority") t.priority = +e.target.value;
     else t[k] = e.target.value;
     markDirty();
-    if (k === "next") renderSettings(); else updateTaskSummary(row);
+    updateTaskSummary(row);
   });
   // 開いている編集を覚えておく(描き直しても閉じない)
   edits.addEventListener("toggle", e => {
