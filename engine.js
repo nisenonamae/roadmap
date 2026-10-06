@@ -222,7 +222,7 @@
     const out = Object.assign({}, def);
     for (const k of EDIT_KEYS) if (e[k] !== undefined) out[k] = e[k];
     if (Array.isArray(e.ministries)) out.ministries = e.ministries.slice();
-    if (Array.isArray(e.waves)) out.waves = e.waves.map(l => ({ label: l, url: "" }));
+    if (Array.isArray(e.waves)) out.waves = e.waves.map(l => typeof l === "string" ? { label: l, url: "" } : { label: l.label || "", url: l.url || "" });
     if (e.name && e.name !== def.name) out.aliases = Array.from(new Set((def.aliases || []).concat([def.name])));
     const gens = (def.generations || []).map(g => Object.assign({}, g));
     for (const g of ov.generations || []) if (!gens.some(x => x.gen === g.gen && x.from === g.from)) gens.push(Object.assign({}, g));
@@ -287,20 +287,26 @@
     const byId = new Map(ps.map(p => [p.id, p]));
     const byKey = new Map(ps.map(p => [tagOf(p) + "|" + String(p.label).toUpperCase(), p]));
     return defs.map(d => {
+      // ページから作ったタスク(リンクで結びつく)は、ページを作った日から決まりに従う。
+      // ラベルで結びつく前からのタスクは、そのページを初めて「進行中」にした日から従う(作り直している間は今までどおり)
       const linked = [];
       for (const w of d.waves || []) {
         const m = /#page=([\w-]+)/.exec((w && w.url) || "");
-        let p = m ? byId.get(m[1]) : null;
+        let p = m ? byId.get(m[1]) : null, explicit = !!p;
         if (!p) { const lab = String((w && w.label) || w || "").replace(/\s+/g, "").toUpperCase(); for (const t of d.ministries || []) { p = byKey.get(t + "|" + lab); if (p) break; } }
-        if (p && linked.indexOf(p) < 0) linked.push(p);
+        if (p && !linked.some(x => x.p === p)) linked.push({ p, explicit });
       }
       if (!linked.length) return d;
       const ranges = []; let start = null;
-      for (const p of linked) {
+      for (const { p, explicit } of linked) {
         const log = (p.statusLog && p.statusLog.length ? p.statusLog : [{ date: p.created || "2000-01-01", status: p.status }]).slice().sort((a, b) => a.date < b.date ? -1 : 1);
-        if (!start || log[0].date < start) start = log[0].date;
+        const firstRun = log.find(x => normSt(x.status) === "進行中");
+        const from = explicit ? log[0].date : (firstRun ? firstRun.date : null);
+        if (!from) continue;
+        if (!start || from < start) start = from;
         log.forEach((x, i) => { if (normSt(x.status) === "進行中") ranges.push([x.date, log[i + 1] ? log[i + 1].date : null]); });
       }
+      if (!start) return d;
       return Object.assign({}, d, { gate: { start, ranges } });
     });
   }
