@@ -281,22 +281,26 @@
   const normSt = s => (s === "未着手" || !s) ? "作成中" : s;
   function applyGates(defs, pagesDoc){
     const ps = ((pagesDoc && pagesDoc.pages) || []).filter(p => !p.deleted && !p.imported && (p.kind === "STAGE" || p.kind === "WAVE"));
-    if (!ps.length) return defs;
-    const all = (pagesDoc.pages || []);
+    // 省アプリに無いSTAGE・WAVEのタスクも待機中にする(strictFrom の日から。それより前は書き換えない)
+    const strict = pagesDoc && pagesDoc.strictFrom;
+    if (!ps.length && !strict) return defs;
+    const all = ((pagesDoc && pagesDoc.pages) || []);
     const tagOf = p => { let c = p, g = 0; while (c && g++ < 50) { if (String(c.parent).indexOf("m:") === 0) return c.parent.slice(2); const pid = c.parent; c = all.find(x => x.id === pid); } return null; };
     const byId = new Map(ps.map(p => [p.id, p]));
     const byKey = new Map(ps.map(p => [tagOf(p) + "|" + String(p.label).toUpperCase(), p]));
     return defs.map(d => {
       // ページから作ったタスク(リンクで結びつく)は、ページを作った日から決まりに従う。
       // ラベルで結びつく前からのタスクは、そのページを初めて「進行中」にした日から従う(作り直している間は今までどおり)
-      const linked = [];
+      const linked = [], orphans = [];
       for (const w of d.waves || []) {
         const m = /#page=([\w-]+)/.exec((w && w.url) || "");
         let p = m ? byId.get(m[1]) : null, explicit = !!p;
-        if (!p) { const lab = String((w && w.label) || w || "").replace(/\s+/g, "").toUpperCase(); for (const t of d.ministries || []) { p = byKey.get(t + "|" + lab); if (p) break; } }
+        const lab = String((w && w.label) || w || "").replace(/\s+/g, "").toUpperCase();
+        if (!p) { for (const t of d.ministries || []) { p = byKey.get(t + "|" + lab); if (p) break; } }
         if (p && !linked.some(x => x.p === p)) linked.push({ p, explicit });
+        else if (!p && strict && /^(STAGE|WAVE)\d/.test(lab) && orphans.indexOf(lab) < 0) orphans.push(lab);
       }
-      if (!linked.length) return d;
+      if (!linked.length && !orphans.length) return d;
       const ranges = []; let start = null;
       for (const { p, explicit } of linked) {
         const log = (p.statusLog && p.statusLog.length ? p.statusLog : [{ date: p.created || "2000-01-01", status: p.status }]).slice().sort((a, b) => a.date < b.date ? -1 : 1);
@@ -306,8 +310,11 @@
         if (!start || from < start) start = from;
         log.forEach((x, i) => { if (normSt(x.status) === "進行中") ranges.push([x.date, log[i + 1] ? log[i + 1].date : null]); });
       }
+      if (orphans.length && (!start || strict < start)) start = strict;
       if (!start) return d;
-      return Object.assign({}, d, { gate: { start, ranges, pages: linked.map(({ p }) => ({ id: p.id, label: p.label, title: p.title || "", status: normSt(p.status) })) } });
+      const info = linked.map(({ p }) => ({ id: p.id, label: p.label, title: p.title || "", status: normSt(p.status) }))
+        .concat(orphans.map(l => ({ id: null, label: l, title: "", status: "省アプリに無い" })));
+      return Object.assign({}, d, { gate: { start, ranges, pages: info } });
     });
   }
 
