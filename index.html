@@ -624,7 +624,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-07 r61";
+const APP_VERSION = "2026-10-07 r62";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -2893,9 +2893,47 @@ function newTaskHtml(){
     '<p class="note" style="font-size:.78rem;color:var(--sub)">今日から新規として始まります。' + (state.cutover ? "" : "毎朝4:40にNotionにも作られます。") + "</p></div>";
 }
 
+/* ───────── 計画の動きの記録(重要度の依存を記録から見つけるための材料) ─────────
+   いつ・どの省で・何が動いたかを roadmap/gov/activity/YYYY-MM.json に1件ずつ溜める。
+   同じ日・同じ省・同じ種類・同じ対象は1件にまとめる。保存は裏で行い、失敗しても本来の操作は止めない */
+const ACT_DIR = "roadmap/gov/activity/";
+const actQ = { pending: [], busy: false };
+function logPlan(tags, kind, ref, note){
+  const d = taskDay();
+  (tags && tags.length ? tags : ["所属なし"]).forEach(tag => actQ.pending.push({ date: d, tag, kind, ref: ref || "", note: note || "", app: "行軍表" }));
+  flushAct();
+}
+async function flushAct(){
+  if (actQ.busy || !actQ.pending.length || !state.conn) return;
+  actQ.busy = true;
+  try {
+    while (actQ.pending.length) {
+      const batch = actQ.pending.splice(0), months = {};
+      batch.forEach(e => (months[e.date.slice(0, 7)] = months[e.date.slice(0, 7)] || []).push(e));
+      for (const [m, evs] of Object.entries(months)) {
+        for (let i = 0; i < 3; i++) {
+          try {
+            const r = await readJson(ACT_DIR + m + ".json"), doc = r.data || { version: 1, events: [] };
+            const key = e => e.date + "|" + e.tag + "|" + e.kind + "|" + e.ref;
+            const have = new Set(doc.events.map(key)); let added = 0;
+            evs.forEach(e => { if (!have.has(key(e))) { doc.events.push(e); have.add(key(e)); added++; } });
+            if (!added) break;
+            await writeJson(ACT_DIR + m + ".json", doc, r.sha); break;
+          } catch (err) { if (!(err.status === 409 || err.status === 422)) break; }
+        }
+      }
+    }
+  } catch (err) {} finally { actQ.busy = false; if (actQ.pending.length) flushAct(); }
+}
+
+// タスクの定義を比べて、作った・直したタスクを見つける
+function overlaySnap(){ const o = state.overlay || {}, m = {}; Object.entries(o.tasks || {}).forEach(([k, v]) => m[k] = JSON.stringify(v)); (o.newTasks || []).forEach(t => m["new:" + t.id] = JSON.stringify(t)); return m; }
 async function commitOverlay(mutate){
   const status = tkStatus;
+  const before = overlaySnap();
   mutate();
+  const after = overlaySnap(), moved = [];
+  Object.keys(after).forEach(k => { if (after[k] !== before[k]) { const id = k.replace(/^new:/, ""); if (!moved.some(x => x.id === id)) moved.push({ id, created: k.startsWith("new:") && !(k in before) }); } });
   taskCache.key = null;
   renderTasks(); renderToday();
   if (!state.conn) return false;
@@ -2906,6 +2944,9 @@ async function commitOverlay(mutate){
       lsSet(KEY_CACHE, cachePayload());
       status("保存しました");
       taskCache.key = null;
+      // 計画の動きとして記録(作った・直したタスクの省に)
+      const defs = window.TaskEngine.allDefs(state.taskDefs, state.overlay, true);
+      moved.forEach(mv => { const d = defs.find(x => x.id === mv.id); if (d) logPlan(d.ministries, mv.created ? "タスクを作った" : "タスクを直した", d.id, d.name); });
       return true;
     } catch (e) {
       let err = e;
@@ -4224,6 +4265,7 @@ function boot(){
   }
 }
 
+window.__roadmapAct = actQ;
 window.__roadmap = { findFlows, flowStats, buildPlan, cfgOf, classify, state, loadAll, saveSettings, saveEvents, eventsFor,
                      togglePreset, setPreset, removeEvent, editEventTime, setDone, getDone, commitEvents,
                      commitPlan, normalizePlan, validatePlanItem, newItem, taskStates, commitOverlay,
