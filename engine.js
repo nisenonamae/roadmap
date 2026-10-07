@@ -278,9 +278,11 @@
   // ── STAGE・WAVEの状態で、タスクを効かせるかどうか ──
   // ページの状態の記録(statusLog)から「進行中」の期間を出し、結びついたタスクに gate を付ける
   function gateOpen(g, day){ return g.ranges.some(([a, z]) => day >= a && (!z || day < z)); }
-  const normSt = s => (s === "未着手" || !s) ? "作成中" : s;
+  // ALERT(防衛省の緊急対応)は、発生・対応中のあいだ効き、収束したら外れる
+  // RAID(防衛省の主体的な侵攻)は、侵攻中のあいだ効き、制圧したら外れる
+  const normSt = s => (s === "未着手" || s === "計画中" || !s) ? "作成中" : (s === "発生" || s === "対応中" || s === "侵攻中") ? "進行中" : (s === "収束" || s === "振り返り済み" || s === "制圧" || s === "引き渡し済み") ? "クリア" : s;
   function applyGates(defs, pagesDoc){
-    const ps = ((pagesDoc && pagesDoc.pages) || []).filter(p => !p.deleted && !p.imported && (p.kind === "STAGE" || p.kind === "WAVE"));
+    const ps = ((pagesDoc && pagesDoc.pages) || []).filter(p => !p.deleted && !p.imported && (p.kind === "STAGE" || p.kind === "WAVE" || p.kind === "ALERT" || p.kind === "RAID"));
     // 省アプリに無いSTAGE・WAVEのタスクも待機中にする(strictFrom の日から。それより前は書き換えない)
     const strict = pagesDoc && pagesDoc.strictFrom;
     if (!ps.length && !strict) return defs;
@@ -298,7 +300,7 @@
         const lab = String((w && w.label) || w || "").replace(/\s+/g, "").toUpperCase();
         if (!p) { for (const t of d.ministries || []) { p = byKey.get(t + "|" + lab); if (p) break; } }
         if (p && !linked.some(x => x.p === p)) linked.push({ p, explicit });
-        else if (!p && strict && /^(STAGE|WAVE)\d/.test(lab) && orphans.indexOf(lab) < 0) orphans.push(lab);
+        else if (!p && strict && /^(STAGE|WAVE|ALERT|RAID)\d/.test(lab) && orphans.indexOf(lab) < 0) orphans.push(lab);
       }
       if (!linked.length && !orphans.length) return d;
       const ranges = []; let start = null;
