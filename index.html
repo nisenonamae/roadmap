@@ -491,7 +491,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
     <div class="seg" role="tablist" aria-label="タスクの見方"><button type="button" data-tkview="list" aria-pressed="true">一覧</button><button type="button" data-tkview="audit" aria-pressed="false">更新の記録</button></div>
     <div id="tk-audit" hidden></div>
     <div id="tk-main">
-    <div class="row" style="margin:0 0 .8rem"><button type="button" class="btn ghost" id="tk-new">タスクを足す</button></div>
+    <p class="note" style="margin:0 0 .8rem;font-size:.8rem;color:var(--sub)">タスクの追加・削除は、省アプリのSTAGE・WAVE(防衛省はALERT・RAID)から行います。ここでは具体的な設定を直せます。</p>
     <div class="tk-bar">
       <input id="tk-q" type="search" placeholder="名前で探す" style="flex:1 1 9rem;min-width:8rem;padding:.3rem .5rem;border:1px solid var(--rule);border-radius:3px;font:inherit;background:#fff">
       <select id="tk-min"><option value="">すべての省</option></select>
@@ -624,7 +624,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-07 r62";
+const APP_VERSION = "2026-10-07 r63";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -2347,7 +2347,8 @@ function renderTasks(){
   } else if (sel === "rest") {
     obody = rest.sort((a, b) => a.def.name.localeCompare(b.def.name, "ja")).map(taskRowHtml).join("");
   } else if (sel === "gone") {
-    obody = gone.map(d => '<div class="chg"><span>' + esc(((state.overlay.tasks || {})[d.id].edits || {}).name || d.name) + '</span><span><button type="button" class="btn ghost" data-task-restore="' + esc(d.id) + '">戻す</button></span></div>').join("");
+    obody = '<p class="note" style="font-size:.78rem;color:var(--sub)">元に戻すのは、省アプリの省の地図の下の「削除したタスク」から行います。</p>' +
+      gone.map(d => '<div class="chg"><span>' + esc(((state.overlay.tasks || {})[d.id].edits || {}).name || d.name) + "</span></div>").join("");
   } else if (sel === "waves") {
     obody = '<div id="tk-waves"></div>';
   }
@@ -2880,8 +2881,7 @@ function settingsHtml(t){
                    weight: d.weight, quota: d.quota, requirement: d.requirement, ministries: d.ministries, waves: d.waves }, "edit") +
     '<div class="row"><button type="button" class="btn" data-edit-save>中身を保存する</button></div>' +
     (state.cutover ? "" : '<p class="note" style="font-size:.78rem;color:var(--sub)">変えたことは毎朝4:40にNotionへも書き写されます。</p>') +
-    '<h3>削除</h3><p class="note" style="font-size:.78rem;color:var(--sub)">間違えて作った・二重にできたタスク向け。記録ごと国力の計算から外れます。やめただけのタスクは、状況の「アーカイブ」を使ってください。削除したあとも、一覧の一番下から戻せます。</p>' +
-    '<button type="button" class="btn ghost" data-task-delete style="border-color:#B3283C;color:#B3283C">このタスクを削除する</button>' +
+    '<h3>削除</h3><p class="note" style="font-size:.78rem;color:var(--sub)">タスクの削除は、省アプリのそのタスクのSTAGE・WAVEのページ(結びついていないタスクは省の地図の下)から行います。やめただけのタスクは、状況の「アーカイブ」を使ってください。</p>' +
     "</details>";
 }
 
@@ -3643,7 +3643,7 @@ function bind(){
     state.auditDay = b.dataset.auditDay; renderAudit();
   });
 
-  document.getElementById("tk-new").addEventListener("click", () => {
+  (document.getElementById("tk-new") || document.createElement("button")).addEventListener("click", () => {     // タスクを足すボタンはもう無い(省アプリから足す)
     state.taskMode = "new"; state.taskOpen = null;
     renderTaskDetail();
     const box = document.getElementById("tk-detail");
