@@ -624,7 +624,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-07 r59";
+const APP_VERSION = "2026-10-07 r61";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -2324,7 +2324,7 @@ function renderTasks(){
   }
   const names = v.group === "状況"
     ? Object.keys(groups).sort((a, b) => order[a] - order[b])
-    : laneOrder(Object.keys(groups).filter(g => g !== "所属なし")).filter(g => g !== "全体")
+    : laneOrder(Object.keys(groups).filter(g => g !== "所属なし"))          // 「全体」も一番上に出す(外すとチェックにだけ出てしまう)
         .concat(groups["所属なし"] ? ["所属なし"] : []);
   const fallenAll = [];
   for (const g of names) {
@@ -2471,7 +2471,8 @@ function renderTodayRecords(list){
   const mode = Object.assign({ sort: "slot" }, lsGet(KEY_CKVIEW, {})).sort;
   if (sortSel) sortSel.value = mode;
   const day = checkDay(), yday = day !== taskDay();
-  const today = list.map(t => dayView(t, day)).filter(t => t.row && LIVE.includes(t.status));
+  // 要再設定のタスクは出さない(今日のタブにも出ないので)。その日に記録を付けていたものだけは残す
+  const today = list.map(t => dayView(t, day)).filter(t => t.row && LIVE.includes(t.status) && (t.status !== "要再設定" || (t.check && t.check !== "未着手")));
   if (!today.length) { box.innerHTML = '<div class="empty">' + (yday ? "昨日" : "今日") + "のタスクはありません。</div>"; return; }
   const isDone = t => window.TaskEngine.DONE.has(t.check);
   // 済みにしても、その場に✓で残す(折りたたむのは今日のタブの行軍表だけ)
