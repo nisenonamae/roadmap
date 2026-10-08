@@ -309,6 +309,7 @@ details.rules .note{color:var(--sub);font-size:.8rem}
 .chip.s-実験,.chip.s-随時{border-style:dashed}
 .csum{font-size:.78rem}.csum .bar{width:3rem}
 .gatebox{border:1px dashed var(--rule);border-radius:6px;padding:.3rem .7rem;margin:.5rem 0;font-size:.82rem}.gatebox summary{cursor:pointer;color:var(--sub)}.gatebox ul{margin:.3rem 0;padding-left:1.1rem}.gatebox li{margin:.25rem 0}
+.tbadge.wait{background:#EEE;color:#777;border:1px dashed #AAA}
 .condbox{border:1px solid var(--rule);border-radius:6px;padding:.4rem .7rem;margin:.6rem 0;background:#fff}.condbox h3{margin:.1rem 0 .3rem;font-size:.86rem}
 .condbox ul{margin:.2rem 0 .4rem;padding-left:1.1rem}.condbox li{font-size:.84rem;margin:.25rem 0}.cunit small,.cnote{color:var(--sub);font-size:.74rem}
 .ladder{font-size:.74rem;color:var(--sub)}.ladder .lnow{color:var(--ink);font-weight:700}.ladder .lnext{color:#fff;background:var(--ink);border-radius:8px;padding:0 .35rem}
@@ -629,7 +630,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-08 r70";
+const APP_VERSION = "2026-10-08 r71";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -3064,6 +3065,14 @@ function reconcileTasksDoc(){
   });
 }
 
+// 設定のタブには、待機中のタスクも並べる(要再設定・終わったものを除く)。今日の組み立てには入れない
+function waitingForSettings(today){
+  if (!state.taskDefs) return [];
+  let live; try { live = taskStates(); } catch (e) { return []; }
+  const have = new Set(today.map(x => x.name));
+  return live.filter(t => t.waiting && !have.has(t.def.name) && ["新規", "進行中", "定着", "熟達", "随時", "殿堂入り", "実験"].includes(t.status))
+    .map(t => ({ name: t.def.name, slot: t.def.slot || "", ministries: t.def.ministries || [], status: t.status, check: null, waiting: true }));
+}
 function allTodayNames(){
   const doc = state.tasksDoc;
   if (!doc) return [];
@@ -3073,7 +3082,7 @@ function allTodayNames(){
 function renderSettings(){
   renderFlows();
   const s = state.settings;
-  const tasks = allTodayNames();
+  const today0 = allTodayNames(), tasks = today0.concat(waitingForSettings(today0));
   const box = document.getElementById("task-edits");
 
   if (!tasks.length) {
@@ -3092,7 +3101,7 @@ function renderSettings(){
     const placeOpts = (s.places || []).map(p => p);
     // 続けられるのは、今日これからやるタスクだけ。
     // 同じ場所でできるものを先に出す。踏み台はたいてい同じ場所だから。
-    const chainable = tasks.filter(t =>
+    const chainable = today0.filter(t =>
       t.status !== "要再設定" && t.status !== "随時" &&
       !(DONE.includes(t.check) && !AUTO.includes(t.status)));
     // 続ける先の候補:今日これからやるタスク(同じ場所 → 場所が違う)と、今日の時刻表に無いタスクに分けて並べる
@@ -3129,6 +3138,7 @@ function renderSettings(){
       const sum = c.configured ? c.min + "分・" + c.place + "・" + c.organs.join("") + (c.fixed ? "・" + c.fixed : "") + (c.win ? "・" + c.winStart + "〜" + c.winEnd : "") : (t.slot || "時間帯なし");
       const open = (state.teOpen || new Set()).has(t.name);
       return '<details class="task-edit" data-name="' + esc(t.name) + '"' + (open ? " open" : "") + '><summary><span class="tn2">' + esc(t.name) +
+          (t.waiting ? '<span class="tbadge wait" title="STAGE・WAVEが進行中になった日から、今日のタブに入ります">待機中</span>' : "") +
           (c.configured ? "" : '<span class="tbadge unset">未設定</span>') + (c.nagara === "no" ? '<span class="tbadge no">ながらにしない</span>' : "") +
           (c.nagara === "pref" ? '<span class="tbadge pref">ながら優先</span>' : "") + '</span><span class="ts">' + esc(sum) + "</span></summary>" +
         '<div class="te-body">' +
