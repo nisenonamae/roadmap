@@ -629,7 +629,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-08 r67";
+const APP_VERSION = "2026-10-08 r68";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -2165,7 +2165,7 @@ function deletedIds(){ const ov = (state.overlay && state.overlay.tasks) || {}; 
 function allDefs(){
   const gone = deletedIds(), E = window.TaskEngine;
   const list = E.allDefs(state.taskDefs, state.overlay).filter(d => !gone.has(d.id));
-  return E.applyGates && state.pagesDoc ? E.applyGates(list, state.pagesDoc) : list;     // STAGE・WAVEが進行中のときだけ効かせる
+  return E.applyGates && state.pagesDoc ? E.applyGates(list, state.pagesDoc, state.overlay) : list;     // STAGE・WAVEが進行中のときだけ効かせる(直した結びつきで判定)
 }
 // 今日のタブの一覧(朝に作ったもの)からも、削除したタスクを外す
 function deletedNames(){
