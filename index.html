@@ -629,7 +629,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-08 r68";
+const APP_VERSION = "2026-10-08 r69";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -2871,19 +2871,12 @@ function govPages(){
 const lnum = l => String(l || "").replace(/^\D+/, "").split("-").map(Number);
 const byLab = (a, b) => { const x = lnum(a.label), y = lnum(b.label); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d; } return 0; };
 function wavePickerHtml(list, mins){
+  // 結びつきは省アプリでだけ変える。ここでは見るだけ
   const ps = govPages(), pid = w => { const m = /#page=([\w-]+)/.exec(w.url || ""); return m ? m[1] : null; };
-  const chosen = new Set(list.map(pid).filter(Boolean));
   const chip = w => { const p = ps.find(x => x.id === pid(w));
-    return '<span class="wvchip' + (p ? " k-" + p.kind : "") + '">' + esc(p ? p.label + (p.title ? " " + p.title : "") : (w.label || "")) + (p && p.status !== "進行中" ? '<small>' + esc(p.status) + "</small>" : "") +
-      '<button type="button" data-wv-rm="' + esc(pid(w) || w.label) + '" aria-label="外す">×</button></span>'; };
-  const pool = ps.filter(p => !chosen.has(p.id) && (!mins.length || mins.includes(p.tag)));
-  const groups = {}; pool.forEach(p => { const k = (p.tag || "?") + "|" + p.kind; (groups[k] = groups[k] || []).push(p); });
-  const opts = Object.keys(groups).sort().map(k => '<optgroup label="' + esc(k.replace("|", " ")) + '">' + groups[k].sort(byLab).map(p =>
-    '<option value="' + esc(p.id) + '">' + esc(p.label + (p.title ? " " + p.title : "") + (p.status !== "進行中" ? "(" + p.status + ")" : "")) + "</option>").join("") + "</optgroup>").join("");
-  return '<div class="wvpick"><input type="hidden" data-fm="waves" value="' + esc(JSON.stringify(list)) + '">' +
-    '<div class="wvchips">' + (list.length ? list.map(chip).join("") : '<span class="note">まだ結びついていません</span>') + "</div>" +
-    (ps.length ? '<select data-wv-add><option value="">+ 選ぶ' + (mins.length ? "(選んだ省のもの)" : "") + "</option>" + opts + "</select>"
-      : '<span class="note">省アプリでSTAGE・WAVEを作ると、ここから選べます。</span>') + "</div>";
+    return '<span class="wvchip' + (p ? " k-" + p.kind : "") + '">' + esc(p ? p.label + (p.title ? " " + p.title : "") : (w.label || "")) + (p && p.status !== "進行中" ? '<small>' + esc(p.status) + "</small>" : "") + "</span>"; };
+  return '<div class="wvpick wv-ro"><div class="wvchips">' + (list.length ? list.map(chip).join("") : '<span class="note">まだ結びついていません(結びつくまで待機中です)</span>') + "</div>" +
+    '<span class="note">STAGE・WAVEへの結びつきは、省アプリのSTAGE・WAVEのページで変えます。</span></div>';
 }
 function refreshWavePicker(box){
   const wp = box.querySelector(".wvpick"); if (!wp) return;
@@ -2918,7 +2911,7 @@ function readTaskForm(box){
     target: num("target"), interval: val("interval"), weight: num("weight"), quota: num("quota"),
     requirement: val("requirement"),
     ministries: Array.from(box.querySelectorAll("[data-fm-min]:checked")).map(x => x.value),
-    waves: (() => { try { return JSON.parse(val("waves") || "[]"); } catch (e) { return []; } })(),
+    waves: box.querySelector('[data-fm="waves"]') ? (() => { try { return JSON.parse(val("waves") || "[]"); } catch (e) { return []; } })() : undefined,
   };
 }
 
@@ -3915,11 +3908,13 @@ function bind(){
       state.taskMode = "settings";
       await commitOverlay(() => {
         const o = state.overlay.tasks[id] = Object.assign({}, state.overlay.tasks[id] || {});
-        o.edits = f;
+        const prevWaves = o.edits && Array.isArray(o.edits.waves) ? o.edits.waves : null;
+        if (f.waves === undefined) delete f.waves;                       // 結びつきは省アプリで変えるので、ここでは触らない
+        o.edits = Object.assign({}, prevWaves ? { waves: prevWaves } : {}, f);
         // まだNotionから戻ってきていない新しいタスクは、その定義も書き換える
         const nt = (state.overlay.newTasks || []).find(x => x.id === id);
         if (nt) Object.assign(nt, { slot: f.slot, stance: f.stance, kind: f.kind, interval: f.interval, weight: f.weight,
-          quota: f.quota, requirement: f.requirement, ministries: f.ministries, waves: f.waves });
+          quota: f.quota, requirement: f.requirement, ministries: f.ministries });
       });
       return;
     }
