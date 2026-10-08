@@ -629,7 +629,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-08 r66";
+const APP_VERSION = "2026-10-08 r67";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -2541,7 +2541,9 @@ function renderTodayRecords(list){
   if (sortSel) sortSel.value = mode;
   const day = checkDay(), yday = day !== taskDay();
   // 要再設定のタスクは出さない(今日のタブにも出ないので)。その日に記録を付けていたものだけは残す
-  const today = list.map(t => dayView(t, day)).filter(t => t.row && LIVE.includes(t.status) && (t.status !== "要再設定" || (t.check && t.check !== "未着手")));
+  // 待機中(STAGE・WAVEが進行中でない)のタスクも出さない。その日に記録を付けていたものだけは残す
+  const today = list.map(t => dayView(t, day)).filter(t => t.row && LIVE.includes(t.status) && (t.status !== "要再設定" || (t.check && t.check !== "未着手")) &&
+    !(t.waiting && !yday && !(t.check && t.check !== "未着手")));
   if (!today.length) { box.innerHTML = '<div class="empty">' + (yday ? "昨日" : "今日") + "のタスクはありません。</div>"; return; }
   const isDone = t => window.TaskEngine.DONE.has(t.check);
   // 済みにしても、その場に✓で残す(折りたたむのは今日のタブの行軍表だけ)
@@ -2710,9 +2712,9 @@ function renderTaskDetail(){
   const gateBox = (d.waves || []).length ? '<details class="gatebox"' + (t.waiting ? "" : " open") + '><summary>STAGE・WAVEとの結びつき(' + (t.waiting ? "今日は待機中" : "今日は効いている") + ")</summary>" +
     (why.length ? "<ul>" + why.map(x => "<li><b>" + esc(x.label) + (x.title ? " " + esc(x.title) : "") + "</b> <small>" + esc(x.status) + "・" + esc(x.link) + "で結びつく</small><br>" + esc(x.rule) +
         (x.from ? "(" + esc(x.from) + " から)" : "") + "</li>").join("") + "</ul>" : '<p class="cnote">結びついているSTAGE・WAVEが、省アプリに見つかりませんでした(決まりの対象外)。</p>') +
-    '<p class="cnote">' + (t.waiting ? "結びついたページがどれも進行中ではないので、待機中です。"
-      : why.some(x => x.status === "進行中") ? "進行中のページに結びついているので、行軍表に出ます(どれか1つが進行中なら出ます)。"
-      : why.some(x => !x.from) ? "まだ決まりに従っていないページがあるので、今までどおり出ます。" : "今日は効いています。") +
+    '<p class="cnote">' + (t.waiting ? "結びついたページがどれも進行中ではないので、待機中です(チェック・今日のタブには出ません)。"
+      : why.some(x => x.status === "進行中") ? "進行中のページに結びついているので、チェック・今日のタブに出ます(どれか1つが進行中なら出ます)。"
+      : why.some(x => !x.from) ? "まだ決まりに従っていないページがあるので、今までどおりチェック・今日のタブに出ます。" : "今日は効いています。") +
     "(決まりの版 " + esc((window.TaskEngine && window.TaskEngine.ENGINE_VERSION) || "古い版") + ")</p></details>" : "";
   box.innerHTML = '<div class="peditor tk-detail">' +
     "<h2>" + esc(d.name) + "</h2>" +
