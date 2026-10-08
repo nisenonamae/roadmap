@@ -307,7 +307,10 @@
       for (const { p, explicit } of linked) {
         const log = (p.statusLog && p.statusLog.length ? p.statusLog : [{ date: p.created || "2000-01-01", status: p.status }]).slice().sort((a, b) => a.date < b.date ? -1 : 1);
         const firstRun = log.find(x => normSt(x.status) === "進行中");
-        const from = explicit ? log[0].date : (firstRun ? firstRun.date : null);
+        // ラベルだけで結びつくタスクでも、そのページができた日以降に作られたもの(そのページのためのタスク)は、リンクと同じく最初から従う。
+        // ページより前からある古いタスクだけ、初めて進行中にした日から従う(引っ越してきたタスクを急に止めないため)
+        const born = p.created || log[0].date, forPage = !!(d.created && born && d.created >= born);
+        const from = (explicit || forPage) ? log[0].date : (firstRun ? firstRun.date : null);
         if (!from) continue;
         if (!start || from < start) start = from;
         log.forEach((x, i) => { if (normSt(x.status) === "進行中") ranges.push([x.date, log[i + 1] ? log[i + 1].date : null]); });
