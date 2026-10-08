@@ -307,6 +307,10 @@ details.rules .note{color:var(--sub);font-size:.8rem}
 .chip.s-熟達{background:#3D8A5A;border-color:#3D8A5A;color:#fff}
 .chip.s-要再設定{border-color:var(--reach);color:var(--reach)}
 .chip.s-実験,.chip.s-随時{border-style:dashed}
+.csum{font-size:.78rem}.csum .bar{width:3rem}
+.condbox{border:1px solid var(--rule);border-radius:6px;padding:.4rem .7rem;margin:.6rem 0;background:#fff}.condbox h3{margin:.1rem 0 .3rem;font-size:.86rem}
+.condbox ul{margin:.2rem 0 .4rem;padding-left:1.1rem}.condbox li{font-size:.84rem;margin:.25rem 0}.cunit small,.cnote{color:var(--sub);font-size:.74rem}
+.ladder{font-size:.74rem;color:var(--sub)}.ladder .lnow{color:var(--ink);font-weight:700}.ladder .lnext{color:#fff;background:var(--ink);border-radius:8px;padding:0 .35rem}
 .bar{display:inline-block;width:4.2rem;height:6px;background:var(--rule);border-radius:3px;overflow:hidden;vertical-align:middle}
 .bar i{display:block;height:100%;background:#2F5DA8}
 .cyc{color:var(--ink)}
@@ -624,7 +628,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-07 r63";
+const APP_VERSION = "2026-10-07 r65";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -2204,7 +2208,7 @@ function taskStates(){
       waiting: wait,                 // STAGE・WAVEが進行中でないため、今日は効力の無いタスク(記録の状況はそのまま)
       gen: row ? row.gen : rep.gen,
       genTotal: s.genTotal, total: s.total, streak: s.streak, best: s.best, miss: s.miss, lastDone: s.lastDone,
-      target: curGen.target != null ? +curGen.target : null,
+      target: null,                  // 世代の目標回数は使わない(世代は省アプリのSTAGE・WAVEのクリアで上がる)
       check: row ? row.check : null,
       cycle: E.cycleIndex(def.cycle, rep.days, today),
       progress: lastProgress(rep.days).value,
@@ -2247,6 +2251,69 @@ const CHECK_MARK = { "完了": ["ok", "✓"], "超過完了": ["ok", "★"], "�
                      "進行中": ["ex", "…"], "まとめて実行待ち": ["ex", "…"] };
 
 function tkView(){ return Object.assign({ group: "省", sort: "name" }, lsGet(KEY_TKVIEW, {})); }
+
+/* ───────── クリア条件の進み具合(条件は省アプリで決め、行軍表は見るだけ) ───────── */
+const ST_RANK = { "要再設定": 0, "新規": 1, "進行中": 2, "定着": 3, "熟達": 4, "殿堂入り": 5 };
+// 状況の段:それぞれの段に上がるのに何が要るか(engine.js の決まりと同じ)
+const ST_LADDER = () => { const R = window.TaskEngine.RULES; return [["進行中", "累計", R.PROMOTE_AT], ["定着", "連続", R.TO_SETTLED], ["熟達", "連続", R.TO_MASTERED]]; };
+// このタスクが結びついたSTAGE・WAVE(省アプリのページ)
+function unitsOfDef(def){
+  const all = (state.pagesDoc && state.pagesDoc.pages) || [], ps = all.filter(p => !p.deleted && !p.imported && (p.kind === "STAGE" || p.kind === "WAVE"));
+  const tagOf = p => { let c = p, g = 0; while (c && g++ < 50) { if (String(c.parent).indexOf("m:") === 0) return c.parent.slice(2); const pid = c.parent; c = all.find(x => x.id === pid); } return null; };
+  const out = [];
+  for (const w of def.waves || []) {
+    const m = /#page=([\w-]+)/.exec((w && w.url) || ""), lab = String((w && w.label) || w || "").replace(/\s+/g, "").toUpperCase();
+    const p = m ? ps.find(x => x.id === m[1]) : ps.find(x => String(x.label).toUpperCase() === lab && (def.ministries || []).includes(tagOf(x)));
+    if (p && !out.includes(p)) out.push(p);
+  }
+  return out;
+}
+// そのページのクリア条件(区分があって、このタスクがどれかの区分に入っていれば、その区分の条件)
+function condsOfUnit(p, def){
+  if (p.parts && p.parts.length) { const mine = p.parts.filter(pp => (pp.taskIds || []).includes(def.id)); return (mine.length ? mine : p.parts).flatMap(pp => pp.clear || []); }
+  return p.clear || [];
+}
+function condProgress(c){
+  if (c.type === "manual") return { manual: true, text: c.text, met: !!c.done };
+  const t = taskStates().find(x => x.def.name === c.task || (x.def.aliases || []).includes(c.task));
+  if (!t) return { text: "「" + c.task + "」", missing: true, met: false };
+  const who = "「" + t.def.name + "」";
+  if (c.metric === "total" || c.metric === "streak") {
+    const label = c.metric === "total" ? "累計" : "連続", cur = c.metric === "total" ? (t.total || 0) : (t.streak || 0);
+    return { text: who + "が" + label + c.value + "回", label, cur, goal: +c.value, met: cur >= +c.value };
+  }
+  const goalR = ST_RANK[c.value] ?? 99, curR = ST_RANK[t.status] ?? -1, text = who + "が" + c.value;
+  if (curR >= goalR) return { text, met: true, status: t.status, final: c.value };
+  if (t.status === "要再設定") return { text, met: false, final: c.value, need: "まず再設定(状況を戻す)が要ります" };
+  const step = ST_LADDER().find(s => ST_RANK[s[0]] === curR + 1);
+  if (!step) return { text, met: false, final: c.value, status: t.status };
+  const cur = step[1] === "累計" ? (t.total || 0) : (t.streak || 0);
+  return { text, met: false, final: c.value, step: step[0], via: step[0] !== c.value, label: step[1], cur, goal: step[2], status: t.status };
+}
+// 状況の段の並び(今の段と、目指している段がわかるように)
+function ladderHtml(cp){
+  const order = ["新規", "進行中", "定着", "熟達"], fin = order.indexOf(cp.final);
+  return '<span class="ladder">' + order.slice(0, fin + 1).map(s => '<span class="' + (s === cp.step ? "lnext" : s === cp.status ? "lnow" : "") + '">' + s + "</span>").join("→") + "</span>";
+}
+function condLineHtml(cp, compact){
+  const bar = (a, b) => '<span class="bar"><i style="width:' + Math.min(100, Math.round(a / b * 100)) + '%"></i></span>';
+  if (cp.manual) return (cp.met ? "✓ " : "○ ") + esc(cp.text) + (compact ? "" : '<span class="cnote">(省アプリでチェック)</span>');
+  if (cp.missing) return "○ " + esc(cp.text) + "(タスクが見つかりません)";
+  if (cp.met) return "✓ " + esc(cp.text) + (cp.final ? "以上(今 " + esc(cp.status) + ")" : "(" + cp.label + " " + cp.cur + ")");
+  if (cp.need) return "○ " + esc(cp.text) + "以上 ― " + esc(cp.need);
+  if (cp.final) return "○ 目標 " + esc(cp.final) + (cp.via ? " ― まず" + esc(cp.step) + "へ" : "") +
+    (compact ? "" : "(" + esc(cp.step) + "になるには" + cp.label + cp.goal + "回)") + " " + cp.label + " " + cp.cur + " / " + cp.goal + bar(cp.cur, cp.goal) + (compact ? "" : "<br>" + ladderHtml(cp));
+  return "○ " + esc(cp.text) + " " + cp.label + " " + cp.cur + " / " + cp.goal + bar(cp.cur, cp.goal);
+}
+// 一覧の行に出す、いちばん近い1つ(進行中のSTAGE・WAVEを先に)
+function condSummary(def){
+  const us = unitsOfDef(def).sort((a, b) => (a.status === "進行中" ? 0 : 1) - (b.status === "進行中" ? 0 : 1));
+  for (const u of us) { const cs = condsOfUnit(u, def); if (!cs.length) continue;
+    const ps = cs.map(condProgress), met = ps.filter(x => x.met).length, next = ps.find(x => !x.met && !x.manual) || ps.find(x => !x.met);
+    return { u, met, n: ps.length, next }; }
+  return null;
+}
+
 function isCompletion(t){ return t.def.kind === "完了型" || (!t.target && t.progress != null); }
 function progressOf(t){
   if (t.target) return Math.min(1, t.genTotal / t.target);
@@ -2545,9 +2612,9 @@ function taskRowHtml(t){
   const meta = t.waiting
     ? ['<span class="chip s-待機中" title="' + esc(waitText(t)) + '">待機中</span>', '<span class="wait-why">' + esc(waitText(t)) + "(" + esc(t.status) + "のまま)</span>"]
     : ['<span class="chip s-' + esc(t.status) + '">' + esc(t.status) + "</span>"];
-  if (t.target) {
-    const pct = Math.min(100, Math.round(t.genTotal / t.target * 100));
-    meta.push("<span>世代" + t.gen + "　" + t.genTotal + "/" + t.target + ' <span class="bar"><i style="width:' + pct + '%"></i></span></span>');
+  const cs0 = condSummary(t.def);
+  if (cs0) {
+    meta.push('<span class="csum">' + esc(cs0.u.label) + " クリア条件 " + cs0.met + "/" + cs0.n + (cs0.next ? "　" + condLineHtml(cs0.next, true) : "") + "</span>");
   } else if (isCompletion(t)) {
     const pct = Math.max(0, Math.min(100, Math.round(t.progress || 0)));
     meta.push("<span>進捗 " + pct + '% <span class="bar"><i style="width:' + pct + '%"></i></span></span>');
@@ -2631,8 +2698,12 @@ function renderTaskDetail(){
   const cycOpts = (cyc.items || []).map((it, i) => '<option value="' + i + '"' + (i === curIdx ? " selected" : "") + ">" +
     esc(String.fromCharCode(97 + (i % 26)) + " " + it) + "</option>").join("");
   const gens = (d.generations || []).slice().sort((a, b) => a.from < b.from ? -1 : 1).map(g =>
-    "<li>世代" + g.gen + "　" + esc(g.from) + " から" + (g.target ? "　目標" + g.target + "回" : "") + "</li>").join("");
+    "<li>世代" + g.gen + "　" + esc(g.from) + " から" + (g.by ? "(STAGE・WAVEのクリアで)" : "") + "</li>").join("");
 
+  const units = unitsOfDef(d);
+  const condBox = units.length ? '<div class="condbox"><h3>クリア条件(省アプリで決めたもの)</h3>' + units.map(u => { const cs = condsOfUnit(u, d);
+      return '<div class="cunit"><b>' + esc(u.label) + (u.title ? " " + esc(u.title) : "") + "</b> <small>" + esc(u.status || "作成中") + "</small>" +
+        (cs.length ? "<ul>" + cs.map(c => "<li>" + condLineHtml(condProgress(c), false) + "</li>").join("") + "</ul>" : '<p class="cnote">まだクリア条件がありません(省アプリで決めます)。</p>') + "</div>"; }).join("") + "</div>" : "";
   box.innerHTML = '<div class="peditor tk-detail">' +
     "<h2>" + esc(d.name) + "</h2>" +
     '<p class="now">' + esc((d.ministries || []).join("・") || "所属なし") + "　" + esc(d.slot || "") +
@@ -2642,13 +2713,13 @@ function renderTaskDetail(){
       "<div>世代<b>" + t.gen + "</b></div>" +
       (isCompletion(t)
         ? "<div>進捗率<b>" + (t.progress != null ? Math.round(t.progress) + "%" : "—") + "</b></div>"
-        : "<div>世代内累計<b>" + t.genTotal + (t.target ? " / " + t.target : "") + "</b></div>") +
+        : "<div>世代内累計<b>" + t.genTotal + "</b></div>") +
       "<div>累計<b>" + t.total + "</b></div>" +
       "<div>連続<b>" + t.streak + "</b></div>" +
       "<div>最長連続<b>" + t.best + "</b></div>" +
       "<div>未実行連続<b>" + t.miss + "</b></div>" +
       "<div>最終達成日<b>" + esc(t.lastDone ? t.lastDone.slice(5) : "—") + "</b></div>" +
-    "</div>" +
+    "</div>" + condBox +
     "<h3>直近2週間</h3>" + '<div class="strip">' + strip + '</div><div class="strip-d">' + dates + "</div>" +
     "<h3>世代の歴史</h3>" + '<ul class="gens">' + gens + "</ul>" +
     "<h3>サイクル</h3>" +
@@ -2768,7 +2839,7 @@ function taskFormHtml(v, mode){
       '<div class="f"><label>時間帯</label>' + sel("slot", v.slot || "一日中", ["朝", "昼", "夜", "一日中"]) + "</div>" +
       '<div class="f"><label>攻守</label>' + sel("stance", v.stance || "守", ["攻", "守", "予定"]) + "</div>" +
       '<div class="f"><label>型</label>' + sel("kind", v.kind || "習慣型", ["習慣型", "完了型"]) + "</div>" +
-      '<div class="f"><label>目標回数</label>' + inp("target", v.target, "number", ' min="1" step="1"') + "</div>" +
+
       '<div class="f"><label>実行間隔</label>' + inp("interval", v.interval, "text", ' placeholder="空欄で毎日/月水金/3日"') + "</div>" +
       '<div class="f"><label>重み</label>' + inp("weight", v.weight, "number", ' step="any" placeholder="空欄で1"') + "</div>" +
       '<div class="f"><label>1日の分量</label>' + inp("quota", v.quota, "number", ' step="any" placeholder="貯金を使うとき"') + "</div>" +
@@ -2873,9 +2944,8 @@ function settingsHtml(t){
     '<div class="opts">' + acts + "</div>" + hallBox + demoteBox + cardBox +
     (actionsFor(t.status).includes("pause") ? '<div class="f" style="max-width:12rem"><label for="tk-resume">休止するときの再開日(空欄なら決めない)</label><input id="tk-resume" type="date"></div>' : "") +
     "<h3>世代(今は世代" + t.gen + ")</h3>" +
-    '<div class="dur"><input data-genup-target type="number" min="1" step="1" placeholder="目標回数" value="' + esc(t.target || "") + '">回で' +
-    '<button type="button" class="btn ghost" data-genup style="margin-left:.4rem">世代' + (t.gen + 1) + "に上げる</button></div>" +
-    '<p class="note" style="font-size:.78rem;color:var(--sub)">今日から新しい世代。世代内累計は0から数え直す。名前を変える必要はない。</p>' +
+    '<p class="note" style="font-size:.8rem;color:var(--sub)">世代は、このタスクが結びついたSTAGE・WAVEを省アプリでクリアしたときに上がります(世代内累計は0から数え直し)。' +
+      "クリア条件も省アプリで決めます。" + ((d.waves || []).length ? "結びついているもの:" + d.waves.map(w => esc((w && w.label) || w)).join("・") : "まだSTAGE・WAVEに結びついていません。") + "</p>" +
     "<h3>中身</h3>" +
     taskFormHtml({ name: d.name, slot: d.slot, stance: d.stance, kind: d.kind, target: t.target, interval: d.interval,
                    weight: d.weight, quota: d.quota, requirement: d.requirement, ministries: d.ministries, waves: d.waves }, "edit") +
@@ -3857,7 +3927,7 @@ function bind(){
         id, name: f.name, aliases: [], ministries: f.ministries, waves: f.waves,
         slot: f.slot, stance: f.stance, kind: f.kind, interval: f.interval, weight: f.weight, quota: f.quota,
         requirement: f.requirement, created: D, initial: { status: "新規" },
-        generations: [{ gen: 1, from: D, target: f.kind === "習慣型" ? f.target : null }], events: [],
+        generations: [{ gen: 1, from: D, target: null }], events: [],
       };
       state.taskMode = null; state.taskOpen = id;
       await commitOverlay(() => {
