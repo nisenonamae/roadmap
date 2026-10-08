@@ -629,7 +629,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-08 r69";
+const APP_VERSION = "2026-10-08 r70";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -3047,6 +3047,23 @@ async function commitOverlay(mutate){
 
 /* ───────── 描画:設定 ───────── */
 
+
+// 今日の一覧(毎朝の計算が作るもの)を、その場の計算で補う。
+// 昼間に省アプリで足したタスクは次の朝まで一覧に入らないので足し、その後待機中になったタスクは外す(記録を付けたものは残す)
+function reconcileTasksDoc(){
+  const doc = state.tasksDoc; if (!doc || !Array.isArray(doc.tasks) || doc.date !== taskDay() || !state.taskDefs) return;
+  let live; try { live = taskStates(); } catch (e) { return; }
+  if (!live || !live.length) return;
+  const byName = new Map(); live.forEach(t => { byName.set(t.def.name, t); (t.def.aliases || []).forEach(a => byName.set(a, t)); });
+  doc.tasks = doc.tasks.filter(x => { const t = byName.get(x.name); return !(t && t.waiting && !(x.check && x.check !== "未着手")) && !x.__goneLive; });
+  const have = new Set(doc.tasks.map(x => x.name));
+  live.forEach(t => {
+    if (t.waiting || !t.row || have.has(t.def.name) || (t.def.aliases || []).some(a => have.has(a))) return;
+    if (!["新規", "進行中", "定着", "熟達", "随時", "殿堂入り", "実験"].includes(t.status)) return;
+    doc.tasks.push({ name: t.def.name, slot: t.def.slot || "", ministries: t.def.ministries || [], status: t.status, check: t.check || "未着手", miss: t.miss || 0, reach: false, live: true });
+  });
+}
+
 function allTodayNames(){
   const doc = state.tasksDoc;
   if (!doc) return [];
@@ -3325,6 +3342,7 @@ async function loadAll(){
       ls.textContent = "最後に読み込んだ時刻:" + n.slice(5, 10).replace("-", "/") + " " + n.slice(11, 16);
     }
     await loadTaskData();
+    reconcileTasksDoc();
     renderToday(); renderSettings(); renderPlan(); renderTasks();
     if (legacy.length) {
       const date = state.tasksDoc.date;
