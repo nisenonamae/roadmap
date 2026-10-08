@@ -281,7 +281,8 @@
   // ALERT(防衛省の緊急対応)は、発生・対応中のあいだ効き、収束したら外れる
   // RAID(防衛省の主体的な侵攻)は、侵攻中のあいだ効き、制圧したら外れる
   const normSt = s => (s === "未着手" || s === "計画中" || !s) ? "作成中" : (s === "発生" || s === "対応中" || s === "侵攻中") ? "進行中" : (s === "収束" || s === "振り返り済み" || s === "制圧" || s === "引き渡し済み") ? "クリア" : s;
-  function applyGates(defs, pagesDoc){
+  // overlay を渡すと、タスクの設定で直した結びつき(STAGE・WAVE・省)で判定する(直す前の古い結びつきで判定しないように)
+  function applyGates(defs, pagesDoc, overlay){
     const ps = ((pagesDoc && pagesDoc.pages) || []).filter(p => !p.deleted && !p.imported && (p.kind === "STAGE" || p.kind === "WAVE" || p.kind === "ALERT" || p.kind === "RAID"));
     // 省アプリに無いSTAGE・WAVEのタスクも待機中にする(strictFrom の日から。それより前は書き換えない)
     const strict = pagesDoc && pagesDoc.strictFrom;
@@ -290,7 +291,10 @@
     const tagOf = p => { let c = p, g = 0; while (c && g++ < 50) { if (String(c.parent).indexOf("m:") === 0) return c.parent.slice(2); const pid = c.parent; c = all.find(x => x.id === pid); } return null; };
     const byId = new Map(ps.map(p => [p.id, p]));
     const byKey = new Map(ps.map(p => [tagOf(p) + "|" + String(p.label).toUpperCase(), p]));
-    return defs.map(d => {
+    return defs.map(d0 => {
+      const ed = overlay && overlay.tasks && overlay.tasks[d0.id] && overlay.tasks[d0.id].edits;
+      const d = ed && (Array.isArray(ed.waves) || Array.isArray(ed.ministries))
+        ? Object.assign({}, d0, Array.isArray(ed.waves) ? { waves: ed.waves } : {}, Array.isArray(ed.ministries) ? { ministries: ed.ministries } : {}) : d0;
       // ページから作ったタスク(リンクで結びつく)は、ページを作った日から決まりに従う。
       // ラベルで結びつく前からのタスクは、そのページを初めて「進行中」にした日から従う(作り直している間は今までどおり)
       const linked = [], orphans = [];
@@ -302,7 +306,7 @@
         if (p && !linked.some(x => x.p === p)) linked.push({ p, explicit });
         else if (!p && strict && /^(STAGE|WAVE|ALERT|RAID)\d/.test(lab) && orphans.indexOf(lab) < 0) orphans.push(lab);
       }
-      if (!linked.length && !orphans.length) return d;
+      if (!linked.length && !orphans.length) return d0;
       const ranges = []; let start = null, why = [];
       for (const { p, explicit } of linked) {
         const log = (p.statusLog && p.statusLog.length ? p.statusLog : [{ date: p.created || "2000-01-01", status: p.status }]).slice().sort((a, b) => a.date < b.date ? -1 : 1);
@@ -320,10 +324,10 @@
       }
       if (orphans.length && (!start || strict < start)) start = strict;
       orphans.forEach(l => why.push({ id: null, label: l, title: "", status: "省アプリに無い", link: "ラベル", rule: "省アプリに無いSTAGE・WAVEなので、" + strict + " から待機中", from: strict }));
-      if (!start) return Object.assign({}, d, { gateWhy: why });
+      if (!start) return Object.assign({}, d0, { gateWhy: why });
       const info = linked.map(({ p }) => ({ id: p.id, label: p.label, title: p.title || "", status: normSt(p.status) }))
         .concat(orphans.map(l => ({ id: null, label: l, title: "", status: "省アプリに無い" })));
-      return Object.assign({}, d, { gate: { start, ranges, pages: info }, gateWhy: why });
+      return Object.assign({}, d0, { gate: { start, ranges, pages: info }, gateWhy: why });
     });
   }
 
@@ -332,6 +336,6 @@
     const g = def && def.gate; if (!g || day < g.start || gateOpen(g, day)) return null;
     return (g.pages || []).filter(p => p.status !== "進行中");
   }
-  const ENGINE_VERSION = "2026-10-08 e2";
+  const ENGINE_VERSION = "2026-10-08 e3";
   return { ENGINE_VERSION, waitingOn, applyGates, gateOpen, replay, makeLogFor, cycleIndex, mergeOverlay, allDefs, mergedLogFor, targetAt, nextStatus, isDue, addDays, daysBetween, DONE, EXCUSED, AUTO_DONE, GENERATED, RULES };
 });
