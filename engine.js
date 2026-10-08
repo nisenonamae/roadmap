@@ -125,7 +125,11 @@
       // Notionでもうやめていたもの。切り替えのあとは行を立てず、アーカイブとして扱う
       // (実行間隔で休みの日だったものは、行が無くて当然なので当てはまらない)
       // STAGE・WAVEが「進行中」でない日は、そのタスクの行を立てない(切り替えた日から効く。過去は書き換えない)
-      if (def.gate && day >= def.gate.start && !gateOpen(def.gate, day) && !rec) continue;
+      if (def.gate && day >= def.gate.start && !gateOpen(def.gate, day) && !rec) {
+        // 待機中の日でも、手で入れた変更(状況の操作・数字の直し)は効かせる。やらなかった日としては数えない
+        for (const e of todays) { if (e.status) st.status = e.status; if (e.set) Object.assign(st, e.set); }
+        continue;
+      }
       if (imported && day === imported && !rec && !def.noDrop && GENERATED.has(st.status) && isDue(def.interval, day, st.lastDone)) {
         st.status = "アーカイブ"; st.dropped = imported;
         continue;
@@ -306,7 +310,12 @@
         if (p && !linked.some(x => x.p === p)) linked.push({ p, explicit });
         else if (!p && strict && /^(STAGE|WAVE|ALERT|RAID)\d/.test(lab) && orphans.indexOf(lab) < 0) orphans.push(lab);
       }
-      if (!linked.length && !orphans.length) return d0;
+      // STAGE・WAVEに結びついていないタスクも待機中(strictFrom の日から)。参謀本部の作戦期のタスクは作戦期のもとにあるので外す
+      if (!linked.length && !orphans.length) {
+        if (!strict || d0.staff) return d0;
+        const why0 = [{ id: null, label: "(結びつきなし)", title: "", status: "結びつきなし", link: "なし", rule: "STAGE・WAVEに結びついていないので、" + strict + " から待機中(省アプリで結びつけると出ます)", from: strict }];
+        return Object.assign({}, d0, { gate: { start: strict, ranges: [], pages: [{ id: null, label: "STAGE・WAVEへの結びつき", title: "", status: "結びつきなし" }] }, gateWhy: why0 });
+      }
       const ranges = []; let start = null, why = [];
       for (const { p, explicit } of linked) {
         const log = (p.statusLog && p.statusLog.length ? p.statusLog : [{ date: p.created || "2000-01-01", status: p.status }]).slice().sort((a, b) => a.date < b.date ? -1 : 1);
@@ -336,6 +345,6 @@
     const g = def && def.gate; if (!g || day < g.start || gateOpen(g, day)) return null;
     return (g.pages || []).filter(p => p.status !== "進行中");
   }
-  const ENGINE_VERSION = "2026-10-08 e3";
+  const ENGINE_VERSION = "2026-10-08 e5";
   return { ENGINE_VERSION, waitingOn, applyGates, gateOpen, replay, makeLogFor, cycleIndex, mergeOverlay, allDefs, mergedLogFor, targetAt, nextStatus, isDue, addDays, daysBetween, DONE, EXCUSED, AUTO_DONE, GENERATED, RULES };
 });
