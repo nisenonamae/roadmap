@@ -310,6 +310,7 @@ details.rules .note{color:var(--sub);font-size:.8rem}
 .csum{font-size:.78rem}.csum .bar{width:3rem}
 .gatebox{border:1px dashed var(--rule);border-radius:6px;padding:.3rem .7rem;margin:.5rem 0;font-size:.82rem}.gatebox summary{cursor:pointer;color:var(--sub)}.gatebox ul{margin:.3rem 0;padding-left:1.1rem}.gatebox li{margin:.25rem 0}
 .tbadge.wait{background:#EEE;color:#777;border:1px dashed #AAA}
+.ro-name{font-weight:700;padding:.3rem 0}.ro-name small{display:block;font-weight:400;color:var(--sub);font-size:.72rem}
 .condbox{border:1px solid var(--rule);border-radius:6px;padding:.4rem .7rem;margin:.6rem 0;background:#fff}.condbox h3{margin:.1rem 0 .3rem;font-size:.86rem}
 .condbox ul{margin:.2rem 0 .4rem;padding-left:1.1rem}.condbox li{font-size:.84rem;margin:.25rem 0}.cunit small,.cnote{color:var(--sub);font-size:.74rem}
 .ladder{font-size:.74rem;color:var(--sub)}.ladder .lnow{color:var(--ink);font-weight:700}.ladder .lnext{color:#fff;background:var(--ink);border-radius:8px;padding:0 .35rem}
@@ -630,7 +631,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-08 r71";
+const APP_VERSION = "2026-10-08 r72";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -2848,7 +2849,7 @@ function taskFormHtml(v, mode){
   const sel = (k, cur, opts) => '<select data-fm="' + k + '">' + opts.map(o => '<option' + (o === cur ? " selected" : "") + ">" + esc(o) + "</option>").join("") + "</select>";
   const inp = (k, val, type, extra) => '<input data-fm="' + k + '" type="' + (type || "text") + '" value="' + esc(val == null ? "" : val) + '"' + (extra || "") + ">";
   return '<div class="grid2">' +
-      '<div class="f"><label>名前</label>' + inp("name", v.name) + "</div>" +
+      '<div class="f"><label>名前</label><div class="ro-name">' + esc(v.name || "") + '<small>名前は省アプリのSTAGE・WAVEのページ(タスクの行の ✎)で変えます</small></div></div>' +
       '<div class="f"><label>時間帯</label>' + sel("slot", v.slot || "一日中", ["朝", "昼", "夜", "一日中"]) + "</div>" +
       '<div class="f"><label>攻守</label>' + sel("stance", v.stance || "守", ["攻", "守", "予定"]) + "</div>" +
       '<div class="f"><label>型</label>' + sel("kind", v.kind || "習慣型", ["習慣型", "完了型"]) + "</div>" +
@@ -2908,7 +2909,7 @@ function readTaskForm(box){
   const val = k => { const el = box.querySelector('[data-fm="' + k + '"]'); return el ? el.value.trim() : ""; };
   const num = k => val(k) === "" ? null : +val(k);
   return {
-    name: val("name"), slot: val("slot"), stance: val("stance"), kind: val("kind"),
+    name: box.querySelector('[data-fm="name"]') ? val("name") : undefined, slot: val("slot"), stance: val("stance"), kind: val("kind"),
     target: num("target"), interval: val("interval"), weight: num("weight"), quota: num("quota"),
     requirement: val("requirement"),
     ministries: Array.from(box.querySelectorAll("[data-fm-min]:checked")).map(x => x.value),
@@ -3930,15 +3931,19 @@ function bind(){
     if (e.target.closest("[data-edit-save]")) {
       const id = state.taskOpen; if (!id) return;
       const f = readTaskForm(document.getElementById("tk-detail"));
-      if (!f.name) { const st = document.getElementById("tk-status"); st.classList.add("err"); st.textContent = "名前を入れてください。"; return; }
-      const clash = taskStates().find(x => x.def.id !== id && (x.def.name === f.name || (x.def.aliases || []).includes(f.name)));
-      if (clash) { const st = document.getElementById("tk-status"); st.classList.add("err"); st.textContent = "同じ名前のタスクがあります。"; return; }
+      if (f.name === undefined) delete f.name;                           // 名前は省アプリで変える(ここでは触らない)
+      else {
+        if (!f.name) { const st = document.getElementById("tk-status"); st.classList.add("err"); st.textContent = "名前を入れてください。"; return; }
+        const clash = taskStates().find(x => x.def.id !== id && (x.def.name === f.name || (x.def.aliases || []).includes(f.name)));
+        if (clash) { const st = document.getElementById("tk-status"); st.classList.add("err"); st.textContent = "同じ名前のタスクがあります。"; return; }
+      }
       state.taskMode = "settings";
       await commitOverlay(() => {
         const o = state.overlay.tasks[id] = Object.assign({}, state.overlay.tasks[id] || {});
         const prevWaves = o.edits && Array.isArray(o.edits.waves) ? o.edits.waves : null;
         if (f.waves === undefined) delete f.waves;                       // 結びつきは省アプリで変えるので、ここでは触らない
-        o.edits = Object.assign({}, prevWaves ? { waves: prevWaves } : {}, f);
+        const prevName = o.edits && o.edits.name ? { name: o.edits.name } : {};
+        o.edits = Object.assign({}, prevName, prevWaves ? { waves: prevWaves } : {}, f);
         // まだNotionから戻ってきていない新しいタスクは、その定義も書き換える
         const nt = (state.overlay.newTasks || []).find(x => x.id === id);
         if (nt) Object.assign(nt, { slot: f.slot, stance: f.stance, kind: f.kind, interval: f.interval, weight: f.weight,
