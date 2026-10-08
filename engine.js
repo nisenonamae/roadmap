@@ -41,6 +41,7 @@
   function isDue(spec, day, lastDone) {
     spec = (spec || "").trim();
     if (!spec) return true;
+    if (spec === "1回") return true;                       // 1回だけ:済ませるまで毎日出る(済ませたら達成済みで行が立たない)
     // 日付を並べたもの(例:「日付:2026-10-09,2026-10-11」)なら、その日にだけ出る
     const dates = spec.match(/\d{4}-\d{2}-\d{2}/g);
     if (dates) return dates.includes(day);
@@ -186,9 +187,11 @@
       const best = Math.max(st.best, streak);
       const miss = done ? 0 : (excused ? st.miss : st.miss + 1);
       const lastDone = done ? day : st.lastDone;
+      // 1回だけのタスク(RAIDの「1回だけ」の作戦):1回済ませたら達成済み。済ませるまでは毎日出し、要再設定には落とさない
+      const once = def.once || (def.interval || "").trim() === "1回";
       st = {
-        status: nextStatus(st.status, check, total, miss, st.streak),
-        total, streak, best, miss, lastDone,
+        status: once ? (done ? "達成済み" : st.status) : nextStatus(st.status, check, total, miss, st.streak),
+        total, streak, best, miss: once ? 0 : miss, lastDone,
         genTotal: st.genTotal + (done ? 1 : 0),
         bank: quota > 0 ? Math.round((st.bank + (+rec.did || 0) - quota) * 100) / 100 : 0,
         prevBooking: rec.nextBooking || "",
@@ -348,6 +351,6 @@
     const g = def && def.gate; if (!g || day < g.start || gateOpen(g, day)) return null;
     return (g.pages || []).filter(p => p.status !== "進行中");
   }
-  const ENGINE_VERSION = "2026-10-08 e6";
+  const ENGINE_VERSION = "2026-10-08 e7";
   return { ENGINE_VERSION, waitingOn, applyGates, gateOpen, replay, makeLogFor, cycleIndex, mergeOverlay, allDefs, mergedLogFor, targetAt, nextStatus, isDue, addDays, daysBetween, DONE, EXCUSED, AUTO_DONE, GENERATED, RULES };
 });
