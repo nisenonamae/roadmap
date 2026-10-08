@@ -41,6 +41,9 @@
   function isDue(spec, day, lastDone) {
     spec = (spec || "").trim();
     if (!spec) return true;
+    // 日付を並べたもの(例:「日付:2026-10-09,2026-10-11」)なら、その日にだけ出る
+    const dates = spec.match(/\d{4}-\d{2}-\d{2}/g);
+    if (dates) return dates.includes(day);
     const m = spec.match(/(\d+)/);
     if (m) {
       const n = +m[1];
@@ -345,6 +348,6 @@
     const g = def && def.gate; if (!g || day < g.start || gateOpen(g, day)) return null;
     return (g.pages || []).filter(p => p.status !== "進行中");
   }
-  const ENGINE_VERSION = "2026-10-08 e5";
+  const ENGINE_VERSION = "2026-10-08 e6";
   return { ENGINE_VERSION, waitingOn, applyGates, gateOpen, replay, makeLogFor, cycleIndex, mergeOverlay, allDefs, mergedLogFor, targetAt, nextStatus, isDue, addDays, daysBetween, DONE, EXCUSED, AUTO_DONE, GENERATED, RULES };
 });
