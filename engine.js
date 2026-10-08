@@ -303,7 +303,7 @@
         else if (!p && strict && /^(STAGE|WAVE|ALERT|RAID)\d/.test(lab) && orphans.indexOf(lab) < 0) orphans.push(lab);
       }
       if (!linked.length && !orphans.length) return d;
-      const ranges = []; let start = null;
+      const ranges = []; let start = null, why = [];
       for (const { p, explicit } of linked) {
         const log = (p.statusLog && p.statusLog.length ? p.statusLog : [{ date: p.created || "2000-01-01", status: p.status }]).slice().sort((a, b) => a.date < b.date ? -1 : 1);
         const firstRun = log.find(x => normSt(x.status) === "進行中");
@@ -311,15 +311,19 @@
         // ページより前からある古いタスクだけ、初めて進行中にした日から従う(引っ越してきたタスクを急に止めないため)
         const born = p.created || log[0].date, forPage = !!(d.created && born && d.created >= born);
         const from = (explicit || forPage) ? log[0].date : (firstRun ? firstRun.date : null);
+        why.push({ id: p.id, label: p.label, title: p.title || "", status: normSt(p.status), link: explicit ? "リンク" : "ラベル",
+          rule: explicit ? "リンクで結びつくので、ページを作った日から従う" : forPage ? "ページができた日以降に作られたタスクなので、ページを作った日から従う" : (firstRun ? "ページより前からあるタスクなので、初めて進行中にした日から従う" : "ページより前からあるタスクで、そのページはまだ一度も進行中になっていないので、まだ従わない"),
+          from: from || null });
         if (!from) continue;
         if (!start || from < start) start = from;
         log.forEach((x, i) => { if (normSt(x.status) === "進行中") ranges.push([x.date, log[i + 1] ? log[i + 1].date : null]); });
       }
       if (orphans.length && (!start || strict < start)) start = strict;
-      if (!start) return d;
+      orphans.forEach(l => why.push({ id: null, label: l, title: "", status: "省アプリに無い", link: "ラベル", rule: "省アプリに無いSTAGE・WAVEなので、" + strict + " から待機中", from: strict }));
+      if (!start) return Object.assign({}, d, { gateWhy: why });
       const info = linked.map(({ p }) => ({ id: p.id, label: p.label, title: p.title || "", status: normSt(p.status) }))
         .concat(orphans.map(l => ({ id: null, label: l, title: "", status: "省アプリに無い" })));
-      return Object.assign({}, d, { gate: { start, ranges, pages: info } });
+      return Object.assign({}, d, { gate: { start, ranges, pages: info }, gateWhy: why });
     });
   }
 
@@ -328,5 +332,6 @@
     const g = def && def.gate; if (!g || day < g.start || gateOpen(g, day)) return null;
     return (g.pages || []).filter(p => p.status !== "進行中");
   }
-  return { waitingOn, applyGates, gateOpen, replay, makeLogFor, cycleIndex, mergeOverlay, allDefs, mergedLogFor, targetAt, nextStatus, isDue, addDays, daysBetween, DONE, EXCUSED, AUTO_DONE, GENERATED, RULES };
+  const ENGINE_VERSION = "2026-10-08 e2";
+  return { ENGINE_VERSION, waitingOn, applyGates, gateOpen, replay, makeLogFor, cycleIndex, mergeOverlay, allDefs, mergedLogFor, targetAt, nextStatus, isDue, addDays, daysBetween, DONE, EXCUSED, AUTO_DONE, GENERATED, RULES };
 });
