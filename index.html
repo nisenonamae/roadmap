@@ -308,6 +308,7 @@ details.rules .note{color:var(--sub);font-size:.8rem}
 .chip.s-要再設定{border-color:var(--reach);color:var(--reach)}
 .chip.s-実験,.chip.s-随時{border-style:dashed}
 .csum{font-size:.78rem}.csum .bar{width:3rem}
+.gatebox{border:1px dashed var(--rule);border-radius:6px;padding:.3rem .7rem;margin:.5rem 0;font-size:.82rem}.gatebox summary{cursor:pointer;color:var(--sub)}.gatebox ul{margin:.3rem 0;padding-left:1.1rem}.gatebox li{margin:.25rem 0}
 .condbox{border:1px solid var(--rule);border-radius:6px;padding:.4rem .7rem;margin:.6rem 0;background:#fff}.condbox h3{margin:.1rem 0 .3rem;font-size:.86rem}
 .condbox ul{margin:.2rem 0 .4rem;padding-left:1.1rem}.condbox li{font-size:.84rem;margin:.25rem 0}.cunit small,.cnote{color:var(--sub);font-size:.74rem}
 .ladder{font-size:.74rem;color:var(--sub)}.ladder .lnow{color:var(--ink);font-weight:700}.ladder .lnext{color:#fff;background:var(--ink);border-radius:8px;padding:0 .35rem}
@@ -628,7 +629,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-07 r65";
+const APP_VERSION = "2026-10-08 r66";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -2704,6 +2705,15 @@ function renderTaskDetail(){
   const condBox = units.length ? '<div class="condbox"><h3>クリア条件(省アプリで決めたもの)</h3>' + units.map(u => { const cs = condsOfUnit(u, d);
       return '<div class="cunit"><b>' + esc(u.label) + (u.title ? " " + esc(u.title) : "") + "</b> <small>" + esc(u.status || "作成中") + "</small>" +
         (cs.length ? "<ul>" + cs.map(c => "<li>" + condLineHtml(condProgress(c), false) + "</li>").join("") + "</ul>" : '<p class="cnote">まだクリア条件がありません(省アプリで決めます)。</p>') + "</div>"; }).join("") + "</div>" : "";
+  // STAGE・WAVEとの結びつきと、待機中になる・ならない理由
+  const why = d.gateWhy || [];
+  const gateBox = (d.waves || []).length ? '<details class="gatebox"' + (t.waiting ? "" : " open") + '><summary>STAGE・WAVEとの結びつき(' + (t.waiting ? "今日は待機中" : "今日は効いている") + ")</summary>" +
+    (why.length ? "<ul>" + why.map(x => "<li><b>" + esc(x.label) + (x.title ? " " + esc(x.title) : "") + "</b> <small>" + esc(x.status) + "・" + esc(x.link) + "で結びつく</small><br>" + esc(x.rule) +
+        (x.from ? "(" + esc(x.from) + " から)" : "") + "</li>").join("") + "</ul>" : '<p class="cnote">結びついているSTAGE・WAVEが、省アプリに見つかりませんでした(決まりの対象外)。</p>') +
+    '<p class="cnote">' + (t.waiting ? "結びついたページがどれも進行中ではないので、待機中です。"
+      : why.some(x => x.status === "進行中") ? "進行中のページに結びついているので、行軍表に出ます(どれか1つが進行中なら出ます)。"
+      : why.some(x => !x.from) ? "まだ決まりに従っていないページがあるので、今までどおり出ます。" : "今日は効いています。") +
+    "(決まりの版 " + esc((window.TaskEngine && window.TaskEngine.ENGINE_VERSION) || "古い版") + ")</p></details>" : "";
   box.innerHTML = '<div class="peditor tk-detail">' +
     "<h2>" + esc(d.name) + "</h2>" +
     '<p class="now">' + esc((d.ministries || []).join("・") || "所属なし") + "　" + esc(d.slot || "") +
@@ -2719,7 +2729,7 @@ function renderTaskDetail(){
       "<div>最長連続<b>" + t.best + "</b></div>" +
       "<div>未実行連続<b>" + t.miss + "</b></div>" +
       "<div>最終達成日<b>" + esc(t.lastDone ? t.lastDone.slice(5) : "—") + "</b></div>" +
-    "</div>" + condBox +
+    "</div>" + condBox + gateBox +
     "<h3>直近2週間</h3>" + '<div class="strip">' + strip + '</div><div class="strip-d">' + dates + "</div>" +
     "<h3>世代の歴史</h3>" + '<ul class="gens">' + gens + "</ul>" +
     "<h3>サイクル</h3>" +
@@ -4299,7 +4309,7 @@ function boot(){
   }
   bind();
   const av = document.getElementById("app-version");
-  if (av) av.textContent = APP_VERSION;
+  if (av) av.textContent = APP_VERSION + "(決まりの版 " + ((window.TaskEngine && window.TaskEngine.ENGINE_VERSION) || "古い版") + ")";
   const conn = lsGet(KEY_CONN, null);
   document.getElementById("c-owner").value = conn ? conn.owner : "";
   document.getElementById("c-repo").value = conn ? conn.repo : "notion-daily";
