@@ -219,6 +219,34 @@
   }
 
   /*
+    サイクルの現在地と、中身ごとに最後にやった日。
+    手順録のサイクル(中身が { id, name })と、行軍表の古いサイクル(中身が文)のどちらも受け取る。
+    やった日だけ次へ進むのは cycleIndex と同じ。今日やった分は明日から進む。
+      switches  [{ date, to, at }]  切り替えの記録(to は中身のid)。その日の朝から効く
+  */
+  function cycleTrack(cycle, days, today, switches) {
+    if (!cycle || !Array.isArray(cycle.items) || !cycle.items.length) return null;
+    const items = cycle.items.map((it, i) => typeof it === "string" ? { id: "i" + i, name: it } : { id: (it && it.id) || ("i" + i), name: (it && it.name) || "" });
+    const n = items.length;
+    let idx = (((+cycle.anchorIndex || 0) % n) + n) % n;
+    const from = cycle.anchorDate || today;
+    const sw = (switches || []).filter(x => x && x.date >= from && x.date <= today).slice()
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : (String(a.at || "") < String(b.at || "") ? -1 : 1)));
+    let si = 0;
+    const apply = upto => { while (si < sw.length && sw[si].date <= upto) { const j = items.findIndex(it => it.id === sw[si].to); if (j >= 0) idx = j; si++; } };
+    const last = new Array(n).fill(null);
+    const ds = (days || []).filter(d => d.date >= from && d.date <= today).slice().sort((a, b) => (a.date < b.date ? -1 : 1));
+    for (const d of ds) {
+      apply(d.date);
+      if (!DONE.has(d.check)) continue;
+      last[idx] = d.date;
+      if (d.date < today) idx = (idx + 1) % n;
+    }
+    apply(today);
+    return { index: idx, item: items[idx].name, id: items[idx].id, count: n, items, last };
+  }
+
+  /*
     アプリで変えたこと(overlay)を、取り込んだ定義に重ねる。アプリの画面と毎朝の計算の両方が使う。
       edits        中身の変更(名前、時間帯、攻守、省、WAVE・STAGE、実行間隔、重み、目標回数、達成要件、1日の分量、型)
       events       状況の変更(休止、再開、立て直し、アーカイブなど)
@@ -351,6 +379,6 @@
     const g = def && def.gate; if (!g || day < g.start || gateOpen(g, day)) return null;
     return (g.pages || []).filter(p => p.status !== "進行中");
   }
-  const ENGINE_VERSION = "2026-10-08 e7";
-  return { ENGINE_VERSION, waitingOn, applyGates, gateOpen, replay, makeLogFor, cycleIndex, mergeOverlay, allDefs, mergedLogFor, targetAt, nextStatus, isDue, addDays, daysBetween, DONE, EXCUSED, AUTO_DONE, GENERATED, RULES };
+  const ENGINE_VERSION = "2026-10-09 e8";
+  return { ENGINE_VERSION, waitingOn, applyGates, gateOpen, replay, makeLogFor, cycleIndex, cycleTrack, mergeOverlay, allDefs, mergedLogFor, targetAt, nextStatus, isDue, addDays, daysBetween, DONE, EXCUSED, AUTO_DONE, GENERATED, RULES };
 });

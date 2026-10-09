@@ -384,6 +384,52 @@ nav.tabs button{flex:1;border:none;background:none;padding:.8rem 0;cursor:pointe
 nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 var(--ink)}
 .view[hidden]{display:none}
 
+/* 手順録:サイクルの現在地と、今日の手順 */
+.cyc-pos{border:1px solid var(--rule);background:#fff;border-radius:3px;padding:0 .4rem;font:inherit;font-size:.78rem;line-height:1.6;color:var(--sub);cursor:pointer;text-align:left}
+.cyc-pos b{color:var(--ink);font-weight:700}
+.rec .rn .cyc-pos{display:inline-block;margin-top:.2rem;font-weight:400}
+.tk .cyc b{font-weight:700}
+.tj-name{border:none;background:none;padding:0;font:inherit;font-weight:700;color:inherit;text-align:left;cursor:pointer;
+  text-decoration:underline dotted var(--sub);text-underline-offset:3px;word-break:break-word}
+.tj-tag{display:inline-block;font-size:.66rem;font-weight:700;color:var(--focus);border:1px solid var(--focus);border-radius:3px;
+  padding:0 .25rem;margin-left:.35rem;vertical-align:.12em;line-height:1.5}
+body.tj-lock{overflow:hidden}
+.tj-sheet{position:fixed;inset:0;z-index:40;background:rgba(29,36,48,.42);display:flex;align-items:flex-end;justify-content:center}
+.tj-sheet[hidden]{display:none}
+.tj-panel{background:var(--sheet);width:100%;max-width:640px;max-height:86vh;overflow:auto;border-radius:10px 10px 0 0;
+  padding:.8rem 1rem calc(1rem + env(safe-area-inset-bottom));box-shadow:0 -6px 20px rgba(0,0,0,.18)}
+.tj-head{display:flex;align-items:center;gap:.6rem;border-bottom:2px solid var(--ink);padding-bottom:.45rem;margin-bottom:.6rem}
+.tj-head h2{margin:0;font-size:1.1rem;flex:1;min-width:0;word-break:break-word}
+.tj-x{border:1px solid var(--rule);background:#fff;border-radius:50%;width:2.2rem;height:2.2rem;font-size:1.2rem;line-height:1;cursor:pointer;color:var(--sub)}
+.tj-sec{margin:0 0 .9rem}
+.tj-lab{font-size:.84rem;font-weight:700;margin:0 0 .35rem;display:flex;flex-wrap:wrap;gap:.2rem .7rem;align-items:baseline}
+.tj-total{font-size:.76rem;font-weight:400;color:var(--sub)}
+.tj-cyc{list-style:none;margin:0;padding:0;border:1px solid var(--rule);border-radius:4px;background:#fff}
+.tj-cyc li{display:flex;justify-content:space-between;gap:.6rem;padding:.35rem .6rem;border-bottom:1px solid var(--rule);font-size:.9rem}
+.tj-cyc li:last-child{border-bottom:none}
+.tj-cyc li.now{background:#EEF2F8;font-weight:700;box-shadow:inset 3px 0 0 var(--focus)}
+.tj-cyc em{font-style:normal;font-size:.7rem;color:#fff;background:var(--focus);border-radius:3px;padding:0 .3rem;margin-left:.4rem}
+.tj-cyc .ld{color:var(--sub);font-size:.8rem;font-weight:400;white-space:nowrap;font-variant-numeric:tabular-nums}
+.tj-list{list-style:none;margin:.2rem 0;padding:0 0 0 1.5rem;position:relative}
+.tj-list::before{content:"";position:absolute;left:.48rem;top:.5rem;bottom:.5rem;width:2px;background:var(--ink)}
+.tj-list.fork::before{background:#B07D2A}.tj-list.part::before{background:var(--focus)}
+.tj-step{position:relative;padding:.2rem 0 .5rem;line-height:1.5}
+.tj-step::before{content:"";position:absolute;left:-1.3rem;top:.45rem;width:11px;height:11px;border-radius:50%;background:var(--sheet);border:2px solid var(--ink);box-sizing:border-box}
+.tj-list.fork > .tj-step::before{border-color:#B07D2A}.tj-list.part > .tj-step::before{border-color:var(--focus)}
+.tj-step.br::before{border-radius:1px;transform:rotate(45deg);background:#B07D2A;border-color:#B07D2A}
+.tj-step.pt::before{border-radius:2px;background:var(--focus);border-color:var(--focus)}
+.tj-num{font-weight:700;margin-right:.4rem;font-variant-numeric:tabular-nums}
+.tj-q{font-weight:700}
+.tj-min{font-size:.76rem;color:var(--sub);margin-left:.4rem;white-space:nowrap}
+.tj-opts{display:flex;flex-wrap:wrap;gap:.35rem;margin:.3rem 0 .1rem}
+.tj-opts button{border:1.5px solid #B07D2A;color:#8A5F12;background:#fff;border-radius:999px;padding:.1rem .8rem;font:inherit;font-size:.86rem;cursor:pointer}
+.tj-opts button[aria-pressed="true"]{background:#B07D2A;color:#fff}
+.tj-hint{font-size:.78rem;color:var(--sub);margin:.15rem 0 0}
+.tj-rng{border:1px solid var(--focus);color:var(--focus);border-radius:3px;padding:0 .3rem;font-size:.86em;white-space:nowrap}
+.tj-rng.miss{border-color:var(--reach);color:var(--reach)}
+.tj-none{font-size:.88rem;color:var(--sub);background:#fff;border:1px dashed var(--rule);border-radius:4px;padding:.6rem .7rem;margin:0 0 .8rem}
+.tj-foot{font-size:.76rem;color:var(--sub);margin:.4rem 0 0}
+
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -613,6 +659,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 
 </div>
 
+<div class="tj-sheet" id="tj-sheet" hidden></div>
 <div class="toast" id="toast" role="status" hidden><span id="toast-text"></span><button type="button" id="toast-undo">取り消す</button></div>
 
 <nav class="tabs" role="tablist">
@@ -631,7 +678,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-09 r74";
+const APP_VERSION = "2026-10-09 r75";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -644,6 +691,9 @@ const APPLOG_DIR = "roadmap/tasks/applog";
 const CUTOVER_PATH = "roadmap/tasks/cutover.json";
 const STAFF_PATH = "roadmap/gov/staff.json";
 const SHIAN_PATH = "roadmap/shian/notes.json";     // 思案のリマインダー(「行軍表にも出す」を付けたもの)       // 参謀本部(作戦期・目標・緊急会議)。省アプリで決める   // 切り替え済みの印。あればNotionのタスク表はもう使っていない          // アプリでつけた記録。取り込みでは上書きされない
+const TEJUN_PATH = "roadmap/apps/tejunroku/data.json";   // 手順録の定義(手順書・範囲・部品・サイクル・結びつき)。手順録が書き、行軍表は読むだけ
+const TEJUN_RUNS = "roadmap/apps/tejunroku/runs";        // 手順の実行の記録。範囲の今の位置を出すのに使う
+const TEJUN_APP = "https://nisenonamae.github.io/tejunroku/";
 const KEY_TKVIEW = "roadmap-tkview";
 const KEY_CKVIEW = "roadmap-ckview";
 const CHECK_SLOTS = ["朝", "昼", "一日中", "夜"];
@@ -709,6 +759,10 @@ const state = {
   staff: null,
   hallConfirm: null,         // 殿堂入りの確認を開いているタスク
   demoteConfirm: null,       // 降格の確認を開いているタスク
+  tejun: null,               // 手順録の定義
+  tjOpen: null,              // 手順を開いているタスク
+  tjPick: {},                // 手順の見本で選んだ分かれ道(保存しない)
+  tjRuns: {}, tjRunsState: "",
 };
 
 function clone(o){ return JSON.parse(JSON.stringify(o)); }
@@ -1599,8 +1653,8 @@ function stopHtml(it, time, places){
     meta.push("<span>" + dur(c.min) + "</span>");
     if (c.mode) meta.push("<span>" + esc(c.mode) + "</span>");
     if (it.task.reach) meta.push('<span class="reach">今日やらないと落ちる</span>');
-    const tk = taskByName(it.task.name);
-    if (tk && tk.cycle) meta.push('<span class="cyc">今日は ' + esc(tk.cycle.item) + "</span>");
+    const tk = taskByName(it.task.name), pos = cyclePos(tk);
+    if (pos) meta.push('<button type="button" class="cyc-pos" data-tjopen="' + esc(tk.def.id) + '" aria-label="サイクルの現在地と今日の手順">' + cycleChipHtml(pos) + "</button>");
     if (!c.configured) meta.push('<span class="unset">未設定</span>');
   }
   const nag = it.nagara.length
@@ -1619,7 +1673,7 @@ function stopHtml(it, time, places){
   return pre + '<div class="stop' + (done ? " done" : "") + '" style="--c:' + color + '">' +
     '<span class="t">' + esc(done ? "済" : time) + '</span><span class="line"></span>' +
     '<div class="body"><div class="row-in"><div class="txt">' +
-    '<div class="name">' + esc(it.task.name) + '</div><div class="meta">' + meta.join("") + "</div>" + nag +
+    '<div class="name">' + (done ? esc(it.task.name) : tjNameHtml(taskByName(it.task.name), it.task.name)) + '</div><div class="meta">' + meta.join("") + "</div>" + nag +
     '</div><button type="button" class="tick' + (done ? " on" : "") + '" ' + act + ">" + (done ? "✓" : "○") + "</button>" +
     "</div></div></div>";
 }
@@ -2258,6 +2312,172 @@ function taskByName(name){
   return taskStates().find(t => t.def.name === n || (t.def.aliases || []).includes(n)) || null;
 }
 
+/* ───────── 手順録:サイクルの現在地と、今日の手順(見るだけ) ─────────
+   手順書・サイクルを作るのは手順録。ここでは見るだけ。
+   手順録の定義(小さなファイル1つ)は最初の読み込みで一緒に読むが、今日の組み立てには使わない。
+   手順を描く計算(手順録の core.js)と範囲の記録は、手順を開いたときに初めて読み込む */
+function tjCycleOf(tid){
+  const d = state.tejun;
+  return d && Array.isArray(d.cycles) ? d.cycles.find(c => c && c.taskId === tid && Array.isArray(c.items) && c.items.length) || null : null;
+}
+// タスクのサイクル。手順録で作ったものを先に見て、無ければ行軍表の古いサイクル
+function cycleOfTask(t){
+  const c = tjCycleOf(t.def.id);
+  if (c) return { src: "tejun", items: c.items.map((it, i) => ({ id: (it && it.id) || ("i" + i), name: (it && it.name) || "名前なし", procId: (it && it.procId) || null })),
+                  anchorDate: c.anchorDate, anchorIndex: c.anchorIndex };
+  const o = t.def.cycle;
+  if (o && Array.isArray(o.items) && o.items.length) return { src: "old", items: o.items.map((n, i) => ({ id: "i" + i, name: String(n), procId: null })),
+                  anchorDate: o.anchorDate, anchorIndex: o.anchorIndex };
+  return null;
+}
+let posMemo = { tj: null, m: new WeakMap() };
+function cyclePos(t){
+  if (!t || !window.TaskEngine.cycleTrack) return null;
+  if (posMemo.tj !== state.tejun) posMemo = { tj: state.tejun, m: new WeakMap() };
+  if (posMemo.m.has(t)) return posMemo.m.get(t);
+  const c = cycleOfTask(t);
+  const p = c ? window.TaskEngine.cycleTrack(c, t.days || [], taskDay(), []) : null;
+  if (p) p.cycle = c;
+  posMemo.m.set(t, p);
+  return p;
+}
+// 今日開く手順書:サイクルなら今の中身の手順書、無ければタスクの手順書
+function procOfTask(t, pos){
+  const d = state.tejun; if (!d || !t) return null;
+  const item = pos && pos.cycle.src === "tejun" ? pos.cycle.items[pos.index] : null;
+  const pid = (item && item.procId) || (d.links || {})[t.def.id] || null;
+  const proc = pid ? (d.procs || []).find(p => p && p.id === pid) || null : null;
+  return { proc, viaItem: !!(item && item.procId && proc) };
+}
+// あ ・ [い] ・ う(中身が多いときは前後だけ)
+function cycleChipHtml(p){
+  const n = p.count, i = p.index, names = p.cycle.items.map(x => x.name);
+  const idx = n <= 5 ? names.map((_, j) => j) : [(i - 1 + n) % n, i, (i + 1) % n];
+  return (n > 5 ? "… " : "") + idx.map(j => j === i ? "<b>[" + esc(names[j]) + "]</b>" : esc(names[j])).join(" ・ ") + (n > 5 ? " …" : "");
+}
+const tjMd = d => (+d.slice(5, 7)) + "/" + (+d.slice(8, 10));
+function cycleListHtml(p){
+  const today = taskDay();
+  return '<ol class="tj-cyc">' + p.cycle.items.map((it, j) => {
+    const d = p.last[j];
+    return '<li' + (j === p.index ? ' class="now"' : "") + '><span class="nm">' + esc(it.name) + (j === p.index ? "<em>今日</em>" : "") + "</span>" +
+      '<span class="ld">' + (d ? (d === today ? "今日やった" : "最後 " + tjMd(d)) : "まだ") + "</span></li>";
+  }).join("") + "</ol>";
+}
+// 名前:手順録に何かあれば押して開ける
+function tjNameHtml(t, name){
+  if (!t) return esc(name);
+  const pos = cyclePos(t), pr = procOfTask(t, pos);
+  if (!pos && !(pr && pr.proc)) return esc(name);
+  return '<button type="button" class="tj-name" data-tjopen="' + esc(t.def.id) + '">' + esc(name) +
+    (pr && pr.proc ? '<span class="tj-tag">手順</span>' : "") + "</button>";
+}
+
+let tjCoreP = null;
+function ensureTjCore(){
+  if (window.TJCore) return Promise.resolve(true);
+  if (tjCoreP) return tjCoreP;
+  tjCoreP = new Promise(res => {
+    const sc = document.createElement("script");
+    sc.src = new URL("../tejunroku/core.js", window.location.href).href;
+    sc.onload = () => res(!!window.TJCore);
+    sc.onerror = () => { tjCoreP = null; res(false); };
+    document.head.appendChild(sc);
+  });
+  return tjCoreP;
+}
+// 範囲を数えるために、手順録の定義を手順録の計算の形にそろえる
+let tjNorm = { src: null, data: null };
+function tjData(){
+  if (tjNorm.src !== state.tejun) tjNorm = { src: state.tejun, data: window.TJCore.normalize(clone(state.tejun || {})) };
+  return tjNorm.data;
+}
+async function loadTejunRuns(){
+  if (state.tjRunsState === "ok" || state.tjRunsState === "loading") return;
+  state.tjRunsState = "loading";
+  try {
+    const since = window.TJCore.rangeSinceMonth(tjData().ranges);
+    const files = since === null ? [] : await listDir(TEJUN_RUNS);
+    const ms = files.map(f => f.name).filter(n => /^\d{4}-\d{2}\.json$/.test(n)).map(n => n.slice(0, 7)).filter(m => !since || m >= since);
+    const runs = {};
+    for (const m of ms) { const r = await readJson(TEJUN_RUNS + "/" + m + ".json"); runs[m] = r.data || {}; }
+    state.tjRuns = runs; state.tjRunsState = "ok";
+  } catch (e) { state.tjRunsState = "err"; }
+  renderTejunSheet();
+}
+function openTejun(tid){
+  state.tjOpen = tid; state.tjPick = {}; state.tjCoreErr = false;
+  renderTejunSheet();
+  const panel = document.querySelector("#tj-sheet [data-tj-close]"); if (panel) panel.focus();
+  const t = taskStates().find(x => x.def.id === tid), pr = t && procOfTask(t, cyclePos(t));
+  if (!pr || !pr.proc) return;
+  ensureTjCore().then(ok => {
+    if (!ok) state.tjCoreErr = true;
+    renderTejunSheet();
+    if (ok && (tjData().ranges || []).length) loadTejunRuns();
+  });
+}
+function closeTejun(){ state.tjOpen = null; state.tjPick = {}; renderTejunSheet(); }
+
+function tjRange(name){
+  const r = (tjData().ranges || []).find(x => x.name === name);
+  if (!r) return '<span class="tj-rng miss" title="この名前の範囲が手順録にありません">' + esc(name) + "</span>";
+  if (state.tjRunsState !== "ok") return '<span class="tj-rng">' + esc(name) + (state.tjRunsState === "err" ? "(今の位置を読めませんでした)" : " …") + "</span>";
+  return '<span class="tj-rng">' + esc(name) + " " + esc(window.TJCore.rangeText(r, window.TJCore.rangeState(r, state.tjRuns))) + "</span>";
+}
+function tjText(t){
+  t = String(t); let out = "", last = 0;
+  t.replace(window.TJCore.RANGE_RE, (m, name, idx) => { out += esc(t.slice(last, idx)) + tjRange(name); last = idx + m.length; return m; });
+  return out + esc(t.slice(last));
+}
+function tjList(steps, labels, inner){
+  return '<ol class="tj-list' + (inner ? " " + inner : "") + '">' + steps.map(s => tjStep(s, labels)).join("") + "</ol>";
+}
+function tjStep(s, labels){
+  const C = window.TJCore, num = '<span class="tj-num">' + esc(labels[s.id] || "") + "</span>";
+  if (s.type === "branch") {
+    const o = s.options.find(x => x.id === state.tjPick[s.id]);
+    return '<li class="tj-step br">' + num + '<span class="tj-q">' + (s.question ? tjText(s.question) : "(問いがありません)") + "</span>" +
+      '<div class="tj-opts">' + s.options.map(x => '<button type="button" data-tj-pick="' + esc(s.id) + '" data-opt="' + esc(x.id) + '" aria-pressed="' + (o === x) + '">' + esc(x.label || "名前なし") + "</button>").join("") + "</div>" +
+      (o ? (o.steps.length ? tjList(o.steps, labels, "fork") : '<p class="tj-hint">この道には手順がありません。そのまま次へ進みます。</p>')
+         : '<p class="tj-hint">選ぶと、その先の手順が出ます。</p>') + "</li>";
+  }
+  if (s.type === "part") {
+    const pt = (tjData().parts || []).find(x => x.id === s.partId), inner = C.expandPart(s, tjData());
+    return '<li class="tj-step pt">' + num + '<span class="tj-q">' + esc(pt ? pt.name || "名前なし" : "見つからない部品") + "</span>" + (inner.length ? tjList(inner, labels, "part") : "") + "</li>";
+  }
+  return '<li class="tj-step">' + num + '<span class="tj-t">' + (s.text ? tjText(s.text) : "(空)") + "</span>" + (s.min ? '<span class="tj-min">' + C.fmtMin(+s.min) + "</span>" : "") + "</li>";
+}
+function tjProcHtml(raw, item){
+  const C = window.TJCore, data = tjData(), p = (data.procs || []).find(x => x.id === raw.id) || C.normalize({ procs: [clone(raw)] }).procs[0];
+  const labels = C.numbering(p.steps, data);
+  const whole = C.fmtSpan(C.span(p.steps, data));
+  let chosen = "";
+  if (C.hasBranch(p.steps, data) && C.allPicked(p.steps, state.tjPick, data)) { const c = C.fmtSpan(C.span(p.steps, data, state.tjPick)); if (c) chosen = "(選んだ道では " + c + ")"; }
+  return '<div class="tj-sec"><div class="tj-lab">' + (item ? "「" + esc(item) + "」の日の手順:" : "今日の手順:") + esc(p.name || "名前なし") +
+    '<span class="tj-total">' + (whole ? "合計 " + whole : "") + chosen + "</span></div>" +
+    (p.steps.length ? tjList(p.steps, labels, "") : '<p class="tj-hint">手順がまだありません。</p>') + "</div>";
+}
+// 開いた手順書1つだけを描く。閉じているときは何も作らない
+function renderTejunSheet(){
+  const box = document.getElementById("tj-sheet"); if (!box) return;
+  const t = state.tjOpen && taskStates().find(x => x.def.id === state.tjOpen);
+  if (!t) { box.hidden = true; box.innerHTML = ""; document.body.classList.remove("tj-lock"); return; }
+  const pos = cyclePos(t), pr = procOfTask(t, pos) || { proc: null };
+  const itemName = pos ? pos.item : "";
+  let html = '<div class="tj-panel" role="dialog" aria-modal="true" aria-labelledby="tj-title"><div class="tj-head"><h2 id="tj-title">' + esc(t.def.name) + "</h2>" +
+    '<button type="button" class="tj-x" data-tj-close aria-label="閉じる">×</button></div>';
+  if (pos) html += '<div class="tj-sec"><div class="tj-lab">サイクル' + (pos.cycle.src === "old" ? "(行軍表で作ったもの)" : "") +
+    '<span class="tj-total">やった日だけ次へ進みます</span></div>' + cycleListHtml(pos) + "</div>";
+  if (!pr.proc) html += '<p class="tj-none">' + (pos ? "今日の中身「" + esc(itemName) + "」には、手順書がありません。" : "このタスクには、手順書がありません。") + "</p>";
+  else if (!window.TJCore) html += '<p class="tj-none">' + (state.tjCoreErr ? "手順を表示する部分を読み込めませんでした。電波を確かめて、開き直してください。" : "手順を読み込んでいます…") + "</p>";
+  else html += tjProcHtml(pr.proc, pr.viaItem ? itemName : "");
+  html += '<p class="tj-foot">手順書やサイクルを作る・直すのは<a href="' + TEJUN_APP + '" target="_blank" rel="noopener">手順録</a>で。ここでは見るだけです。</p></div>';
+  box.innerHTML = html;
+  box.hidden = false;
+  document.body.classList.add("tj-lock");
+}
+
 const CHECK_MARK = { "完了": ["ok", "✓"], "超過完了": ["ok", "★"], "不完全な完了": ["ok", "△"],
                      "不実行": ["ng", "✕"], "未着手": ["ng", "・"], "今日は該当しない": ["ex", "ー"],
                      "進行中": ["ex", "…"], "まとめて実行待ち": ["ex", "…"] };
@@ -2569,9 +2789,10 @@ function renderTodayRecords(list){
     if (mode === "prio" && isReach(t)) sub.push("今日やらないと落ちる");
     if (mode === "settle") sub.push(t.status + " 連続" + t.streak);
     if (isCompletion(t)) sub.push("進捗 " + Math.round(t.progress || 0) + "%");
-    if (t.cycle) sub.push("今日は " + t.cycle.item);
+    const pos = yday ? null : cyclePos(t);
     if (t.row && t.row.prevBooking) sub.push("予約:" + t.row.prevBooking);
-    return '<div class="rec" data-recrow="' + esc(t.def.id) + '"><div class="rn">' + esc(t.def.name) + "<small>" + esc(sub.filter(Boolean).join("　")) + "</small></div>" +
+    return '<div class="rec" data-recrow="' + esc(t.def.id) + '"><div class="rn">' + (yday ? esc(t.def.name) : tjNameHtml(t, t.def.name)) + "<small>" + esc(sub.filter(Boolean).join("　")) + "</small>" +
+      (pos ? '<button type="button" class="cyc-pos" data-tjopen="' + esc(t.def.id) + '" aria-label="サイクルの現在地と今日の手順">' + cycleChipHtml(pos) + "</button>" : "") + "</div>" +
       '<button type="button" class="q' + (done ? " on" : miss ? " ng" : "") + '" data-quick="' + esc(t.def.id) +
       '" aria-label="' + esc(t.def.name) + (done ? "の完了を取り消す" : "を完了にする") + '">' + (done ? "✓" : miss ? "✕" : "○") + "</button>" +
       '<button type="button" class="more" data-record="' + esc(t.def.id) + '">記録</button></div>';
@@ -2636,7 +2857,8 @@ function taskRowHtml(t){
     meta.push("<span>世代" + t.gen + "</span>");
   }
   meta.push("<span>連続" + t.streak + "</span>");
-  if (t.cycle) meta.push('<span class="cyc">今日は ' + esc(t.cycle.item) + "</span>");
+  const pos = cyclePos(t);
+  if (pos) meta.push('<span class="cyc">' + cycleChipHtml(pos) + "</span>");
   return '<button type="button" class="tk" data-tid="' + esc(t.def.id) + '"><div class="tn">' + esc(t.def.name) +
          '</div><div class="tm">' + meta.join("") + "</div></button>";
 }
@@ -2709,6 +2931,7 @@ function renderTaskDetail(){
   const cyc = d.cycle || { items: [] };
   const cycItems = (cyc.items || []).join("\n");
   const curIdx = t.cycle ? t.cycle.index : 0;
+  const tjPos = cyclePos(t);
   const cycOpts = (cyc.items || []).map((it, i) => '<option value="' + i + '"' + (i === curIdx ? " selected" : "") + ">" +
     esc(String.fromCharCode(97 + (i % 26)) + " " + it) + "</option>").join("");
   const gens = (d.generations || []).slice().sort((a, b) => a.from < b.from ? -1 : 1).map(g =>
@@ -2745,10 +2968,12 @@ function renderTaskDetail(){
     "</div>" + condBox + gateBox +
     "<h3>直近2週間</h3>" + '<div class="strip">' + strip + '</div><div class="strip-d">' + dates + "</div>" +
     "<h3>世代の歴史</h3>" + '<ul class="gens">' + gens + "</ul>" +
-    "<h3>サイクル</h3>" +
-    '<p class="note" style="font-size:.8rem;color:var(--sub);margin:.1rem 0 .4rem">回す中身を1行に1つ書く。やった日だけ次へ進む。</p>' +
-    '<textarea data-cycle-items placeholder="過去の語彙\n未来の語彙\n長文1題">' + esc(cycItems) + "</textarea>" +
-    (cycOpts ? '<div class="f" style="margin-top:.4rem"><label for="tk-cyc-now">今日はどれか</label><select id="tk-cyc-now" data-cycle-now>' + cycOpts + "</select></div>" : "") +
+    "<h3>サイクル</h3>" + (tjPos ? cycleListHtml(tjPos) : "") +
+    (tjPos && tjPos.cycle.src === "tejun"
+      ? '<p class="note" style="font-size:.8rem;color:var(--sub);margin:.3rem 0">このサイクルは手順録で作ったものです。中身や切り替えてよい条件は<a href="' + TEJUN_APP + '" target="_blank" rel="noopener">手順録</a>で変えます。</p>'
+      : '<p class="note" style="font-size:.8rem;color:var(--sub);margin:.1rem 0 .4rem">回す中身を1行に1つ書く。やった日だけ次へ進む。</p>' +
+        '<textarea data-cycle-items placeholder="過去の語彙\n未来の語彙\n長文1題">' + esc(cycItems) + "</textarea>" +
+        (cycOpts ? '<div class="f" style="margin-top:.4rem"><label for="tk-cyc-now">今日はどれか</label><select id="tk-cyc-now" data-cycle-now>' + cycOpts + "</select></div>" : "")) +
     (waves ? "<h3>WAVE・STAGE</h3>" + waves : "") +
     '<div class="row"><button type="button" class="btn" data-tk-save>保存する</button>' +
     '<button type="button" class="btn ghost" data-tk-close>閉じる</button></div>' +
@@ -3347,10 +3572,12 @@ async function loadAll(){
   st.classList.remove("err");
   st.textContent = "読み込んでいます…";
   try {
-    const [t, s, ev, pl, ps, sf, sh, pg0] = await Promise.all([readJson(TASKS_PATH), readJson(SETTINGS_PATH), readJson(EVENTS_PATH),
+    const [t, s, ev, pl, ps, sf, sh, pg0, tj] = await Promise.all([readJson(TASKS_PATH), readJson(SETTINGS_PATH), readJson(EVENTS_PATH),
                                                   readJson(PLAN_PATH), readJson(PLAN_STATUS_PATH), readJson(STAFF_PATH).catch(() => ({})),
-                                                  readJson(SHIAN_PATH).catch(() => ({})), readJson("roadmap/gov/pages.json").catch(() => ({}))]);
+                                                  readJson(SHIAN_PATH).catch(() => ({})), readJson("roadmap/gov/pages.json").catch(() => ({})),
+                                                  readJson(TEJUN_PATH).catch(() => null)]);
     state.pagesDoc = (pg0 && pg0.data) || null;
+    if (tj) { state.tejun = tj.data || null; state.tjRunsState = ""; }     // 読めなかったときは前のものを使う
     state.staff = (sf && sf.data) || null;
     state.shian = (sh && sh.data) || null;
     if (!t.data) throw new Error(TASKS_PATH + " がまだありません。Actions の Roadmap tasks を実行してください。");
@@ -3477,7 +3704,7 @@ function cachePayload(){
            events: state.events, eventsSha: state.eventsSha,
            plan: state.plan, planSha: state.planSha, planStatus: state.planStatus,
            taskDefs: state.taskDefs, taskLogs: state.taskLogs, taskLogShas: state.taskLogShas,
-           appLogs: state.appLogs, appLogShas: state.appLogShas, overlay: state.overlay, overlaySha: state.overlaySha };
+           appLogs: state.appLogs, appLogShas: state.appLogShas, overlay: state.overlay, overlaySha: state.overlaySha, tejun: state.tejun };
 }
 
 function normalizeSettings(s){
@@ -3674,6 +3901,7 @@ function bind(){
   document.getElementById("notices").addEventListener("click", replanBox);
   document.getElementById("plan").addEventListener("click", e => {
     if (replanBox(e)) return;
+    const tjb = e.target.closest("[data-tjopen]"); if (tjb) { openTejun(tjb.dataset.tjopen); return; }
     const doc = state.tasksDoc; if (!doc) return;
     const d = e.target.closest("[data-done]");
     const u = e.target.closest("[data-undo]");
@@ -3780,6 +4008,15 @@ function bind(){
     renderToday();
   });
 
+  // 手順の画面
+  const tjs = document.getElementById("tj-sheet");
+  tjs.addEventListener("click", e => {
+    if (e.target === tjs || e.target.closest("[data-tj-close]")) { closeTejun(); return; }
+    const pk = e.target.closest("[data-tj-pick]");
+    if (pk) { const id = pk.dataset.tjPick; state.tjPick[id] = state.tjPick[id] === pk.dataset.opt ? undefined : pk.dataset.opt; renderTejunSheet(); }
+  });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && state.tjOpen) closeTejun(); });
+
   document.getElementById("toast-undo").addEventListener("click", () => {
     const f = toastUndo; toastUndo = null;
     document.getElementById("toast").hidden = true;
@@ -3807,6 +4044,7 @@ function bind(){
 
   // 今日の記録:○で完了、もう一度で取り消し。「記録」で詳しく
   document.getElementById("tk-today").addEventListener("click", async e => {
+    const tjb = e.target.closest("[data-tjopen]"); if (tjb) { openTejun(tjb.dataset.tjopen); return; }
     const q = e.target.closest("[data-quick]");
     const r = e.target.closest("[data-record]");
     const today = checkDay();
@@ -3997,17 +4235,18 @@ function bind(){
     if (!e.target.closest("[data-tk-save]")) return;
     const id = state.taskOpen; if (!id) return;
     const box = document.getElementById("tk-detail");
-    const items = box.querySelector("[data-cycle-items]").value.split("\n").map(x => x.trim()).filter(Boolean);
+    const cycTa = box.querySelector("[data-cycle-items]");
+    const items = cycTa ? cycTa.value.split("\n").map(x => x.trim()).filter(Boolean) : null;
     const nowSel = box.querySelector("[data-cycle-now]");
     let idx = nowSel ? +nowSel.value : 0;
-    if (!(idx >= 0 && idx < items.length)) idx = 0;
+    if (items && !(idx >= 0 && idx < items.length)) idx = 0;
     const waves = {};
     box.querySelectorAll("[data-wave]").forEach(inp => { waves[inp.dataset.wave] = inp.value.trim(); });
     const today = taskDay();
     await commitOverlay(() => {
       const t = state.overlay.tasks[id] = Object.assign({}, state.overlay.tasks[id] || {});
       // 今日どれかを選び直したら、今日を起点にする
-      t.cycle = items.length ? { items, anchorDate: today, anchorIndex: idx } : null;
+      if (items) t.cycle = items.length ? { items, anchorDate: today, anchorIndex: idx } : null;
       delete t.waves;
       state.overlay.waveUrls = Object.assign({}, state.overlay.waveUrls || {});
       for (const [label, url] of Object.entries(waves)) {
@@ -4384,6 +4623,7 @@ function boot(){
     state.appLogShas = cache.appLogShas || {};
     state.overlay = cache.overlay || { version: 1, tasks: {}, waveUrls: {} };
     state.overlaySha = cache.overlaySha || null;
+    state.tejun = cache.tejun || null;
   }
   renderToday(); renderSettings(); renderPlan(); renderTasks();
 
@@ -4399,7 +4639,7 @@ window.__roadmapAct = actQ;
 window.__roadmap = { findFlows, flowStats, buildPlan, cfgOf, classify, state, loadAll, saveSettings, saveEvents, eventsFor,
                      togglePreset, setPreset, removeEvent, editEventTime, setDone, getDone, commitEvents,
                      commitPlan, normalizePlan, validatePlanItem, newItem, taskStates, commitOverlay,
-                     commitAppLog, setAppRecord, taskDay, taskIdFor,
+                     commitAppLog, setAppRecord, taskDay, taskIdFor, cyclePos, openTejun, closeTejun,
                      b64encode, b64decode, DEFAULT_SETTINGS };
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
 })();
@@ -4523,7 +4763,7 @@ SE.init([
   ["[data-demote-ok]", "down"],
   ["#save, [data-plan-save], [data-edit-save], [data-tk-save], [data-rec-save], [data-new-save], [data-wavelinks-save], [data-ev-add], #nf-save, [data-task-restore], [data-hall-feel]", el => el.matches("input") ? (el.checked ? "toggleOn" : "toggleOff") : "save"],
   ["[data-task-delete], [data-plan-del], [data-ev-del], [data-pdel], [data-fl-del], [data-rm-list], [data-fl-del-step], [data-fl-del-task], [data-ewith-rm], [data-pwith-rm]", "remove"],
-  ["[data-replan], #connect, #reload-data, #reload-app", "open"],
+  ["[data-replan], #connect, #reload-data, #reload-app, [data-tjopen]", "open"],
   ["nav.tabs button, [data-view], [data-tkview]", "tab"]
 ]);
 (function(){ const go = () => { const a = document.getElementById("app-version"); SE.mount(a ? (a.closest("p, div, .f, .row") || a) : null); };
