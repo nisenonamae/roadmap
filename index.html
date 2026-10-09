@@ -631,7 +631,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-09 r73";
+const APP_VERSION = "2026-10-09 r74";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -2164,7 +2164,16 @@ function effectiveDef(def){
 // 取り込んだタスクと、アプリで足したタスク(まだNotionから戻ってきていないもの)を合わせる
 // 削除の印を付けたタスクは、計算のルールの版によらず、ここでも外す
 function deletedIds(){ const ov = (state.overlay && state.overlay.tasks) || {}; return new Set(Object.keys(ov).filter(id => ov[id] && ov[id].deleted)); }
+const objIds = new WeakMap(); let objSeq = 0;
+const objId = o => { if (!o || typeof o !== "object") return 0; if (!objIds.has(o)) objIds.set(o, ++objSeq); return objIds.get(o); };
+let allDefsMemo = { key: null, list: null };
 function allDefs(){
+  const ov = state.overlay || {};
+  const key = [objId(state.taskDefs), objId(ov), state.overlaySha || "", (ov.newTasks || []).length, Object.keys(ov.tasks || {}).length, objId(state.pagesDoc), state.pagesSha || "", taskCache.bump || 0].join("|");
+  if (allDefsMemo.key === key && allDefsMemo.list) return allDefsMemo.list;
+  const list = allDefsRaw(); allDefsMemo = { key, list }; return list;
+}
+function allDefsRaw(){
   const gone = deletedIds(), E = window.TaskEngine;
   const list = E.allDefs(state.taskDefs, state.overlay).filter(d => !gone.has(d.id));
   return E.applyGates && state.pagesDoc ? E.applyGates(list, state.pagesDoc, state.overlay) : list;     // STAGE・WAVEが進行中のときだけ効かせる(直した結びつきで判定)
@@ -3127,22 +3136,24 @@ function renderSettings(){
     const q = (state.teQ || "").trim().toLowerCase(), f = state.teF || "";
     const hit = t => { const c = cfgOf(s, t.name);
       return (!q || t.name.toLowerCase().includes(q)) && (!f || (f === "unset" ? !c.configured : c.nagara === f)); };
+    const bodies = state._teBodies = new Map();       // カードの中身は、開いたときに作る(閉じたカードは名前の行だけ)
     const card = (t, i) => {
       const c = cfgOf(s, t.name);
       const id = "t" + i;
+      const sum = c.configured ? c.min + "分・" + c.place + "・" + c.organs.join("") + (c.fixed ? "・" + c.fixed : "") + (c.win ? "・" + c.winStart + "〜" + c.winEnd : "") : (t.slot || "時間帯なし");
+      const open = (state.teOpen || new Set()).has(t.name);
+      const head = '<details class="task-edit" data-name="' + esc(t.name) + '"' + (open ? " open" : "") + '><summary><span class="tn2">' + esc(t.name) +
+          (t.waiting ? '<span class="tbadge wait" title="STAGE・WAVEが進行中になった日から、今日のタブに入ります">待機中</span>' : "") +
+          (c.configured ? "" : '<span class="tbadge unset">未設定</span>') + (c.nagara === "no" ? '<span class="tbadge no">ながらにしない</span>' : "") +
+          (c.nagara === "pref" ? '<span class="tbadge pref">ながら優先</span>' : "") + '</span><span class="ts">' + esc(sum) + "</span></summary>";
+      const body = () => {
       const opts = (placeOpts.includes(c.place) ? placeOpts : placeOpts.concat([c.place]))
         .map(p => '<option' + (p === c.place ? " selected" : "") + ">" + esc(p) + "</option>").join("");
       const modeOpts = MODES.map(([v, l]) => '<option value="' + v + '"' + (v === c.mode ? " selected" : "") + ">" + (l || "なし") + "</option>").join("");
       const prOpts = [-2,-1,0,1,2].map(v => '<option value="' + v + '"' + (v === c.priority ? " selected" : "") + ">" + (v > 0 ? "+" + v : v) + "</option>").join("");
       const organs = ORGANS.map(o => '<button type="button" aria-pressed="' + (c.organs.includes(o)) + '" data-organ="' + o + '">' + o + "</button>").join("");
       const nagOpts = NAG.map(([v, l]) => '<option value="' + v + '"' + (v === c.nagara ? " selected" : "") + ">" + l + "</option>").join("");
-      const sum = c.configured ? c.min + "分・" + c.place + "・" + c.organs.join("") + (c.fixed ? "・" + c.fixed : "") + (c.win ? "・" + c.winStart + "〜" + c.winEnd : "") : (t.slot || "時間帯なし");
-      const open = (state.teOpen || new Set()).has(t.name);
-      return '<details class="task-edit" data-name="' + esc(t.name) + '"' + (open ? " open" : "") + '><summary><span class="tn2">' + esc(t.name) +
-          (t.waiting ? '<span class="tbadge wait" title="STAGE・WAVEが進行中になった日から、今日のタブに入ります">待機中</span>' : "") +
-          (c.configured ? "" : '<span class="tbadge unset">未設定</span>') + (c.nagara === "no" ? '<span class="tbadge no">ながらにしない</span>' : "") +
-          (c.nagara === "pref" ? '<span class="tbadge pref">ながら優先</span>' : "") + '</span><span class="ts">' + esc(sum) + "</span></summary>" +
-        '<div class="te-body">' +
+      return '<div class="te-body">' +
         "<h4>基本</h4>" +
         '<div class="grid2">' +
           '<div class="f"><label for="' + id + 'm">所要(分)</label><input id="' + id + 'm" data-k="min" type="number" min="1" step="1" value="' + c.min + '"></div>' +
@@ -3163,7 +3174,10 @@ function renderSettings(){
         '<div class="f"><label for="' + id + 'n">ながらの扱い(どのタスクとも)</label><select id="' + id + 'n" data-k="nagara">' + nagOpts + "</select></div>" +
         pairPicker(t.name, "pair", "一緒にやりたいタスク", allNames) + pairPicker(t.name, "avoid", "一緒にしないタスク", allNames) +
         '<div class="organs" role="group" aria-label="使う器官">' + organs + "</div>" +
-        "</div></details>";
+        "</div>";
+      };
+      bodies.set(t.name, body);
+      return head + (open || window.__teEager ? body() : '<div class="te-body" data-lazy="1"></div>') + "</details>";
     };
     const shown = live.filter(hit), unset = shown.filter(t => !cfgOf(s, t.name).configured), setd = shown.filter(t => cfgOf(s, t.name).configured);
     const fall = fallen.filter(hit);
@@ -3260,10 +3274,15 @@ function pairPicker(name, kind, label, allNames){
     '<select data-add-list="' + kind + '"><option value="">+ 選ぶ</option>' + opts + "</select></div>";
 }
 // 選んだあと、そのタスクの行が見えるように合わせ、何をしたかを出す
+// 閉じていたカードの中身を作る
+function fillTaskEdit(d){
+  const b = d && d.querySelector(".te-body[data-lazy]"), mk = b && state._teBodies && state._teBodies.get(d.dataset.name);
+  if (mk) b.outerHTML = mk();
+}
 function afterPairEdit(name, msg){
   const row = Array.from(document.querySelectorAll("#task-edits details.task-edit")).find(r => r.dataset.name === name);
   if (!row) return;
-  row.open = true; (state.teOpen = state.teOpen || new Set()).add(name);
+  row.open = true; (state.teOpen = state.teOpen || new Set()).add(name); fillTaskEdit(row);
   if (row.scrollIntoView) row.scrollIntoView({ block: "nearest" });
   const body = row.querySelector(".te-body");
   if (body) { const n = document.createElement("div"); n.className = "pair-msg"; n.textContent = msg; body.insertBefore(n, body.firstChild); }
@@ -4223,6 +4242,7 @@ function bind(){
     const d = e.target.closest && e.target.closest("details.task-edit"); if (!d) return;
     state.teOpen = state.teOpen || new Set();
     d.open ? state.teOpen.add(d.dataset.name) : state.teOpen.delete(d.dataset.name);
+    if (d.open) fillTaskEdit(d);
   }, true);
   document.getElementById("te-q").addEventListener("input", e => { state.teQ = e.target.value; renderSettings(); });
   document.getElementById("te-f").addEventListener("change", e => { state.teF = e.target.value; renderSettings(); });
