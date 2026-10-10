@@ -427,6 +427,15 @@ body.tj-lock{overflow:hidden}
 .tj-step.br::before{border-radius:1px;transform:rotate(45deg);background:#B07D2A;border-color:#B07D2A}
 .tj-step.pt::before{border-radius:2px;background:var(--focus);border-color:var(--focus)}
 .tj-num{font-weight:700;font-variant-numeric:tabular-nums}
+.tj-alw{margin:0 0 .75rem;padding:.35rem .6rem;border:1px solid #9CC9B0;border-left:4px solid #3D8A5A;background:#EDF6F0;border-radius:4px;font-size:.86rem;line-height:1.55}
+.tj-alw-h{font-size:.72rem;color:#2E6B45;font-weight:700;margin-bottom:.1rem}
+.tj-alw ul{margin:0;padding:0;list-style:none}
+.tj-alw li{display:flex;flex-wrap:wrap;gap:.1rem .4rem;align-items:baseline;padding:.1rem 0}
+.tj-aw-always{font-size:.68rem;font-weight:700;background:#3D8A5A;color:#fff;border-radius:3px;padding:0 .3rem}
+.tj-aw-when{font-weight:700;white-space:pre-wrap}
+.tj-aw-text{white-space:pre-wrap;word-break:break-word}
+.tj-aw-arrow{color:var(--sub)}
+.tj-alw-li{list-style:none;position:relative;z-index:1}
 .tj-q{font-weight:700}
 .tj-min{font-size:.76rem;color:var(--sub);white-space:nowrap;background:var(--paper);border-radius:3px;padding:0 .35rem}
 .tj-opts{display:flex;flex-wrap:wrap;gap:.35rem;margin:.3rem 0 .1rem}
@@ -686,7 +695,7 @@ body.tj-lock{overflow:hidden}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-09 r77";
+const APP_VERSION = "2026-10-09 r78";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -2444,7 +2453,17 @@ function tjList(steps, labels, inner){
 // 区切り:ここから次の区切りまでのまとまりと、その時間
 function tjSection(steps, i){
   const C = window.TJCore, s = steps[i], t = C.sectionSpan ? C.fmtSpan(C.sectionSpan(steps, i, tjData(), state.tjPick)) : "";
-  return '<li class="tj-div lv' + Math.min(3, Math.max(1, +s.level || 1)) + '"><span>' + esc(s.title || "区切り") + "</span>" + (t ? '<span class="tj-div-m">' + t + "</span>" : "") + "</li>";
+  const box = tjAlways(s.always, "「" + (s.title || "区切り") + "」のあいだ");
+  return '<li class="tj-div lv' + Math.min(3, Math.max(1, +s.level || 1)) + '"><span>' + esc(s.title || "区切り") + "</span>" + (t ? '<span class="tj-div-m">' + t + "</span>" : "") + "</li>" +
+    (box ? '<li class="tj-alw-li">' + box + "</li>" : "");
+}
+// 常にすること(手順書全体・区切り・部品のあいだ)。「〜のとき」が空なら「常に」
+function tjAlways(rules, label){
+  const rs = (rules || []).filter(r => r && (String(r.text || "").trim() || String(r.when || "").trim()));
+  if (!rs.length) return "";
+  return '<div class="tj-alw"><div class="tj-alw-h">' + esc(label) + "</div><ul>" + rs.map(r => "<li>" +
+    (String(r.when || "").trim() ? '<span class="tj-aw-when">' + tjText(r.when) + '</span><span class="tj-aw-arrow">→</span>' : '<span class="tj-aw-always">常に</span>') +
+    '<span class="tj-aw-text">' + tjText(r.text || "") + "</span></li>").join("") + "</ul></div>";
 }
 // やること1つの時間(手順録の版によっては、幅の出し方がまだ無い)
 const tjStepTime = s => window.TJCore.fmtStep ? window.TJCore.fmtStep(s) : (s.min ? window.TJCore.fmtMin(+s.min) : "");
@@ -2459,7 +2478,8 @@ function tjStep(s, labels){
   }
   if (s.type === "part") {
     const pt = (tjData().parts || []).find(x => x.id === s.partId), inner = C.expandPart(s, tjData());
-    return '<li class="tj-step pt"><div class="tj-row">' + num + '<span class="tj-q">' + esc(pt ? pt.name || "名前なし" : "見つからない部品") + "</span></div>" + (inner.length ? tjList(inner, labels, "part") : "") + "</li>";
+    return '<li class="tj-step pt"><div class="tj-row">' + num + '<span class="tj-q">' + esc(pt ? pt.name || "名前なし" : "見つからない部品") + "</span></div>" +
+      (pt ? tjAlways(pt.always, "「" + (pt.name || "部品") + "」のあいだ") : "") + (inner.length ? tjList(inner, labels, "part") : "") + "</li>";
   }
   const tm = tjStepTime(s);
   return '<li class="tj-step"><div class="tj-row">' + num + '<span class="tj-t">' + (s.text ? tjText(s.text) : "(空)") + "</span>" + (tm ? '<span class="tj-min">' + tm + "</span>" : "") + "</div></li>";
@@ -2472,6 +2492,7 @@ function tjProcHtml(raw, item){
   if (C.hasBranch(p.steps, data) && C.allPicked(p.steps, state.tjPick, data)) { const c = C.fmtSpan(C.span(p.steps, data, state.tjPick)); if (c) chosen = "(選んだ道では " + c + ")"; }
   return '<div class="tj-sec"><div class="tj-lab">' + (item ? "「" + esc(item) + "」の日の手順:" : "今日の手順:") + esc(p.name || "名前なし") +
     '<span class="tj-total">' + (whole ? "合計 " + whole : "") + chosen + "</span></div>" +
+    tjAlways(p.always, "この手順書のあいだ") +
     (p.steps.length ? tjList(p.steps, labels, "") : '<p class="tj-hint">手順がまだありません。</p>') + "</div>";
 }
 // 開いた手順書1つだけを描く。閉じているときは何も作らない

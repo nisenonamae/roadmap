@@ -75,8 +75,8 @@ function baseFiles(withTejun = true) {
     files["roadmap/apps/tejunroku/data.json"] = {
       version: 1,
       procs: [
-        { id: "p1", name: "未来の語彙の日", steps: [
-          { id: "h1", type: "section", title: "覚える" },
+        { id: "p1", name: "未来の語彙の日", always: [{ id: "a1", when: "", text: "声に出して読む" }, { id: "a0", when: "", text: "  " }], steps: [
+          { id: "h1", type: "section", title: "覚える", always: [{ id: "a2", when: "3回まちがえたら", text: "{単語帳} の最初に戻す" }] },
           { id: "h1a", type: "section", title: "1周目", level: 2 },
           { id: "s1", type: "do", text: "時間を計って {単語帳}", min: 15 },
           { id: "h1b", type: "section", title: "確かめる", level: 2 },
@@ -175,6 +175,10 @@ test("名前を押すと今日の手順が開く:現在地と最後にやった�
   // 区切りと、その時間(分かれ道を選ぶ前は幅で)
   assert.deepStrictEqual($$(dom, "#tj-sheet .tj-div").map(e => e.textContent), ["覚える20〜25分", "1周目15分", "確かめる5〜10分", "残す8〜11分"]);
   assert.deepStrictEqual($$(dom, "#tj-sheet .tj-div").map(e => e.className), ["tj-div lv1", "tj-div lv2", "tj-div lv2", "tj-div lv1"]);
+  // 常にすること:手順書全体と区切り(空のものは出さない)
+  assert.deepStrictEqual($$(dom, "#tj-sheet .tj-alw").map(e => e.textContent),
+    ["この手順書のあいだ常に声に出して読む", "「覚える」のあいだ3回まちがえたら→単語帳 101〜200語 の最初に戻す"]);
+  assert($(dom, "#tj-sheet .tj-div + .tj-alw-li"));
   // 時間の幅と、文の改行
   assert.strictEqual($$(dom, "#tj-sheet .tj-min").pop().textContent, "5〜8分");
   assert.strictEqual($$(dom, "#tj-sheet .tj-t").pop().textContent, "1行目\n2行目");
