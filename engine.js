@@ -13,6 +13,7 @@
     - 実験と随時は上がりも落ちもしない
     - 「今日は該当しない」は無かった日として扱う。連続を保ち、累計は増やさない
     - 定着と熟達は記録が無ければ完了、随時は該当しない、貯金が1日分あれば完了
+    - 要再設定から立て直した(新規に戻した)日は、累計・連続・世代内累計を0から数え直す(最長連続は残す)
 */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory();
@@ -86,6 +87,14 @@
     return g;
   }
 
+  // 手で入れた状況の変更を1つ効かせる。要再設定から新規に戻す(立て直す)ときは、累計・連続・世代内累計を0から数え直す
+  function applyEvent(st, e) {
+    if (e.status) {
+      if (e.status === "新規" && st.status === "要再設定") { st.total = 0; st.streak = 0; st.genTotal = 0; st.miss = 0; }
+      st.status = e.status;
+    }
+  }
+
   /*
     def   タスクの定義
     logFor(day)  その日の記録を返す関数。無ければ undefined
@@ -131,7 +140,7 @@
       // STAGE・WAVEが「進行中」でない日は、そのタスクの行を立てない(切り替えた日から効く。過去は書き換えない)
       if (def.gate && day >= def.gate.start && !gateOpen(def.gate, day) && !rec) {
         // 待機中の日でも、手で入れた変更(状況の操作・数字の直し)は効かせる。やらなかった日としては数えない
-        for (const e of todays) { if (e.status) st.status = e.status; if (e.set) Object.assign(st, e.set); }
+        for (const e of todays) { applyEvent(st, e); if (e.set) Object.assign(st, e.set); }
         continue;
       }
       if (imported && day === imported && !rec && !def.noDrop && GENERATED.has(st.status) && isDue(def.interval, day, st.lastDone)) {
@@ -155,7 +164,7 @@
       // その日の行に手で入れた変更(状況・数字の直し)
       const firstGen = gens.length ? (gens[0].gen || 1) : 1;
       for (const e of todays) {
-        if (e.status) st.status = e.status;
+        applyEvent(st, e);
         if (e.set) {
           // 最初の世代のあいだは、世代内累計は累計と同じ。累計を直したら同じだけ動かす
           if ("total" in e.set && !("genTotal" in e.set) && gen === firstGen) {
@@ -333,8 +342,8 @@
       const ed = overlay && overlay.tasks && overlay.tasks[d0.id] && overlay.tasks[d0.id].edits;
       const d = ed && (Array.isArray(ed.waves) || Array.isArray(ed.ministries))
         ? Object.assign({}, d0, Array.isArray(ed.waves) ? { waves: ed.waves } : {}, Array.isArray(ed.ministries) ? { ministries: ed.ministries } : {}) : d0;
-      // ページから作ったタスク(リンクで結びつく)は、ページを作った日から決まりに従う。
-      // ラベルで結びつく前からのタスクは、そのページを初めて「進行中」にした日から従う(作り直している間は今までどおり)
+      // 結びついたページ(リンクでもラベルでも)を作った日から、決まりに従う。
+      // 待機中が解けるのは、省アプリでページを進行中にしているあいだだけ
       const linked = [], orphans = [];
       for (const w of d.waves || []) {
         const m = /#page=([\w-]+)/.exec((w && w.url) || "");
@@ -353,13 +362,9 @@
       const ranges = []; let start = null, why = [];
       for (const { p, explicit } of linked) {
         const log = (p.statusLog && p.statusLog.length ? p.statusLog : [{ date: p.created || "2000-01-01", status: p.status }]).slice().sort((a, b) => a.date < b.date ? -1 : 1);
-        const firstRun = log.find(x => normSt(x.status) === "進行中");
-        // ラベルだけで結びつくタスクでも、そのページができた日以降に作られたもの(そのページのためのタスク)は、リンクと同じく最初から従う。
-        // ページより前からある古いタスクだけ、初めて進行中にした日から従う(引っ越してきたタスクを急に止めないため)
-        const born = p.created || log[0].date, forPage = !!(d.created && born && d.created >= born);
-        const from = (explicit || forPage) ? log[0].date : (firstRun ? firstRun.date : null);
+        const from = log[0].date;
         why.push({ id: p.id, label: p.label, title: p.title || "", status: normSt(p.status), link: explicit ? "リンク" : "ラベル",
-          rule: explicit ? "リンクで結びつくので、ページを作った日から従う" : forPage ? "ページができた日以降に作られたタスクなので、ページを作った日から従う" : (firstRun ? "ページより前からあるタスクなので、初めて進行中にした日から従う" : "ページより前からあるタスクで、そのページはまだ一度も進行中になっていないので、まだ従わない"),
+          rule: "ページを作った日から従う(省アプリで進行中にしているあいだだけ効く)",
           from: from || null });
         if (!from) continue;
         if (!start || from < start) start = from;
@@ -379,6 +384,6 @@
     const g = def && def.gate; if (!g || day < g.start || gateOpen(g, day)) return null;
     return (g.pages || []).filter(p => p.status !== "進行中");
   }
-  const ENGINE_VERSION = "2026-10-09 e8";
+  const ENGINE_VERSION = "2026-10-10 e9";
   return { ENGINE_VERSION, waitingOn, applyGates, gateOpen, replay, makeLogFor, cycleIndex, cycleTrack, mergeOverlay, allDefs, mergedLogFor, targetAt, nextStatus, isDue, addDays, daysBetween, DONE, EXCUSED, AUTO_DONE, GENERATED, RULES };
 });
