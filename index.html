@@ -413,14 +413,22 @@ body.tj-lock{overflow:hidden}
 .tj-list{list-style:none;margin:.2rem 0;padding:0 0 0 1.5rem;position:relative}
 .tj-list::before{content:"";position:absolute;left:.48rem;top:.5rem;bottom:.5rem;width:2px;background:var(--ink)}
 .tj-list.fork::before{background:#B07D2A}.tj-list.part::before{background:var(--focus)}
-.tj-step{position:relative;padding:.2rem 0 .5rem;line-height:1.5}
+.tj-step{position:relative;padding:.25rem 0 .75rem;line-height:1.65}
+.tj-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:.5rem;align-items:baseline}
+.tj-t,.tj-q{white-space:pre-wrap;word-break:break-word}
+.tj-div{margin:.35rem 0 .7rem -1.5rem;padding:.3rem .6rem;background:var(--ink);color:#fff;border-radius:4px;display:flex;justify-content:space-between;gap:.6rem;align-items:baseline;font-weight:700;letter-spacing:.04em;position:relative;z-index:1}
+.tj-list.fork > .tj-div,.tj-list.part > .tj-div{background:var(--sub)}
+.tj-list .tj-div.lv2{background:#E1E7EB;color:var(--ink);margin-left:-.8rem;border-left:4px solid var(--ink);border-radius:0 4px 4px 0;padding:.2rem .6rem;letter-spacing:.02em}
+.tj-list .tj-div.lv3{background:transparent;color:var(--ink);margin-left:0;border-radius:0;border-bottom:1px dashed var(--sub);padding:.05rem .15rem;font-size:.92rem;letter-spacing:0}
+.tj-list .tj-div.lv2 .tj-div-m,.tj-list .tj-div.lv3 .tj-div-m{color:var(--sub)}
+.tj-div-m{font-size:.76rem;font-weight:400;color:#D9DEE3;white-space:nowrap;letter-spacing:0}
 .tj-step::before{content:"";position:absolute;left:-1.3rem;top:.45rem;width:11px;height:11px;border-radius:50%;background:var(--sheet);border:2px solid var(--ink);box-sizing:border-box}
 .tj-list.fork > .tj-step::before{border-color:#B07D2A}.tj-list.part > .tj-step::before{border-color:var(--focus)}
 .tj-step.br::before{border-radius:1px;transform:rotate(45deg);background:#B07D2A;border-color:#B07D2A}
 .tj-step.pt::before{border-radius:2px;background:var(--focus);border-color:var(--focus)}
-.tj-num{font-weight:700;margin-right:.4rem;font-variant-numeric:tabular-nums}
+.tj-num{font-weight:700;font-variant-numeric:tabular-nums}
 .tj-q{font-weight:700}
-.tj-min{font-size:.76rem;color:var(--sub);margin-left:.4rem;white-space:nowrap}
+.tj-min{font-size:.76rem;color:var(--sub);white-space:nowrap;background:var(--paper);border-radius:3px;padding:0 .35rem}
 .tj-opts{display:flex;flex-wrap:wrap;gap:.35rem;margin:.3rem 0 .1rem}
 .tj-opts button{border:1.5px solid #B07D2A;color:#8A5F12;background:#fff;border-radius:999px;padding:.1rem .8rem;font:inherit;font-size:.86rem;cursor:pointer}
 .tj-opts button[aria-pressed="true"]{background:#B07D2A;color:#fff}
@@ -678,7 +686,7 @@ body.tj-lock{overflow:hidden}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-09 r75";
+const APP_VERSION = "2026-10-09 r77";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -2431,22 +2439,30 @@ function tjText(t){
   return out + esc(t.slice(last));
 }
 function tjList(steps, labels, inner){
-  return '<ol class="tj-list' + (inner ? " " + inner : "") + '">' + steps.map(s => tjStep(s, labels)).join("") + "</ol>";
+  return '<ol class="tj-list' + (inner ? " " + inner : "") + '">' + steps.map((s, i) => s.type === "section" ? tjSection(steps, i) : tjStep(s, labels)).join("") + "</ol>";
 }
+// 区切り:ここから次の区切りまでのまとまりと、その時間
+function tjSection(steps, i){
+  const C = window.TJCore, s = steps[i], t = C.sectionSpan ? C.fmtSpan(C.sectionSpan(steps, i, tjData(), state.tjPick)) : "";
+  return '<li class="tj-div lv' + Math.min(3, Math.max(1, +s.level || 1)) + '"><span>' + esc(s.title || "区切り") + "</span>" + (t ? '<span class="tj-div-m">' + t + "</span>" : "") + "</li>";
+}
+// やること1つの時間(手順録の版によっては、幅の出し方がまだ無い)
+const tjStepTime = s => window.TJCore.fmtStep ? window.TJCore.fmtStep(s) : (s.min ? window.TJCore.fmtMin(+s.min) : "");
 function tjStep(s, labels){
   const C = window.TJCore, num = '<span class="tj-num">' + esc(labels[s.id] || "") + "</span>";
   if (s.type === "branch") {
     const o = s.options.find(x => x.id === state.tjPick[s.id]);
-    return '<li class="tj-step br">' + num + '<span class="tj-q">' + (s.question ? tjText(s.question) : "(問いがありません)") + "</span>" +
+    return '<li class="tj-step br"><div class="tj-row">' + num + '<span class="tj-q">' + (s.question ? tjText(s.question) : "(問いがありません)") + "</span></div>" +
       '<div class="tj-opts">' + s.options.map(x => '<button type="button" data-tj-pick="' + esc(s.id) + '" data-opt="' + esc(x.id) + '" aria-pressed="' + (o === x) + '">' + esc(x.label || "名前なし") + "</button>").join("") + "</div>" +
       (o ? (o.steps.length ? tjList(o.steps, labels, "fork") : '<p class="tj-hint">この道には手順がありません。そのまま次へ進みます。</p>')
          : '<p class="tj-hint">選ぶと、その先の手順が出ます。</p>') + "</li>";
   }
   if (s.type === "part") {
     const pt = (tjData().parts || []).find(x => x.id === s.partId), inner = C.expandPart(s, tjData());
-    return '<li class="tj-step pt">' + num + '<span class="tj-q">' + esc(pt ? pt.name || "名前なし" : "見つからない部品") + "</span>" + (inner.length ? tjList(inner, labels, "part") : "") + "</li>";
+    return '<li class="tj-step pt"><div class="tj-row">' + num + '<span class="tj-q">' + esc(pt ? pt.name || "名前なし" : "見つからない部品") + "</span></div>" + (inner.length ? tjList(inner, labels, "part") : "") + "</li>";
   }
-  return '<li class="tj-step">' + num + '<span class="tj-t">' + (s.text ? tjText(s.text) : "(空)") + "</span>" + (s.min ? '<span class="tj-min">' + C.fmtMin(+s.min) + "</span>" : "") + "</li>";
+  const tm = tjStepTime(s);
+  return '<li class="tj-step"><div class="tj-row">' + num + '<span class="tj-t">' + (s.text ? tjText(s.text) : "(空)") + "</span>" + (tm ? '<span class="tj-min">' + tm + "</span>" : "") + "</div></li>";
 }
 function tjProcHtml(raw, item){
   const C = window.TJCore, data = tjData(), p = (data.procs || []).find(x => x.id === raw.id) || C.normalize({ procs: [clone(raw)] }).procs[0];

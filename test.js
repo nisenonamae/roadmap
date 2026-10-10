@@ -76,11 +76,16 @@ function baseFiles(withTejun = true) {
       version: 1,
       procs: [
         { id: "p1", name: "未来の語彙の日", steps: [
+          { id: "h1", type: "section", title: "覚える" },
+          { id: "h1a", type: "section", title: "1周目", level: 2 },
           { id: "s1", type: "do", text: "時間を計って {単語帳}", min: 15 },
+          { id: "h1b", type: "section", title: "確かめる", level: 2 },
           { id: "s2", type: "branch", question: "全部覚えた?", options: [
             { id: "o1", label: "はい", steps: [{ id: "s3", type: "do", text: "次へ", min: 5 }] },
             { id: "o2", label: "いいえ", steps: [{ id: "s4", type: "do", text: "もう一周", min: 10 }] }] },
-          { id: "s5", type: "part", partId: "tp" }] },
+          { id: "h2", type: "section", title: "残す" },
+          { id: "s5", type: "part", partId: "tp" },
+          { id: "s6", type: "do", text: "1行目\n2行目", min: 5, max: 8 }] },
         { id: "p2", name: "演習の手順", steps: [{ id: "s9", type: "do", text: "例題を解く", min: 30 }] }],
       parts: [{ id: "tp", name: "Ankiに追加", steps: [{ id: "x1", type: "do", text: "カードを作る", min: 3 }] }],
       ranges: [{ id: "r1", name: "単語帳", unit: "語", start: 1, end: 1000, step: 100, atEnd: "stop", created: D(20), set: null }],
@@ -165,14 +170,21 @@ test("名前を押すと今日の手順が開く:現在地と最後にやった�
   assert.deepStrictEqual(rows, ["過去の語彙最後 " + md(D(1)), "未来の語彙今日最後 " + md(D(5)), "長文最後 " + md(D(3))]);
   assert($$(dom, "#tj-sheet .tj-cyc li")[1].classList.contains("now"));
   assert.match($$(dom, "#tj-sheet .tj-lab")[1].textContent, /「未来の語彙」の日の手順:未来の語彙の日/);
-  assert.deepStrictEqual($$(dom, "#tj-sheet .tj-num").map(e => e.textContent), ["1", "2", "3", "3-a"]);
-  assert.match($$(dom, "#tj-sheet .tj-total")[1].textContent, /合計 23分〜28分/);
+  assert.deepStrictEqual($$(dom, "#tj-sheet .tj-num").map(e => e.textContent), ["1", "2", "3", "3-a", "4"]);
+  assert.match($$(dom, "#tj-sheet .tj-total")[1].textContent, /合計 28〜36分/);
+  // 区切りと、その時間(分かれ道を選ぶ前は幅で)
+  assert.deepStrictEqual($$(dom, "#tj-sheet .tj-div").map(e => e.textContent), ["覚える20〜25分", "1周目15分", "確かめる5〜10分", "残す8〜11分"]);
+  assert.deepStrictEqual($$(dom, "#tj-sheet .tj-div").map(e => e.className), ["tj-div lv1", "tj-div lv2", "tj-div lv2", "tj-div lv1"]);
+  // 時間の幅と、文の改行
+  assert.strictEqual($$(dom, "#tj-sheet .tj-min").pop().textContent, "5〜8分");
+  assert.strictEqual($$(dom, "#tj-sheet .tj-t").pop().textContent, "1行目\n2行目");
   assert.strictEqual($(dom, "#tj-sheet .tj-rng").textContent, "単語帳 101〜200語");
   // 分かれ道は選ぶとその先が出る(保存はしない)
   click(dom, $$(dom, "#tj-sheet [data-tj-pick]")[1]);
   assert.match($(dom, "#tj-sheet").textContent, /もう一周/);
   assert(!$(dom, "#tj-sheet").textContent.includes("次へ10"));
-  assert.match($$(dom, "#tj-sheet .tj-total")[1].textContent, /選んだ道では 28分/);
+  assert.match($$(dom, "#tj-sheet .tj-total")[1].textContent, /選んだ道では 33〜36分/);
+  assert.strictEqual($$(dom, "#tj-sheet .tj-div")[0].textContent, "覚える25分");
   // 閉じると中身を捨てる
   click(dom, $(dom, "#tj-sheet [data-tj-close]"));
   assert.strictEqual($(dom, "#tj-sheet").hidden, true);
@@ -278,7 +290,7 @@ test("計算:サイクルの現在地(切り替えの記録・中身が多いと
   let ok = 0;
   for (const [name, fn] of tests) {
     try { await fn(); ok++; console.log("○ " + name); }
-    catch (e) { console.log("× " + name + "\n   " + String(e.stack || e).split("\n").slice(0, 4).join("\n   ")); }
+    catch (e) { console.log("× " + name + "\n   " + String(e.stack || e).split("\n").slice(0, 14).join("\n   ")); }
   }
   console.log("\n" + ok + "/" + tests.length + " 通過");
   process.exit(ok === tests.length ? 0 : 1);
