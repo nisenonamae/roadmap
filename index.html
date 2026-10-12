@@ -447,6 +447,11 @@ body.tj-lock{overflow:hidden}
 .tj-none{font-size:.88rem;color:var(--sub);background:#fff;border:1px dashed var(--rule);border-radius:4px;padding:.6rem .7rem;margin:0 0 .8rem}
 .tj-foot{font-size:.76rem;color:var(--sub);margin:.4rem 0 0}
 
+.tmark{display:inline-flex;align-items:center;gap:.18em;padding:0 .42em 0 .14em;margin-right:.32em;border:1px solid var(--tc);border-radius:999px;
+  background:color-mix(in srgb,var(--tc) 11%,#fff);vertical-align:.08em;font-size:.78em;line-height:1.55;white-space:nowrap}
+.tmark svg{width:1.25em;height:1.25em;flex:0 0 auto}
+.tmark b{color:var(--tc);font-weight:700;letter-spacing:.02em}
+
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -695,7 +700,7 @@ body.tj-lock{overflow:hidden}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-09 r78";
+const APP_VERSION = "2026-10-12 r79";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -784,6 +789,26 @@ const state = {
 
 function clone(o){ return JSON.parse(JSON.stringify(o)); }
 function esc(s){ return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+/* ───────── 天体制度の印(水金地火木土天海)。名前の先頭の「☿水 」などを、天体の絵の札にして出す ───────── */
+const TMARK = [
+  ["水", "☿", "#7D838C", '<circle cx="8" cy="8" r="6.2" fill="#A2A8AF"/><circle cx="5.6" cy="6" r="1.1" fill="#80868D"/><circle cx="10.2" cy="9.6" r="1.4" fill="#80868D"/><circle cx="7.2" cy="11.2" r=".8" fill="#80868D"/><circle cx="10.6" cy="5.4" r=".6" fill="#80868D"/>'],
+  ["金", "♀", "#B98A12", '<circle cx="8" cy="8" r="6.2" fill="#E6B93E"/><path d="M3.6 7.2c2-1.6 4.4-.4 6.2-1.4M4.6 10.4c2.2-.8 4.6.2 7-1.2" stroke="#F7DA82" stroke-width="1.1" fill="none" stroke-linecap="round"/>'],
+  ["地", "♁", "#2F6FB0", '<circle cx="8" cy="8" r="6.2" fill="#3B7DD8"/><path d="M4.4 5.6c1.2-1 2.6-.6 3 .4.3.9-.8 1.4-.4 2.4.4 1-1.2 1.6-2 .8-.9-.8-1.6-2.6-.6-3.6zM9.6 9c.9-.5 2.4-.3 2.6.8.2 1-.9 2-2 1.8-1-.2-1.6-1.9-.6-2.6zM9.8 4.2c.8-.2 1.8.3 1.6 1-.2.6-1.2.6-1.6.2-.3-.3-.4-1 0-1.2z" fill="#47A85F"/>'],
+  ["火", "♂", "#B8402C", '<circle cx="8" cy="8" r="6.2" fill="#D4583E"/><path d="M4.2 6.6c1.4.6 2.6-.4 3.8.2M7.6 10.6c1.2-.4 2.4.4 3.6-.2" stroke="#A33A27" stroke-width="1.2" fill="none" stroke-linecap="round"/><circle cx="10.4" cy="6.2" r=".9" fill="#A33A27"/>'],
+  ["木", "♃", "#A86429", '<circle cx="8" cy="8" r="6.2" fill="#DDAA72"/><path d="M2.3 5.6h11.4M2 8.2h12M2.3 10.8h11.4" stroke="#B5733C" stroke-width="1.15"/><ellipse cx="10.2" cy="9.6" rx="1.3" ry=".75" fill="#C0532E"/>'],
+  ["土", "♄", "#9A7A2E", '<ellipse cx="8" cy="8.4" rx="7.4" ry="2.3" transform="rotate(-18 8 8.4)" fill="none" stroke="#B78F35" stroke-width="1.3"/><circle cx="8" cy="8" r="4.6" fill="#E4BC5C"/><path d="M3.9 8.9a7.4 2.3 -18 0 0 8.4-2.2" fill="none" stroke="#B78F35" stroke-width="1.3"/>'],
+  ["天", "♅", "#268C93", '<circle cx="8" cy="8" r="6" fill="#71D0D8"/><ellipse cx="8" cy="8" rx="1.7" ry="7.4" fill="none" stroke="#3A9DA7" stroke-width="1.1"/>'],
+  ["海", "♆", "#2C4FA8", '<circle cx="8" cy="8" r="6.2" fill="#3658C8"/><path d="M3.8 6.4c2.4-1 5.6-.8 8.4.2M4.4 10.2c2-.6 4.8-.4 6.6.4" stroke="#9DB2F2" stroke-width="1" fill="none" stroke-linecap="round"/><circle cx="10.6" cy="8.2" r=".9" fill="#1F3A96"/>']];
+const TMARK_RE = /([☿♀♁♂♃♄♅♆])([水金地火木土天海]) /g;
+function tmarkHtml(i){
+  const p = TMARK[i]; if (!p) return "";
+  return '<span class="tmark" style="--tc:' + p[2] + '" title="天体制度:' + p[0] + '(' + (i + 1) + '番目)"><svg viewBox="0 0 16 16" aria-hidden="true">' + p[3] + "</svg><b>" + p[0] + "</b></span>";
+}
+// 名前(エスケープして)の中の天体の印を、絵の札に置き換える
+function nameHtml(name){
+  return esc(name).replace(TMARK_RE, (m, sym, k) => { const i = TMARK.findIndex(p => p[0] === k); return i >= 0 ? tmarkHtml(i) : m; });
+}
+
 
 // 記録の1日は朝5時で区切る。Notionで新しい日の行ができる時刻と同じ。夜中に記録しても前日に入る
 function taskDay(){
@@ -1601,7 +1626,7 @@ function renderToday(){
 
   if (finished.length) {
     html += '<details class="more done-box"><summary>済み　' + finished.length + '件</summary><ul class="list done-list">' +
-      finished.map(it => '<li><span class="dn">' + esc(it.task.name) + '</span><button type="button" data-undo="' + esc(it.task.name) +
+      finished.map(it => '<li><span class="dn">' + nameHtml(it.task.name) + '</span><button type="button" data-undo="' + esc(it.task.name) +
         '">戻す</button></li>').join("") + "</ul></details>";
   }
   const extra = [];
@@ -1611,7 +1636,7 @@ function renderToday(){
 
   for (const [label, arr] of extra) {
     html += '<details class="more"><summary>' + esc(label) + "　" + arr.length + "件</summary><ul class=\"list\">" +
-      arr.map(t => '<li><span>' + esc(t.name) + '</span><span class="r">' + esc(t.slot || "") +
+      arr.map(t => '<li><span>' + nameHtml(t.name) + '</span><span class="r">' + esc(t.slot || "") +
         "</span></li>").join("") + "</ul></details>";
   }
 
@@ -1675,13 +1700,13 @@ function stopHtml(it, time, places){
     if (!c.configured) meta.push('<span class="unset">未設定</span>');
   }
   const nag = it.nagara.length
-    ? '<div class="nagara">' + it.nagara.map(n => "<div>＋ " + esc(n.task.name) + "<span>" + dur(n.c.min) + "</span></div>").join("") +
+    ? '<div class="nagara">' + it.nagara.map(n => "<div>＋ " + nameHtml(n.task.name) + "<span>" + dur(n.c.min) + "</span></div>").join("") +
       (it.sequential ? '<div><span style="margin-left:0">上から順に</span></div>' : "") + "</div>"
     : "";
   if (it.isEvent) {
     return pre + '<div class="stop ev" style="--c:' + color + '">' +
       '<span class="t">' + esc(time) + '</span><span class="line"></span>' +
-      '<div class="body"><div class="name">' + esc(it.task.name) + '</div><div class="meta">' + meta.join("") + "</div>" + nag +
+      '<div class="body"><div class="name">' + nameHtml(it.task.name) + '</div><div class="meta">' + meta.join("") + "</div>" + nag +
       "</div></div>";
   }
   const act = done
@@ -1690,7 +1715,7 @@ function stopHtml(it, time, places){
   return pre + '<div class="stop' + (done ? " done" : "") + '" style="--c:' + color + '">' +
     '<span class="t">' + esc(done ? "済" : time) + '</span><span class="line"></span>' +
     '<div class="body"><div class="row-in"><div class="txt">' +
-    '<div class="name">' + (done ? esc(it.task.name) : tjNameHtml(taskByName(it.task.name), it.task.name)) + '</div><div class="meta">' + meta.join("") + "</div>" + nag +
+    '<div class="name">' + (done ? nameHtml(it.task.name) : tjNameHtml(taskByName(it.task.name), it.task.name)) + '</div><div class="meta">' + meta.join("") + "</div>" + nag +
     '</div><button type="button" class="tick' + (done ? " on" : "") + '" ' + act + ">" + (done ? "✓" : "○") + "</button>" +
     "</div></div></div>";
 }
@@ -2383,10 +2408,10 @@ function cycleListHtml(p){
 }
 // 名前:手順録に何かあれば押して開ける
 function tjNameHtml(t, name){
-  if (!t) return esc(name);
+  if (!t) return nameHtml(name);
   const pos = cyclePos(t), pr = procOfTask(t, pos);
-  if (!pos && !(pr && pr.proc)) return esc(name);
-  return '<button type="button" class="tj-name" data-tjopen="' + esc(t.def.id) + '">' + esc(name) +
+  if (!pos && !(pr && pr.proc)) return nameHtml(name);
+  return '<button type="button" class="tj-name" data-tjopen="' + esc(t.def.id) + '">' + nameHtml(name) +
     (pr && pr.proc ? '<span class="tj-tag">手順</span>' : "") + "</button>";
 }
 
@@ -2502,7 +2527,7 @@ function renderTejunSheet(){
   if (!t) { box.hidden = true; box.innerHTML = ""; document.body.classList.remove("tj-lock"); return; }
   const pos = cyclePos(t), pr = procOfTask(t, pos) || { proc: null };
   const itemName = pos ? pos.item : "";
-  let html = '<div class="tj-panel" role="dialog" aria-modal="true" aria-labelledby="tj-title"><div class="tj-head"><h2 id="tj-title">' + esc(t.def.name) + "</h2>" +
+  let html = '<div class="tj-panel" role="dialog" aria-modal="true" aria-labelledby="tj-title"><div class="tj-head"><h2 id="tj-title">' + nameHtml(t.def.name) + "</h2>" +
     '<button type="button" class="tj-x" data-tj-close aria-label="閉じる">×</button></div>';
   if (pos) html += '<div class="tj-sec"><div class="tj-lab">サイクル' + (pos.cycle.src === "old" ? "(行軍表で作ったもの)" : "") +
     '<span class="tj-total">やった日だけ次へ進みます</span></div>' + cycleListHtml(pos) + "</div>";
@@ -2828,7 +2853,7 @@ function renderTodayRecords(list){
     if (isCompletion(t)) sub.push("進捗 " + Math.round(t.progress || 0) + "%");
     const pos = yday ? null : cyclePos(t);
     if (t.row && t.row.prevBooking) sub.push("予約:" + t.row.prevBooking);
-    return '<div class="rec" data-recrow="' + esc(t.def.id) + '"><div class="rn">' + (yday ? esc(t.def.name) : tjNameHtml(t, t.def.name)) + "<small>" + esc(sub.filter(Boolean).join("　")) + "</small>" +
+    return '<div class="rec" data-recrow="' + esc(t.def.id) + '"><div class="rn">' + (yday ? nameHtml(t.def.name) : tjNameHtml(t, t.def.name)) + "<small>" + esc(sub.filter(Boolean).join("　")) + "</small>" +
       (pos ? '<button type="button" class="cyc-pos" data-tjopen="' + esc(t.def.id) + '" aria-label="サイクルの現在地と今日の手順">' + cycleChipHtml(pos) + "</button>" : "") + "</div>" +
       '<button type="button" class="q' + (done ? " on" : miss ? " ng" : "") + '" data-quick="' + esc(t.def.id) +
       '" aria-label="' + esc(t.def.name) + (done ? "の完了を取り消す" : "を完了にする") + '">' + (done ? "✓" : miss ? "✕" : "○") + "</button>" +
@@ -2896,7 +2921,7 @@ function taskRowHtml(t){
   meta.push("<span>連続" + t.streak + "</span>");
   const pos = cyclePos(t);
   if (pos) meta.push('<span class="cyc">' + cycleChipHtml(pos) + "</span>");
-  return '<button type="button" class="tk" data-tid="' + esc(t.def.id) + '"><div class="tn">' + esc(t.def.name) +
+  return '<button type="button" class="tk" data-tid="' + esc(t.def.id) + '"><div class="tn">' + nameHtml(t.def.name) +
          '</div><div class="tm">' + meta.join("") + "</div></button>";
 }
 
@@ -2936,7 +2961,7 @@ function renderRecordSheet(){
       "</div>" +
       '<div class="row"><button type="button" class="btn" data-rec-save>記録を保存する</button></div>';
   }
-  box.innerHTML = '<div class="peditor tk-detail"><h2>' + esc(d.name) + "</h2>" + rec +
+  box.innerHTML = '<div class="peditor tk-detail"><h2>' + nameHtml(d.name) + "</h2>" + rec +
     '<div class="row"><button type="button" class="btn ghost" data-rec-close>閉じる</button></div></div>';
 }
 
@@ -2988,7 +3013,7 @@ function renderTaskDetail(){
       : why.some(x => !x.from) ? "まだ決まりに従っていないページがあるので、今までどおりチェック・今日のタブに出ます。" : "今日は効いています。") +
     "(決まりの版 " + esc((window.TaskEngine && window.TaskEngine.ENGINE_VERSION) || "古い版") + ")</p></details>" : "";
   box.innerHTML = '<div class="peditor tk-detail">' +
-    "<h2>" + esc(d.name) + "</h2>" +
+    "<h2>" + nameHtml(d.name) + "</h2>" +
     '<p class="now">' + esc((d.ministries || []).join("・") || "所属なし") + "　" + esc(d.slot || "") +
       (d.aliases && d.aliases.length ? "　前の名前:" + esc(d.aliases.join("、")) : "") + "</p>" +
     '<div class="nums">' +
@@ -3404,7 +3429,7 @@ function renderSettings(){
       const id = "t" + i;
       const sum = c.configured ? c.min + "分・" + c.place + "・" + c.organs.join("") + (c.fixed ? "・" + c.fixed : "") + (c.win ? "・" + c.winStart + "〜" + c.winEnd : "") : (t.slot || "時間帯なし");
       const open = (state.teOpen || new Set()).has(t.name);
-      const head = '<details class="task-edit" data-name="' + esc(t.name) + '"' + (open ? " open" : "") + '><summary><span class="tn2">' + esc(t.name) +
+      const head = '<details class="task-edit" data-name="' + esc(t.name) + '"' + (open ? " open" : "") + '><summary><span class="tn2">' + nameHtml(t.name) +
           (t.waiting ? '<span class="tbadge wait" title="STAGE・WAVEが進行中になった日から、今日のタブに入ります">待機中</span>' : "") +
           (c.configured ? "" : '<span class="tbadge unset">未設定</span>') + (c.nagara === "no" ? '<span class="tbadge no">ながらにしない</span>' : "") +
           (c.nagara === "pref" ? '<span class="tbadge pref">ながら優先</span>' : "") + '</span><span class="ts">' + esc(sum) + "</span></summary>";
@@ -3571,7 +3596,7 @@ function updateTaskSummary(row){
   const c = cfgOf(state.settings, row.dataset.name);
   const ts = row.querySelector("summary .ts"), tn = row.querySelector("summary .tn2");
   if (ts) ts.textContent = c.min + "分・" + c.place + "・" + c.organs.join("") + (c.fixed ? "・" + c.fixed : "") + (c.win ? "・" + c.winStart + "〜" + c.winEnd : "");
-  if (tn) tn.innerHTML = esc(row.dataset.name) + (c.nagara === "no" ? '<span class="tbadge no">ながらにしない</span>' : "") + (c.nagara === "pref" ? '<span class="tbadge pref">ながら優先</span>' : "");
+  if (tn) tn.innerHTML = nameHtml(row.dataset.name) + (c.nagara === "no" ? '<span class="tbadge no">ながらにしない</span>' : "") + (c.nagara === "pref" ? '<span class="tbadge pref">ながら優先</span>' : "");
 }
 
 function ensureTask(name){
