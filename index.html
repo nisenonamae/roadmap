@@ -468,6 +468,16 @@ body.tj-lock{overflow:hidden}
 .bulk-row{display:flex;align-items:center;gap:.5rem;padding:.35rem 0;border-bottom:1px solid var(--rule);cursor:pointer}
 .bulk-row input{width:1.15rem;height:1.15rem;accent-color:var(--ink);flex:0 0 auto}
 .bulk-row .bn{font-weight:700;flex:1;min-width:0;word-break:break-word}.bulk-row small{color:var(--sub);font-size:.74rem;white-space:nowrap}
+
+.kensei-box{border:1px solid #A8842C;border-left:5px solid #2A2118;background:#FBF8F1;border-radius:4px;padding:.5rem .75rem;margin:0 0 1rem}
+.kensei-box .kb-h{font-size:.78rem;color:#6E6252;letter-spacing:.12em;margin-bottom:.2rem}
+.kensei-box .kb-i{display:flex;justify-content:space-between;gap:.6rem;align-items:center;padding:.3rem 0;border-top:1px dashed #D8CDB8}
+.kensei-box .kb-i:first-of-type{border-top:none}
+.kensei-box .kb-s{font-size:.72rem;border:1px solid #D8CDB8;border-radius:3px;padding:0 .3rem;color:#6E6252}
+.kensei-box small{color:#6E6252}
+.kensei-box .kb-b{display:flex;gap:.3rem;flex:0 0 auto}.kensei-box .kb-b button{border:1px solid #2A2118;background:#fff;border-radius:3px;padding:.15rem .55rem;cursor:pointer;font:inherit;font-size:.82rem}
+.kensei-box .kb-r{font-size:.82rem;color:#3D7A4A;white-space:nowrap}
+.kensei-box .kb-f{font-size:.72rem;color:#6E6252;margin-top:.2rem}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -568,6 +578,11 @@ body.tj-lock{overflow:hidden}
       <label>並べ方 <select id="ck-sort">
         <option value="slot">時間帯</option><option value="prio">優先度順</option><option value="settle">定着度順</option>
       </select></label>
+    </div>
+    <div class="tk-bar">
+      <input id="ck-q" type="search" placeholder="名前で探す" autocomplete="off" style="flex:1 1 9rem;min-width:8rem;padding:.3rem .5rem;border:1px solid var(--rule);border-radius:3px;font:inherit;background:#fff">
+      <select id="ck-min"><option value="">すべての省</option></select>
+      <select id="ck-done"><option value="">すべて</option><option value="open">まだ</option><option value="done">済んだ</option></select>
     </div>
     <div id="tk-today"></div>
     <div id="ck-detail"></div>
@@ -716,7 +731,7 @@ body.tj-lock{overflow:hidden}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-12 r81";
+const APP_VERSION = "2026-10-12 r83";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -728,7 +743,8 @@ const TASKLOG_DIR = "roadmap/tasks/log";
 const APPLOG_DIR = "roadmap/tasks/applog";
 const CUTOVER_PATH = "roadmap/tasks/cutover.json";
 const STAFF_PATH = "roadmap/gov/staff.json";
-const SHIAN_PATH = "roadmap/shian/notes.json";     // 思案のリマインダー(「行軍表にも出す」を付けたもの)       // 参謀本部(作戦期・目標・緊急会議)。省アプリで決める   // 切り替え済みの印。あればNotionのタスク表はもう使っていない          // アプリでつけた記録。取り込みでは上書きされない
+const SHIAN_PATH = "roadmap/shian/notes.json";
+const KENSEI_DATA = "roadmap/apps/kenseiin/data.json", KENSEI_CONS = "roadmap/apps/kenseiin/constitution.json";   // 憲政院(守る場面が来た制度を出す)     // 思案のリマインダー(「行軍表にも出す」を付けたもの)       // 参謀本部(作戦期・目標・緊急会議)。省アプリで決める   // 切り替え済みの印。あればNotionのタスク表はもう使っていない          // アプリでつけた記録。取り込みでは上書きされない
 const TEJUN_PATH = "roadmap/apps/tejunroku/data.json";   // 手順録の定義(手順書・範囲・部品・サイクル・結びつき)。手順録が書き、行軍表は読むだけ
 const TEJUN_RUNS = "roadmap/apps/tejunroku/runs";        // 手順の実行の記録。範囲の今の位置を出すのに使う
 const TEJUN_APP = "https://nisenonamae.github.io/tejunroku/";
@@ -1088,6 +1104,38 @@ function remindersHtml(){
     '<div class="rb-f">済みにするのは思案のアプリで</div></div>';
 }
 
+
+// 憲政院:今日守る制度(出る場面:毎日・曜日・結びつけたタスクがある日)。その場で守れた/破ったを付ける
+function kenseiScene(keep, today, names){
+  if (!keep) return null;
+  const wd = new Date(today + "T00:00:00Z").getUTCDay();
+  if (keep.daily) return "毎日";
+  if ((keep.days || []).includes(wd)) return "毎週" + "日月火水木金土"[wd] + "曜日";
+  const t = (keep.tasks || []).find(n => names.includes(n)); return t ? "「" + t + "」の日" : null;
+}
+function kenseiHtml(){
+  const k = state.kensei; if (!k || !k.data || !k.cons) return "";
+  const today = taskDay(), ann = k.data.ann || {}, names = ((state.tasksDoc && state.tasksDoc.tasks) || []).map(t => t.name);
+  const list = (k.cons.articles || []).filter(a => String(a.text || "").trim() && (ann[a.id] || {}).kind === "制度").map(a => {
+    const an = ann[a.id] || {}, susp = an.suspended && today >= an.suspended.from && today <= an.suspended.until;
+    return susp ? null : { a, an, scene: kenseiScene(an.keep, today, names) }; }).filter(x => x && x.scene);
+  if (!list.length) return "";
+  return '<div class="kensei-box"><div class="kb-h">憲法:今日守る制度</div>' + list.map(({ a, an, scene }) => { const kp = an.keep || {}, rec = (k.data.keeps || []).find(x => x.date === today && x.articleId === a.id);
+    return '<div class="kb-i"><div><b>' + esc(a.title || "") + '</b> <span class="kb-s">' + esc(scene) + "</span><br><small>" + (kp.what ? (kp.when ? esc(kp.when) + "に、" : "") + esc(kp.what) + (kp.extent ? "(" + esc(kp.extent) + ")" : "") : esc(a.text)) + "</small></div>" +
+      (rec ? '<span class="kb-r">' + (rec.ok ? "守れた ✓" : "破った") + "</span>" : '<span class="kb-b"><button type="button" data-kk="' + esc(a.id) + ':ok">守れた</button><button type="button" data-kk="' + esc(a.id) + ':ng">破った</button></span>') + "</div>"; }).join("") +
+    '<div class="kb-f">破ったときの是正の手は、<a href="https://nisenonamae.github.io/kenseiin/" target="_blank" rel="noopener">憲政院</a>で決めます</div></div>';
+}
+async function kenseiKeep(id, ok, reason){
+  const today = taskDay(), rid = "k" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), bid = "b" + rid.slice(1);
+  const mutate = d => { d.keeps = (d.keeps || []).filter(x => !(x.date === today && x.articleId === id)).concat([{ id: rid, date: today, articleId: id, ok, from: "行軍表" }]);
+    if (!ok) { d.breaches = d.breaches || []; if (!d.breaches.some(x => x.id === bid)) d.breaches.push({ id: bid, date: today, articleId: id, reason: reason || "(行軍表で記録)", cause: "unk" }); } };
+  mutate(state.kensei.data); renderToday();
+  if (!state.conn) return;
+  for (let i = 0; i < 3; i++) {
+    try { state.kensei.sha = await writeJson(KENSEI_DATA, state.kensei.data, state.kensei.sha); return; }
+    catch (e) { if ((e.status === 409 || e.status === 422) && i < 2) { const f = await readJson(KENSEI_DATA); state.kensei.data = f.data || {}; state.kensei.sha = f.sha; mutate(state.kensei.data); continue; } return; }
+  }
+}
 // 流れを通しで回せた日は、疲れにくさを聞く
 function flowRateHtml(){
   const d = taskDay(), recs = ((state.appLogs[d.slice(0, 7)] || {})[d]) || {};
@@ -1541,7 +1589,7 @@ function nowMinutes(){
 
 function renderToday(){
   const sbBox = document.getElementById("staff-banner");
-  if (sbBox) sbBox.innerHTML = alertsHtml() + staffBanner() + remindersHtml() + flowRateHtml();
+  if (sbBox) sbBox.innerHTML = alertsHtml() + staffBanner() + kenseiHtml() + remindersHtml() + flowRateHtml();
   const doc = state.tasksDoc;
   const dateEl = document.getElementById("date");
   const notices = document.getElementById("notices");
@@ -2915,10 +2963,19 @@ function renderTodayRecords(list){
     !(t.waiting && !yday && !(t.check && t.check !== "未着手")));
   if (!today.length) { box.innerHTML = '<div class="empty">' + (yday ? "昨日" : "今日") + "のタスクはありません。</div>"; return; }
   const isDone = t => window.TaskEngine.DONE.has(t.check);
+  // 絞り込み
+  const fold = x => String(x || "").toLowerCase().replace(/[\u30a1-\u30f6]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
+  const qEl = document.getElementById("ck-q"), mEl = document.getElementById("ck-min"), dEl = document.getElementById("ck-done");
+  const words = fold(qEl ? qEl.value : "").split(/\s+/).filter(Boolean), fm = mEl ? mEl.value : "", fd = dEl ? dEl.value : "";
+  if (mEl) { const mins = Array.from(new Set(today.flatMap(t => t.def.ministries || []))).sort((a, b) => a.localeCompare(b, "ja"));
+    mEl.innerHTML = '<option value="">すべての省</option>' + mins.map(m => "<option" + (m === fm ? " selected" : "") + ">" + esc(m) + "</option>").join(""); if (fm && !mins.includes(fm)) mEl.value = ""; }
+  const hitCk = t => (!words.length || words.every(w => fold([t.def.name].concat(t.def.aliases || []).join(" ")).includes(w))) &&
+    (!fm || (t.def.ministries || []).includes(fm)) && (!fd || (fd === "done" ? isDone(t) : !isDone(t)));
+  const filtering = !!(words.length || (mEl && mEl.value) || fd);
   // 済みにしても、その場に✓で残す(折りたたむのは今日のタブの行軍表だけ)
-  const open = today, fin = today.filter(isDone);
+  const open = today.filter(hitCk), fin = today.filter(isDone);
   let html = '<div class="rec-list"><h2>' + (yday ? "昨日(" + day.slice(5).replace("-", "/") + ")の記録" : "今日の記録") + '　<span style="font-size:.8rem;color:var(--sub);font-weight:400">' +
-             fin.length + " / " + today.length + "</span></h2>" +
+             fin.length + " / " + today.length + (filtering ? "　絞り込み " + open.length + "件" : "") + "</span></h2>" +
              (yday ? '<p class="notice" style="font-size:.84rem">昨日の記録を直しています。直すと、今日の累計・連続・状況もすぐに数え直されます。国力には明日の朝の計算から入ります。</p>' : "");
   const recRow = t => {
     const done = isDone(t), miss = t.check === "不実行";
@@ -2946,6 +3003,7 @@ function renderTodayRecords(list){
     const score = mode === "prio" ? prioScore : settleScore;
     html += tgRows(open.slice().sort((a, b) => (score(b) - score(a)) || byName(a, b)), t => t.def.name, t => recRow(t), { done: isDone, showNext: true, scope: "ck" });
   }
+  if (filtering && !open.length) html += '<div class="empty">当てはまるタスクはありません。</div>';
   box.innerHTML = html + "</div>";
   if (flashTargetId) {
     const row = box.querySelector('[data-recrow="' + flashTargetId + '"]');
@@ -3738,6 +3796,7 @@ async function loadAll(){
     }
     await loadTaskData();
     reconcileTasksDoc();
+    try { const [kd, kc] = await Promise.all([readJson(KENSEI_DATA), readJson(KENSEI_CONS)]); state.kensei = kd.data && kc.data ? { data: kd.data, sha: kd.sha, cons: kc.data } : null; } catch (e) { state.kensei = null; }
     renderToday(); renderSettings(); renderPlan(); renderTasks();
     if (legacy.length) {
       const date = state.tasksDoc.date;
@@ -4114,6 +4173,9 @@ function bind(){
     renderTasks();
   }));
 
+  // チェックの絞り込み(チェックの一覧だけを描き直す)
+  document.getElementById("ck-q").addEventListener("input", () => renderTodayRecords(taskStates()));
+  ["ck-min", "ck-done"].forEach(id => document.getElementById(id).addEventListener("change", () => renderTodayRecords(taskStates())));
   // チェックの並べ方
   document.getElementById("ck-sort").addEventListener("change", e => {
     lsSet(KEY_CKVIEW, { sort: e.target.value });
@@ -4140,6 +4202,8 @@ function bind(){
   });
 
   document.getElementById("staff-banner").addEventListener("click", async e => {
+    const kk = e.target.closest("[data-kk]");
+    if (kk) { const [id, v] = kk.dataset.kk.split(":"); const reason = v === "ng" ? (window.prompt("なぜ破ったか(一言)", "") || "").trim() : ""; await kenseiKeep(id, v === "ok", reason); return; }
     const b = e.target.closest("[data-flow-ease]"); if (!b) return;
     const [id, n] = b.dataset.flowEase.split(":"), d = taskDay();
     await commitAppLog(d, () => setAppRecord(d, "__flow:" + id, { ease: +n }));
