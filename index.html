@@ -461,6 +461,13 @@ body.tj-lock{overflow:hidden}
 .tg-base{font-weight:700;min-width:0;word-break:break-word}
 .tg-sum{font-size:.76rem;color:var(--sub);margin-left:auto;white-space:nowrap}
 .tg-body{padding-left:.7rem;border-left:2px solid var(--rule);margin:0 0 .3rem .85rem}
+
+.bulkbar{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:.3rem 0 .6rem}
+.bulkbar .btn{padding:.3rem .8rem;font-size:.86rem}.bulkbar .note{font-size:.76rem;color:var(--sub)}
+.bulk{border:1px solid var(--rule);border-radius:6px;background:#fff;padding:.4rem .7rem}
+.bulk-row{display:flex;align-items:center;gap:.5rem;padding:.35rem 0;border-bottom:1px solid var(--rule);cursor:pointer}
+.bulk-row input{width:1.15rem;height:1.15rem;accent-color:var(--ink);flex:0 0 auto}
+.bulk-row .bn{font-weight:700;flex:1;min-width:0;word-break:break-word}.bulk-row small{color:var(--sub);font-size:.74rem;white-space:nowrap}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -709,7 +716,7 @@ body.tj-lock{overflow:hidden}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-12 r80";
+const APP_VERSION = "2026-10-12 r81";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -2741,11 +2748,15 @@ function renderTasks(){
     .filter(x => x[2] === null || x[2] > 0);
   const sel = OTHER.some(x => x[0] === state.tkOther) ? state.tkOther : null;
   let obody = "";
-  if (sel === "reset") {
+  if ((sel === "reset" || sel === "rest") && state.bulk === sel) {
+    obody = bulkHtml(sel, sel === "reset" ? fallenAll.slice().sort(sorter) : rest.slice().sort((a, b) => a.def.name.localeCompare(b.def.name, "ja")));
+  } else if (sel === "reset") {
     const byM = {}; fallenAll.forEach(t => { const m = (t.def.ministries && t.def.ministries[0]) || "所属なし"; (byM[m] = byM[m] || []).push(t); });
-    obody = Object.keys(byM).map(m => '<div class="tk-sub">' + esc(m) + "</div>" + tgRows(byM[m].sort(sorter), t => t.def.name, t => taskRowHtml(t), { scope: "tk" })).join("");
+    obody = '<div class="bulkbar"><button type="button" class="btn ghost" data-bulk="reset">まとめて立て直す</button><span class="note">選んだものを、一度に新規へ</span></div>' +
+      Object.keys(byM).map(m => '<div class="tk-sub">' + esc(m) + "</div>" + tgRows(byM[m].sort(sorter), t => t.def.name, t => taskRowHtml(t), { scope: "tk" })).join("");
   } else if (sel === "rest") {
-    obody = tgRows(rest.sort((a, b) => a.def.name.localeCompare(b.def.name, "ja")), t => t.def.name, t => taskRowHtml(t), { scope: "tk" });
+    obody = '<div class="bulkbar"><button type="button" class="btn ghost" data-bulk="rest">まとめて元に戻す</button><span class="note">休止中は再開、終わったものは新規として戻す</span></div>' +
+      tgRows(rest.sort((a, b) => a.def.name.localeCompare(b.def.name, "ja")), t => t.def.name, t => taskRowHtml(t), { scope: "tk" });
   } else if (sel === "gone") {
     obody = '<p class="note" style="font-size:.78rem;color:var(--sub)">元に戻すのは、省アプリの省の地図の下の「削除したタスク」から行います。</p>' +
       gone.map(d => '<div class="chg"><span>' + esc(((state.overlay.tasks || {})[d.id].edits || {}).name || d.name) + "</span></div>").join("");
@@ -2764,6 +2775,32 @@ function renderTasks(){
 
 // 今日の記録:今日行が立っているタスクを時間帯ごとに。○を押すだけで完了
 
+
+/* ───────── まとめて操作する(要再設定をまとめて立て直す・休止中や終わったものをまとめて元に戻す) ───────── */
+const bulkWhat = (kind, t) => kind === "reset" ? "rebuild" : t.status === "休止中" ? "resume" : "revive";
+const BULK_LABEL = { rebuild: "立て直す(新規へ)", resume: "再開する(進行中へ)", revive: "新規として戻す" };
+function bulkHtml(kind, list){
+  const byM = {}; list.forEach(t => { const m = (t.def.ministries && t.def.ministries[0]) || "所属なし"; (byM[m] = byM[m] || []).push(t); });
+  return '<div class="bulk"><div class="bulkbar"><b>' + (kind === "reset" ? "まとめて立て直す" : "まとめて元に戻す") + '</b><button type="button" class="btn ghost" data-bulk-all>全部選ぶ</button><button type="button" class="btn ghost" data-bulk-none>選ぶのをやめる</button></div>' +
+    Object.keys(byM).map(m => '<div class="tk-sub">' + esc(m) + "</div>" + byM[m].map(t => '<label class="bulk-row"><input type="checkbox" data-bulk-id="' + esc(t.def.id) + '"><span class="bn">' + nameHtml(t.def.name) +
+      "</span><small>" + esc(t.status) + " → " + esc(BULK_LABEL[bulkWhat(kind, t)]) + "</small></label>").join("")).join("") +
+    '<div class="bulkbar"><button type="button" class="btn" data-bulk-do="' + kind + '">選んだものを' + (kind === "reset" ? "立て直す" : "元に戻す") + '(<span id="bulk-n">0</span>件)</button><button type="button" class="btn ghost" data-bulk-x>やめる</button></div></div>';
+}
+async function bulkApply(kind, ids){
+  const D = taskDay(), all = taskStates(), n = ids.length;
+  await commitOverlay(() => {
+    for (const id of ids) {
+      const t = all.find(x => x.def.id === id); if (!t) continue;
+      const a = bulkWhat(kind, t), o = state.overlay.tasks[id] = Object.assign({}, state.overlay.tasks[id] || {});
+      const evs = (o.events || []).filter(x => x.date !== D && !(x.resume && x.fromPause === D));
+      if (a === "resume") evs.push({ date: D, status: "進行中", resume: true });
+      else evs.push({ date: D, status: "新規", set: { miss: 0 } });
+      o.events = evs;
+    }
+  });
+  state.bulk = null; renderTasks();
+  tkStatus(n + "件を" + (kind === "reset" ? "立て直しました" : "元に戻しました"));
+}
 /* ───────── 更新の記録:ルール通りに動いているかの検算 ─────────
    計算のルール(engine.js)とは別に、ルールの表をそのまま書いた計算で、
    前の日の行から次の日の行を出し直して比べる。同じ答えが出ればルール通り。 */
@@ -4132,11 +4169,27 @@ function bind(){
 
   // 絞り込み
   document.getElementById("tk-q").addEventListener("input", renderTasks);
+  document.getElementById("tk-list").addEventListener("change", e => {
+    if (!e.target.matches || !e.target.matches("[data-bulk-id]")) return;
+    const c = document.getElementById("bulk-n"); if (c) c.textContent = document.querySelectorAll("#tk-list [data-bulk-id]:checked").length;
+  });
   ["tk-min", "tk-stat"].forEach(id => document.getElementById(id).addEventListener("change", renderTasks));
   document.getElementById("tk-list").addEventListener("click", async e => {
     if (e.target.closest("[data-import-now]")) triggerImport();
     const ob = e.target.closest("[data-tk-other]");
-    if (ob) { state.tkOther = state.tkOther === ob.dataset.tkOther ? null : ob.dataset.tkOther; renderTasks(); return; }
+    if (ob) { state.tkOther = state.tkOther === ob.dataset.tkOther ? null : ob.dataset.tkOther; state.bulk = null; renderTasks(); return; }
+    const bk = e.target.closest("[data-bulk]");
+    if (bk) { state.bulk = bk.dataset.bulk; renderTasks(); return; }
+    if (e.target.closest("[data-bulk-x]")) { state.bulk = null; renderTasks(); return; }
+    const setAll = on => { document.querySelectorAll("#tk-list [data-bulk-id]").forEach(x => x.checked = on); const c = document.getElementById("bulk-n"); if (c) c.textContent = on ? document.querySelectorAll("#tk-list [data-bulk-id]").length : 0; };
+    if (e.target.closest("[data-bulk-all]")) { setAll(true); return; }
+    if (e.target.closest("[data-bulk-none]")) { setAll(false); return; }
+    const bd = e.target.closest("[data-bulk-do]");
+    if (bd) {
+      const ids = Array.from(document.querySelectorAll("#tk-list [data-bulk-id]:checked")).map(x => x.dataset.bulkId);
+      if (!ids.length) { tkStatus("タスクを選んでください。", true); return; }
+      await bulkApply(bd.dataset.bulkDo, ids); return;
+    }
     const rb = e.target.closest("[data-task-restore]");
     if (rb) { const id = rb.dataset.taskRestore;
       await commitOverlay(() => { const o = state.overlay.tasks[id] = Object.assign({}, state.overlay.tasks[id] || {}); delete o.deleted; delete o.deletedAt; });
