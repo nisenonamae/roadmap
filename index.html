@@ -452,6 +452,15 @@ body.tj-lock{overflow:hidden}
 .tmark svg{width:1.25em;height:1.25em;flex:0 0 auto}
 .tmark b{color:var(--tc);font-weight:700;letter-spacing:.02em}
 
+
+.tgrp{display:flex;align-items:center;gap:.45rem;padding:.4rem 0;border-bottom:1px dashed var(--rule);flex-wrap:wrap}
+.tg-tog{border:1px solid var(--rule);background:#fff;border-radius:4px;width:1.8rem;height:1.8rem;cursor:pointer;color:var(--sub);flex:0 0 auto}
+.tg-marks{display:inline-flex;flex-wrap:wrap;gap:.1rem}
+.tmark.mini{margin-right:0;padding:0 .3em 0 .1em;font-size:.7em}
+.tmark.dim{opacity:.38;filter:grayscale(.5)}
+.tg-base{font-weight:700;min-width:0;word-break:break-word}
+.tg-sum{font-size:.76rem;color:var(--sub);margin-left:auto;white-space:nowrap}
+.tg-body{padding-left:.7rem;border-left:2px solid var(--rule);margin:0 0 .3rem .85rem}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -700,7 +709,7 @@ body.tj-lock{overflow:hidden}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-12 r79";
+const APP_VERSION = "2026-10-12 r80";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -2354,6 +2363,36 @@ function taskByName(name){
   return taskStates().find(t => t.def.name === n || (t.def.aliases || []).includes(n)) || null;
 }
 
+
+/* 天体のまとまり:一覧では、同じタスクから分けた天体を見出し1行にたたみ、▸で開く(一覧を圧迫しないように) */
+function tgInfo(name){
+  const t = taskByName(name), c = t && t.def.celestial;
+  if (c) return { key: c.group, base: c.base, index: c.index };
+  const m = /^([☿♀♁♂♃♄♅♆])([水金地火木土天海]) (.+)$/.exec(String(name || ""));
+  if (!m) return null;
+  return { key: "n:" + m[3].replace(/[(（][^()（）]*[)）]$/, ""), base: m[3].replace(/[(（][^()（）]*[)）]$/, ""), index: TMARK.findIndex(p => p[0] === m[2]) };
+}
+// items の並びのうち、同じまとまりの天体(2つ以上)を、最初に出てきた場所に見出しとしてまとめる
+//   opts.done(item) 済んだか(見出しの印の濃さと「済」の数) / opts.showNext たたんでいても、次にやる天体だけは出す
+function tgRows(items, nameOf, row, opts){
+  opts = opts || {};
+  const info = items.map(x => tgInfo(nameOf(x))), cnt = {};
+  info.forEach(g => { if (g) cnt[g.key] = (cnt[g.key] || 0) + 1; });
+  const seen = new Set(); let out = "";
+  items.forEach((x, i) => {
+    const g = info[i];
+    if (!g || cnt[g.key] < 2) { out += row(x, i); return; }
+    if (seen.has(g.key)) return; seen.add(g.key);
+    const mem = items.map((y, j) => [y, j, info[j]]).filter(z => z[2] && z[2].key === g.key).sort((a, b) => a[2].index - b[2].index);
+    const ok = (opts.scope || "") + "|" + g.key, open = (state.tgOpen || new Set()).has(ok), isDone = opts.done || null, doneN = isDone ? mem.filter(z => isDone(z[0])).length : null;
+    out += '<div class="tgrp"><button type="button" class="tg-tog" data-tgtog="' + esc(ok) + '" aria-expanded="' + open + '" aria-label="' + (open ? "たたむ" : "全部の天体を見る") + '">' + (open ? "▾" : "▸") + "</button>" +
+      '<span class="tg-marks">' + mem.map(z => tmarkHtml(z[2].index).replace('class="tmark"', 'class="tmark mini' + (isDone && !isDone(z[0]) ? " dim" : "") + '"')).join("") + "</span>" +
+      '<span class="tg-base">' + esc(g.base) + '</span><span class="tg-sum">' + (doneN != null ? "済 " + doneN + "/" + mem.length : mem.length + "つの天体") + "</span></div>";
+    if (open) out += '<div class="tg-body">' + mem.map(z => row(z[0], z[1])).join("") + "</div>";
+    else if (opts.showNext) { const nx = mem.find(z => !isDone || !isDone(z[0])); if (nx) out += '<div class="tg-body">' + row(nx[0], nx[1]) + "</div>"; }
+  });
+  return out;
+}
 /* ───────── 手順録:サイクルの現在地と、今日の手順(見るだけ) ─────────
    手順書・サイクルを作るのは手順録。ここでは見るだけ。
    手順録の定義(小さなファイル1つ)は最初の読み込みで一緒に読むが、今日の組み立てには使わない。
@@ -2693,7 +2732,7 @@ function renderTasks(){
     const active = filtering ? arr : arr.filter(t => t.status !== "要再設定");
     if (!filtering) arr.filter(t => t.status === "要再設定").forEach(t => fallenAll.push(t));
     if (!active.length) continue;
-    html += '<div class="tk-group"><h2>' + esc(g) + "<span>" + active.length + "件</span></h2>" + active.map(taskRowHtml).join("") + "</div>";
+    html += '<div class="tk-group"><h2>' + esc(g) + "<span>" + active.length + "件</span></h2>" + tgRows(active, t => t.def.name, t => taskRowHtml(t), { scope: "tk" }) + "</div>";
   }
   // 要再設定・休止中や終わったもの・削除したもの・WAVEとSTAGEのリンクは、札1行にまとめ、押したものだけを開く
   const rest = list.filter(t => !LIVE.includes(t.status));
@@ -2704,9 +2743,9 @@ function renderTasks(){
   let obody = "";
   if (sel === "reset") {
     const byM = {}; fallenAll.forEach(t => { const m = (t.def.ministries && t.def.ministries[0]) || "所属なし"; (byM[m] = byM[m] || []).push(t); });
-    obody = Object.keys(byM).map(m => '<div class="tk-sub">' + esc(m) + "</div>" + byM[m].sort(sorter).map(taskRowHtml).join("")).join("");
+    obody = Object.keys(byM).map(m => '<div class="tk-sub">' + esc(m) + "</div>" + tgRows(byM[m].sort(sorter), t => t.def.name, t => taskRowHtml(t), { scope: "tk" })).join("");
   } else if (sel === "rest") {
-    obody = rest.sort((a, b) => a.def.name.localeCompare(b.def.name, "ja")).map(taskRowHtml).join("");
+    obody = tgRows(rest.sort((a, b) => a.def.name.localeCompare(b.def.name, "ja")), t => t.def.name, t => taskRowHtml(t), { scope: "tk" });
   } else if (sel === "gone") {
     obody = '<p class="note" style="font-size:.78rem;color:var(--sub)">元に戻すのは、省アプリの省の地図の下の「削除したタスク」から行います。</p>' +
       gone.map(d => '<div class="chg"><span>' + esc(((state.overlay.tasks || {})[d.id].edits || {}).name || d.name) + "</span></div>").join("");
@@ -2864,11 +2903,11 @@ function renderTodayRecords(list){
     for (const slot of CHECK_SLOTS.concat(["その他"])) {
       const arr = open.filter(t => (CHECK_SLOTS.includes(t.def.slot) ? t.def.slot : "その他") === slot).sort(byName);
       if (!arr.length) continue;
-      html += '<div class="rec-slot">' + slot + "</div>" + arr.map(recRow).join("");
+      html += '<div class="rec-slot">' + slot + "</div>" + tgRows(arr, t => t.def.name, t => recRow(t), { done: isDone, showNext: true, scope: "ck" });
     }
   } else {
     const score = mode === "prio" ? prioScore : settleScore;
-    html += open.slice().sort((a, b) => (score(b) - score(a)) || byName(a, b)).map(recRow).join("");
+    html += tgRows(open.slice().sort((a, b) => (score(b) - score(a)) || byName(a, b)), t => t.def.name, t => recRow(t), { done: isDone, showNext: true, scope: "ck" });
   }
   box.innerHTML = html + "</div>";
   if (flashTargetId) {
@@ -3469,11 +3508,11 @@ function renderSettings(){
     const shown = live.filter(hit), unset = shown.filter(t => !cfgOf(s, t.name).configured), setd = shown.filter(t => cfgOf(s, t.name).configured);
     const fall = fallen.filter(hit);
     box.innerHTML = (!shown.length && !fall.length ? '<div class="empty">当てはまるタスクはありません。</div>' : "") +
-      (unset.length ? '<div class="te-group">まだ設定していない ' + unset.length + "件</div>" + unset.map(card).join("") : "") +
-      (setd.length ? '<div class="te-group">設定ずみ ' + setd.length + "件</div>" + setd.map((t, i) => card(t, unset.length + i)).join("") : "") +
+      (unset.length ? '<div class="te-group">まだ設定していない ' + unset.length + "件</div>" + tgRows(unset, t => t.name, (t, i) => card(t, i), { scope: "te" }) : "") +
+      (setd.length ? '<div class="te-group">設定ずみ ' + setd.length + "件</div>" + tgRows(setd, t => t.name, (t, i) => card(t, unset.length + i), { scope: "te" }) : "") +
       (fall.length
         ? '<details class="more"><summary>要再設定　' + fall.length +
-          "件</summary>" + fall.map((t, i) => card(t, shown.length + i)).join("") + "</details>"
+          "件</summary>" + tgRows(fall, t => t.name, (t, i) => card(t, shown.length + i), { scope: "te" }) + "</details>"
         : "");
   }
 
@@ -4079,6 +4118,12 @@ function bind(){
   });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && state.tjOpen) closeTejun(); });
 
+  document.addEventListener("click", e => {
+    const b = e.target.closest && e.target.closest("[data-tgtog]"); if (!b) return;
+    const k = b.dataset.tgtog; state.tgOpen = state.tgOpen || new Set();
+    state.tgOpen.has(k) ? state.tgOpen.delete(k) : state.tgOpen.add(k);
+    if (b.closest("#task-edits")) renderSettings(); else renderTasks();
+  });
   document.getElementById("toast-undo").addEventListener("click", () => {
     const f = toastUndo; toastUndo = null;
     document.getElementById("toast").hidden = true;
