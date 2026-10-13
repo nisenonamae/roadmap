@@ -478,6 +478,8 @@ body.tj-lock{overflow:hidden}
 .kensei-box .kb-b{display:flex;gap:.3rem;flex:0 0 auto}.kensei-box .kb-b button{border:1px solid #2A2118;background:#fff;border-radius:3px;padding:.15rem .55rem;cursor:pointer;font:inherit;font-size:.82rem}
 .kensei-box .kb-r{font-size:.82rem;color:#3D7A4A;white-space:nowrap}
 .kensei-box .kb-f{font-size:.72rem;color:#6E6252;margin-top:.2rem}
+
+.tg-setbox{border:1px solid var(--rule);border-left:4px solid #2C4FA8;border-radius:4px;background:#fff;padding:.5rem .7rem;margin:.2rem 0 .5rem .85rem}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -731,7 +733,7 @@ body.tj-lock{overflow:hidden}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-12 r83";
+const APP_VERSION = "2026-10-13 r84";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -2419,6 +2421,24 @@ function taskByName(name){
 }
 
 
+// 天体のまとまりに、1日の分量(貯金)・実行間隔・時間帯をまとめて設定する欄(空のままの項目は変えない)
+function tgSetHtml(key, ids){
+  return '<div class="tg-setbox" data-tgset-box="' + esc(key) + '" data-ids="' + esc(ids.join(",")) + '"><div class="grid2">' +
+    '<div class="f"><label>1日の分量(貯金)</label><input data-tgs="quota" type="number" step="any" min="0" placeholder="変えない"></div>' +
+    '<div class="f"><label>実行間隔</label><input data-tgs="interval" placeholder="変えない(例:毎日/月水金/3日)"></div>' +
+    '<div class="f"><label>時間帯</label><select data-tgs="slot"><option value="">変えない</option><option>朝</option><option>昼</option><option>夜</option><option>一日中</option></select></div></div>' +
+    '<label class="note" style="display:flex;gap:.35rem;align-items:center;font-size:.78rem;color:var(--sub)"><input type="checkbox" data-tgs-clear> 1日の分量を外す(貯金を使わない)</label>' +
+    '<div class="row" style="margin-top:.4rem"><button type="button" class="btn" data-tgset-do="' + esc(key) + '">全部の天体(' + ids.length + 'つ)に設定する</button><button type="button" class="btn ghost" data-tgset-x>やめる</button></div></div>';
+}
+async function tgSetApply(ids, patch){
+  await commitOverlay(() => {
+    for (const id of ids) {
+      const o = state.overlay.tasks[id] = Object.assign({}, state.overlay.tasks[id] || {});
+      o.edits = Object.assign({}, o.edits || {}, patch);
+      const nt = (state.overlay.newTasks || []).find(x => x.id === id); if (nt) Object.assign(nt, patch);
+    }
+  });
+}
 /* 天体のまとまり:一覧では、同じタスクから分けた天体を見出し1行にたたみ、▸で開く(一覧を圧迫しないように) */
 function tgInfo(name){
   const t = taskByName(name), c = t && t.def.celestial;
@@ -2442,7 +2462,9 @@ function tgRows(items, nameOf, row, opts){
     const ok = (opts.scope || "") + "|" + g.key, open = (state.tgOpen || new Set()).has(ok), isDone = opts.done || null, doneN = isDone ? mem.filter(z => isDone(z[0])).length : null;
     out += '<div class="tgrp"><button type="button" class="tg-tog" data-tgtog="' + esc(ok) + '" aria-expanded="' + open + '" aria-label="' + (open ? "たたむ" : "全部の天体を見る") + '">' + (open ? "▾" : "▸") + "</button>" +
       '<span class="tg-marks">' + mem.map(z => tmarkHtml(z[2].index).replace('class="tmark"', 'class="tmark mini' + (isDone && !isDone(z[0]) ? " dim" : "") + '"')).join("") + "</span>" +
-      '<span class="tg-base">' + esc(g.base) + '</span><span class="tg-sum">' + (doneN != null ? "済 " + doneN + "/" + mem.length : mem.length + "つの天体") + "</span></div>";
+      '<span class="tg-base">' + esc(g.base) + '</span><span class="tg-sum">' + (doneN != null ? "済 " + doneN + "/" + mem.length : mem.length + "つの天体") + "</span>" +
+      (opts.setAll ? '<button type="button" class="linkbtn" data-tgset="' + esc(ok) + '">まとめて設定</button>' : "") + "</div>" +
+      (opts.setAll && state.tgSet === ok ? tgSetHtml(ok, mem.map(z => opts.setAll(z[0])).filter(Boolean)) : "");
     if (open) out += '<div class="tg-body">' + mem.map(z => row(z[0], z[1])).join("") + "</div>";
     else if (opts.showNext) { const nx = mem.find(z => !isDone || !isDone(z[0])); if (nx) out += '<div class="tg-body">' + row(nx[0], nx[1]) + "</div>"; }
   });
@@ -2787,7 +2809,7 @@ function renderTasks(){
     const active = filtering ? arr : arr.filter(t => t.status !== "要再設定");
     if (!filtering) arr.filter(t => t.status === "要再設定").forEach(t => fallenAll.push(t));
     if (!active.length) continue;
-    html += '<div class="tk-group"><h2>' + esc(g) + "<span>" + active.length + "件</span></h2>" + tgRows(active, t => t.def.name, t => taskRowHtml(t), { scope: "tk" }) + "</div>";
+    html += '<div class="tk-group"><h2>' + esc(g) + "<span>" + active.length + "件</span></h2>" + tgRows(active, t => t.def.name, t => taskRowHtml(t), { scope: "tk", setAll: t => t.def && t.def.id }) + "</div>";
   }
   // 要再設定・休止中や終わったもの・削除したもの・WAVEとSTAGEのリンクは、札1行にまとめ、押したものだけを開く
   const rest = list.filter(t => !LIVE.includes(t.status));
@@ -2801,10 +2823,10 @@ function renderTasks(){
   } else if (sel === "reset") {
     const byM = {}; fallenAll.forEach(t => { const m = (t.def.ministries && t.def.ministries[0]) || "所属なし"; (byM[m] = byM[m] || []).push(t); });
     obody = '<div class="bulkbar"><button type="button" class="btn ghost" data-bulk="reset">まとめて立て直す</button><span class="note">選んだものを、一度に新規へ</span></div>' +
-      Object.keys(byM).map(m => '<div class="tk-sub">' + esc(m) + "</div>" + tgRows(byM[m].sort(sorter), t => t.def.name, t => taskRowHtml(t), { scope: "tk" })).join("");
+      Object.keys(byM).map(m => '<div class="tk-sub">' + esc(m) + "</div>" + tgRows(byM[m].sort(sorter), t => t.def.name, t => taskRowHtml(t), { scope: "tk", setAll: t => t.def && t.def.id })).join("");
   } else if (sel === "rest") {
     obody = '<div class="bulkbar"><button type="button" class="btn ghost" data-bulk="rest">まとめて元に戻す</button><span class="note">休止中は再開、終わったものは新規として戻す</span></div>' +
-      tgRows(rest.sort((a, b) => a.def.name.localeCompare(b.def.name, "ja")), t => t.def.name, t => taskRowHtml(t), { scope: "tk" });
+      tgRows(rest.sort((a, b) => a.def.name.localeCompare(b.def.name, "ja")), t => t.def.name, t => taskRowHtml(t), { scope: "tk", setAll: t => t.def && t.def.id });
   } else if (sel === "gone") {
     obody = '<p class="note" style="font-size:.78rem;color:var(--sub)">元に戻すのは、省アプリの省の地図の下の「削除したタスク」から行います。</p>' +
       gone.map(d => '<div class="chg"><span>' + esc(((state.overlay.tasks || {})[d.id].edits || {}).name || d.name) + "</span></div>").join("");
@@ -4219,7 +4241,17 @@ function bind(){
   });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && state.tjOpen) closeTejun(); });
 
-  document.addEventListener("click", e => {
+  document.addEventListener("click", async e => {
+    const sb = e.target.closest && e.target.closest("[data-tgset]");
+    if (sb) { state.tgSet = state.tgSet === sb.dataset.tgset ? null : sb.dataset.tgset; renderTasks(); return; }
+    if (e.target.closest && e.target.closest("[data-tgset-x]")) { state.tgSet = null; renderTasks(); return; }
+    const sd = e.target.closest && e.target.closest("[data-tgset-do]");
+    if (sd) { const box = sd.closest("[data-tgset-box]"), ids = box.dataset.ids.split(",").filter(Boolean), v = k => box.querySelector('[data-tgs="' + k + '"]').value.trim(), patch = {};
+      if (box.querySelector("[data-tgs-clear]").checked) patch.quota = null; else if (v("quota") !== "") patch.quota = +v("quota");
+      if (v("interval") !== "") patch.interval = v("interval"); if (v("slot") !== "") patch.slot = v("slot");
+      if (!Object.keys(patch).length) { tkStatus("変える項目を入れてください。", true); return; }
+      state.tgSet = null; await tgSetApply(ids, patch);
+      tkStatus(ids.length + "つの天体に設定しました" + ("quota" in patch ? (patch.quota ? "(1日の分量 " + patch.quota + ")" : "(貯金を外した)") : "")); return; }
     const b = e.target.closest && e.target.closest("[data-tgtog]"); if (!b) return;
     const k = b.dataset.tgtog; state.tgOpen = state.tgOpen || new Set();
     state.tgOpen.has(k) ? state.tgOpen.delete(k) : state.tgOpen.add(k);
