@@ -479,6 +479,7 @@ body.tj-lock{overflow:hidden}
 .kensei-box .kb-r{font-size:.82rem;color:#3D7A4A;white-space:nowrap}
 .kensei-box .kb-f{font-size:.72rem;color:#6E6252;margin-top:.2rem}
 
+.tg-info{font-size:.74rem;color:var(--sub);border:1px solid var(--rule);border-radius:3px;padding:0 .35rem;white-space:nowrap}
 .tg-setbox{border:1px solid var(--rule);border-left:4px solid #2C4FA8;border-radius:4px;background:#fff;padding:.5rem .7rem;margin:.2rem 0 .5rem .85rem}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -733,7 +734,7 @@ body.tj-lock{overflow:hidden}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-13 r85";
+const APP_VERSION = "2026-10-13 r86";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -2421,6 +2422,14 @@ function taskByName(name){
 }
 
 
+// 見出しに出す、重みの合計と貯金(1日の分量)
+function tgInfoHtml(ts){
+  const defs = ts.map(t => t && t.def).filter(Boolean); if (!defs.length) return "";
+  const w = Math.round(defs.reduce((a, d) => a + ((+d.weight > 0) ? +d.weight : 1), 0) * 1000) / 1000;
+  const qs = defs.map(d => +d.quota > 0 ? +d.quota : 0), on = qs.filter(q => q > 0), mn = Math.min(...on), mx = Math.max(...on);
+  const q = !on.length ? "貯金なし" : "貯金 1日" + (mn === mx ? mn : mn + "〜" + mx) + (on.length < qs.length ? "(" + on.length + "/" + qs.length + "つ)" : "");
+  return '<span class="tg-info">重み 合計' + w + "・" + q + "</span>";
+}
 // 天体のまとまりに、1日の分量(貯金)・実行間隔・時間帯をまとめて設定する欄(空のままの項目は変えない)
 function tgSetHtml(key, ids){
   return '<div class="tg-setbox" data-tgset-box="' + esc(key) + '" data-ids="' + esc(ids.join(",")) + '"><div class="grid2">' +
@@ -2464,7 +2473,7 @@ function tgRows(items, nameOf, row, opts){
     out += '<div class="tgrp"><button type="button" class="tg-tog" data-tgtog="' + esc(ok) + '" aria-expanded="' + open + '" aria-label="' + (open ? "たたむ" : "全部の天体を見る") + '">' + (open ? "▾" : "▸") + "</button>" +
       '<span class="tg-marks">' + mem.map(z => tmarkHtml(z[2].index).replace('class="tmark"', 'class="tmark mini' + (isDone && !isDone(z[0]) ? " dim" : "") + '"')).join("") + "</span>" +
       '<span class="tg-base">' + esc(g.base) + '</span><span class="tg-sum">' + (doneN != null ? "済 " + doneN + "/" + mem.length : mem.length + "つの天体") + "</span>" +
-      (opts.setAll ? '<button type="button" class="linkbtn" data-tgset="' + esc(ok) + '">まとめて設定</button>' : "") + "</div>" +
+      (opts.setAll ? tgInfoHtml(mem.map(z => z[0])) + '<button type="button" class="linkbtn" data-tgset="' + esc(ok) + '">まとめて設定</button>' : "") + "</div>" +
       (opts.setAll && state.tgSet === ok ? tgSetHtml(ok, mem.map(z => opts.setAll(z[0])).filter(Boolean)) : "");
     if (open) out += '<div class="tg-body">' + mem.map(z => row(z[0], z[1])).join("") + "</div>";
     else if (opts.showNext) { const nx = mem.find(z => !isDone || !isDone(z[0])); if (nx) out += '<div class="tg-body">' + row(nx[0], nx[1]) + "</div>"; }
