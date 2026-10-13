@@ -479,7 +479,9 @@ body.tj-lock{overflow:hidden}
 .kensei-box .kb-r{font-size:.82rem;color:#3D7A4A;white-space:nowrap}
 .kensei-box .kb-f{font-size:.72rem;color:#6E6252;margin-top:.2rem}
 
-.tk .tm .tk-wq{border:1px solid var(--rule);border-radius:3px;padding:0 .35rem;font-size:.74rem}
+.tk .tm .tk-wq{border:1px solid var(--rule);border-radius:3px;padding:0 .35rem;font-size:.74rem;cursor:pointer;background:#fff}
+.wq-box{border:1px solid var(--rule);border-left:4px solid var(--focus);border-radius:4px;background:#fff;padding:.45rem .65rem;margin:.1rem 0 .5rem}
+.tg-info{cursor:pointer}
 .tg-info{font-size:.74rem;color:var(--sub);border:1px solid var(--rule);border-radius:3px;padding:0 .35rem;white-space:nowrap}
 .tg-setbox{border:1px solid var(--rule);border-left:4px solid #2C4FA8;border-radius:4px;background:#fff;padding:.5rem .7rem;margin:.2rem 0 .5rem .85rem}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
@@ -735,7 +737,7 @@ body.tj-lock{overflow:hidden}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-13 r87";
+const APP_VERSION = "2026-10-13 r88";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -2423,13 +2425,20 @@ function taskByName(name){
 }
 
 
+// タスクの行のその場で、重みと1日の分量(貯金)を直す欄
+function wqEditHtml(t){
+  const id = esc(t.def.id);
+  return '<div class="wq-box" data-wq-box="' + id + '"><div class="grid2"><div class="f"><label>重み</label><input data-wq="weight" type="number" step="any" min="0" value="' + ((+t.def.weight > 0) ? +t.def.weight : "") + '" placeholder="1"></div>' +
+    '<div class="f"><label>1日の分量(貯金。空なら使わない)</label><input data-wq="quota" type="number" step="any" min="0" value="' + (+t.def.quota > 0 ? +t.def.quota : "") + '" placeholder="使わない"></div></div>' +
+    '<div class="row"><button type="button" class="btn" data-wq-save="' + id + '">保存する</button><button type="button" class="btn ghost" data-wq-x>やめる</button></div></div>';
+}
 // 見出しに出す、重みの合計と貯金(1日の分量)
 function tgInfoHtml(ts){
   const defs = ts.map(t => t && t.def).filter(Boolean); if (!defs.length) return "";
   const w = Math.round(defs.reduce((a, d) => a + ((+d.weight > 0) ? +d.weight : 1), 0) * 1000) / 1000;
   const qs = defs.map(d => +d.quota > 0 ? +d.quota : 0), on = qs.filter(q => q > 0), mn = Math.min(...on), mx = Math.max(...on);
   const q = !on.length ? "貯金なし" : "貯金 1日" + (mn === mx ? mn : mn + "〜" + mx) + (on.length < qs.length ? "(" + on.length + "/" + qs.length + "つ)" : "");
-  return '<span class="tg-info">重み 合計' + w + "・" + q + "</span>";
+  return '<span class="tg-info" data-tginfo>重み 合計' + w + "・" + q + "</span>";
 }
 // 天体のまとまりに、1日の分量(貯金)・実行間隔・時間帯をまとめて設定する欄(空のままの項目は変えない)
 function tgSetHtml(key, ids){
@@ -3089,11 +3098,11 @@ function taskRowHtml(t){
   // 重みと貯金(1日の分量と、今たまっている分)は、開かなくても見えるように
   const wt = (+t.def.weight > 0) ? +t.def.weight : 1, qd = +t.def.quota > 0 ? +t.def.quota : 0;
   const bank = t.row && t.row.bank != null ? t.row.bank : (t.rep && t.rep.next ? t.rep.next.bank : null);
-  meta.push('<span class="tk-wq">重み ' + wt + (qd ? "・貯金 1日" + qd + (bank != null ? "(今 " + (Math.round(bank * 100) / 100) + ")" : "") : "") + "</span>");
+  meta.push('<span class="tk-wq" data-wq-edit="' + esc(t.def.id) + '" title="押すと、ここで直せる">重み ' + wt + (qd ? "・貯金 1日" + qd + (bank != null ? "(今 " + (Math.round(bank * 100) / 100) + ")" : "") : "") + " ✎</span>");
   const pos = cyclePos(t);
   if (pos) meta.push('<span class="cyc">' + cycleChipHtml(pos) + "</span>");
   return '<button type="button" class="tk" data-tid="' + esc(t.def.id) + '"><div class="tn">' + nameHtml(t.def.name) +
-         '</div><div class="tm">' + meta.join("") + "</div></button>";
+         '</div><div class="tm">' + meta.join("") + "</div></button>" + (state.wqEdit === t.def.id ? wqEditHtml(t) : "");
 }
 
 // 記録の画面(チェックのタブ)
@@ -4163,7 +4172,18 @@ function bind(){
   });
 
   // タスク
-  document.getElementById("tk-list").addEventListener("click", e => {
+  document.getElementById("tk-list").addEventListener("click", async e => {
+    const we = e.target.closest("[data-wq-edit]");
+    if (we) { e.preventDefault(); e.stopPropagation(); state.wqEdit = state.wqEdit === we.dataset.wqEdit ? null : we.dataset.wqEdit; renderTasks(); const i = document.querySelector('[data-wq-box] [data-wq="weight"]'); if (i) i.focus(); return; }
+    if (e.target.closest("[data-wq-x]")) { state.wqEdit = null; renderTasks(); return; }
+    const ws = e.target.closest("[data-wq-save]");
+    if (ws) { const id = ws.dataset.wqSave, box = ws.closest("[data-wq-box]"), wv = box.querySelector('[data-wq="weight"]').value.trim(), qv = box.querySelector('[data-wq="quota"]').value.trim();
+      if ((wv !== "" && !(+wv > 0)) || (qv !== "" && !(+qv >= 0))) { tkStatus("重みは0より大きい数、1日の分量は0以上の数にしてください。", true); return; }
+      const patch = { weight: wv === "" ? null : +wv, quota: qv === "" || +qv === 0 ? null : +qv };
+      state.wqEdit = null; await tgSetApply([id], patch); tkStatus("重み・1日の分量を保存しました"); return; }
+    const ti = e.target.closest("[data-tginfo]");
+    if (ti) { const sb = ti.parentElement.querySelector("[data-tgset]"); if (sb) sb.click(); return; }
+    if (e.target.closest(".wq-box")) return;
     const b = e.target.closest("[data-tid]"); if (!b) return;
     state.taskOpen = b.dataset.tid;
     state.taskMode = null;
