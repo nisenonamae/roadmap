@@ -479,6 +479,7 @@ body.tj-lock{overflow:hidden}
 .kensei-box .kb-r{font-size:.82rem;color:#3D7A4A;white-space:nowrap}
 .kensei-box .kb-f{font-size:.72rem;color:#6E6252;margin-top:.2rem}
 
+.tk .tm .tk-wq{border:1px solid var(--rule);border-radius:3px;padding:0 .35rem;font-size:.74rem}
 .tg-info{font-size:.74rem;color:var(--sub);border:1px solid var(--rule);border-radius:3px;padding:0 .35rem;white-space:nowrap}
 .tg-setbox{border:1px solid var(--rule);border-left:4px solid #2C4FA8;border-radius:4px;background:#fff;padding:.5rem .7rem;margin:.2rem 0 .5rem .85rem}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
@@ -734,7 +735,7 @@ body.tj-lock{overflow:hidden}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-13 r86";
+const APP_VERSION = "2026-10-13 r87";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -3085,6 +3086,10 @@ function taskRowHtml(t){
     meta.push("<span>世代" + t.gen + "</span>");
   }
   meta.push("<span>連続" + t.streak + "</span>");
+  // 重みと貯金(1日の分量と、今たまっている分)は、開かなくても見えるように
+  const wt = (+t.def.weight > 0) ? +t.def.weight : 1, qd = +t.def.quota > 0 ? +t.def.quota : 0;
+  const bank = t.row && t.row.bank != null ? t.row.bank : (t.rep && t.rep.next ? t.rep.next.bank : null);
+  meta.push('<span class="tk-wq">重み ' + wt + (qd ? "・貯金 1日" + qd + (bank != null ? "(今 " + (Math.round(bank * 100) / 100) + ")" : "") : "") + "</span>");
   const pos = cyclePos(t);
   if (pos) meta.push('<span class="cyc">' + cycleChipHtml(pos) + "</span>");
   return '<button type="button" class="tk" data-tid="' + esc(t.def.id) + '"><div class="tn">' + nameHtml(t.def.name) +
