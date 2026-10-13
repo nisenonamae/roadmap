@@ -733,7 +733,7 @@ body.tj-lock{overflow:hidden}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-13 r84";
+const APP_VERSION = "2026-10-13 r85";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -2424,6 +2424,7 @@ function taskByName(name){
 // 天体のまとまりに、1日の分量(貯金)・実行間隔・時間帯をまとめて設定する欄(空のままの項目は変えない)
 function tgSetHtml(key, ids){
   return '<div class="tg-setbox" data-tgset-box="' + esc(key) + '" data-ids="' + esc(ids.join(",")) + '"><div class="grid2">' +
+    '<div class="f"><label>重み(合計。天体の数で等分)</label><input data-tgs="weight" type="number" step="any" min="0" placeholder="変えない"></div>' +
     '<div class="f"><label>1日の分量(貯金)</label><input data-tgs="quota" type="number" step="any" min="0" placeholder="変えない"></div>' +
     '<div class="f"><label>実行間隔</label><input data-tgs="interval" placeholder="変えない(例:毎日/月水金/3日)"></div>' +
     '<div class="f"><label>時間帯</label><select data-tgs="slot"><option value="">変えない</option><option>朝</option><option>昼</option><option>夜</option><option>一日中</option></select></div></div>' +
@@ -4249,9 +4250,10 @@ function bind(){
     if (sd) { const box = sd.closest("[data-tgset-box]"), ids = box.dataset.ids.split(",").filter(Boolean), v = k => box.querySelector('[data-tgs="' + k + '"]').value.trim(), patch = {};
       if (box.querySelector("[data-tgs-clear]").checked) patch.quota = null; else if (v("quota") !== "") patch.quota = +v("quota");
       if (v("interval") !== "") patch.interval = v("interval"); if (v("slot") !== "") patch.slot = v("slot");
+      if (v("weight") !== "" && +v("weight") > 0) patch.weight = Math.round(+v("weight") / ids.length * 1000) / 1000;
       if (!Object.keys(patch).length) { tkStatus("変える項目を入れてください。", true); return; }
       state.tgSet = null; await tgSetApply(ids, patch);
-      tkStatus(ids.length + "つの天体に設定しました" + ("quota" in patch ? (patch.quota ? "(1日の分量 " + patch.quota + ")" : "(貯金を外した)") : "")); return; }
+      tkStatus(ids.length + "つの天体に設定しました" + ("weight" in patch ? "(重み 合計" + v("weight") + " → 1つあたり " + patch.weight + ")" : "") + ("quota" in patch ? (patch.quota ? "(1日の分量 " + patch.quota + ")" : "(貯金を外した)") : "")); return; }
     const b = e.target.closest && e.target.closest("[data-tgtog]"); if (!b) return;
     const k = b.dataset.tgtog; state.tgOpen = state.tgOpen || new Set();
     state.tgOpen.has(k) ? state.tgOpen.delete(k) : state.tgOpen.add(k);
