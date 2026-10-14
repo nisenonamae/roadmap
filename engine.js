@@ -14,6 +14,12 @@
     - 「今日は該当しない」は無かった日として扱う。連続を保ち、累計は増やさない
     - 定着と熟達は記録が無ければ完了、随時は該当しない、貯金が1日分あれば完了
     - 要再設定から立て直した(新規に戻した)日は、累計・連続・世代内累計を0から数え直す(最長連続は残す)
+  e10 から、実行を細かく数える(線は、自分で決めた1日の目標量だけ。ほかに「何%から」は置かない)
+    - 実行率 = やった量 ÷ 1日の目標量(頭打ちなし)。量のないタスクは自分で入れた%。何も入れなければ、完了=100%・未完了=0%(今までどおり)
+    - 累計・世代内累計には、実行率をそのまま足す
+    - 連続は、実行率が100%以上の日だけ伸びる(届かなければ切れる)
+    - 未実行の連続(要再設定への近づき)は、やりきれば0に戻り(今までどおり)、届かなければ足りない分(1 − 実行率)だけ増える
+    - 経験 = 実行率の通算。立て直しても0に戻らない(立て直すときの材料)
 */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory();
@@ -57,10 +63,22 @@
     return true;
   }
 
-  // その日の終わりに、明日の状況を決める
-  function nextStatus(cur, check, total, miss, prevStreak) {
+  // その日の実行率。量・%が入っていればそれで、なければ完了かどうかで(今までどおり)
+  //   goal  1日の目標量(なければ貯金の1日の分量)
+  function ratioOf(rec, check, goal, bankCovers) {
+    if (EXCUSED.has(check)) return null;
+    rec = rec || {};
+    if (rec.ratio !== undefined && rec.ratio !== null && rec.ratio !== "") return Math.max(0, +rec.ratio / 100 || 0);
+    const hasDid = rec.did !== undefined && rec.did !== null && rec.did !== "";
+    if (goal > 0 && hasDid) { const r = Math.max(0, +rec.did / goal || 0); return (bankCovers || DONE.has(check)) ? Math.max(1, r) : r; }
+    return DONE.has(check) ? 1 : 0;
+  }
+  const r9 = x => Math.round(x * 1e9) / 1e9;
+
+  // その日の終わりに、明日の状況を決める(ratio を渡すと、実行率で判定する)
+  function nextStatus(cur, check, total, miss, prevStreak, ratio) {
     if (cur === "実験" || cur === "随時") return cur;
-    const done = DONE.has(check), excused = EXCUSED.has(check);
+    const excused = EXCUSED.has(check), done = ratio === undefined ? DONE.has(check) : (ratio !== null && ratio >= 1);
     const streak = prevStreak + (done ? 1 : 0);
     const missed = !done && !excused;
     if (cur === "熟達") return missed ? "定着" : "熟達";
@@ -111,11 +129,12 @@
       total: +ini.total || 0, streak: +ini.streak || 0, best: +ini.best || 0, miss: +ini.miss || 0,
       lastDone: ini.lastDone || null, bank: +ini.bank || 0, prevBooking: ini.prevBooking || "",
       genTotal: ini.genTotal != null ? +ini.genTotal : (+ini.total || 0),
+      exp: ini.exp != null ? +ini.exp : (+ini.total || 0), tries: ini.tries != null ? +ini.tries : (+ini.total || 0),
     };
     const gens = sortBy(def.generations, "from");
     const events = sortBy(def.events, "date");
     let gen = genAt(gens, def.created).gen || 1;
-    const quota = +def.quota || 0;
+    const quota = +def.quota || 0, goal = +def.goal || quota;
     const imported = def.importedUntil || null;
     const days = [];
     if (!def.created || def.created > until) return { days, next: st, gen };
@@ -174,34 +193,37 @@
         }
       }
 
-      let check = rec.check;
+      let check = rec.check, bankCovers = false;
       if (!check) {
         if (AUTO_DONE.has(st.status)) check = "完了";
         else if (st.status === "随時") check = "今日は該当しない";
-        else if (quota > 0 && st.bank >= quota) check = "完了";
+        else if (quota > 0 && st.bank >= quota) { check = "完了"; bankCovers = true; }
         else if (quota > 0 && st.bank > 0) check = "進行中";
         else check = "未着手";
       }
+      // 量や%を入れたのに、完了かどうかを付けていない日は、実行率で決める
+      const ratio = ratioOf(rec, check, goal, bankCovers);
+      if (!rec.check && !bankCovers && ratio !== null && (rec.did != null && rec.did !== "" || rec.ratio != null && rec.ratio !== "")) check = ratio >= 1 ? "完了" : ratio > 0 ? "進行中" : check;
 
       days.push({
         date: day, status: st.status, check, gen, genTotal: st.genTotal,
         total: st.total, streak: st.streak, best: st.best, miss: st.miss, lastDone: st.lastDone,
-        bank: quota > 0 ? st.bank : null, prevBooking: st.prevBooking, rec,
+        bank: quota > 0 ? st.bank : null, prevBooking: st.prevBooking, rec, ratio, goal: goal || null, exp: st.exp, tries: st.tries,
       });
 
-      // その日の終わり
-      const done = DONE.has(check), excused = EXCUSED.has(check);
-      const total = st.total + (done ? 1 : 0);
+      // その日の終わり(実行率で数える。量を入れていない日は、今までどおり 1 か 0)
+      const excused = ratio === null, rr = ratio || 0, done = !excused && rr >= 1;
+      const total = r9(st.total + rr);
       const streak = done ? st.streak + 1 : (excused ? st.streak : 0);
       const best = Math.max(st.best, streak);
-      const miss = done ? 0 : (excused ? st.miss : st.miss + 1);
+      const miss = excused ? st.miss : done ? 0 : r9(st.miss + 1 - rr);     // やりきれば0に戻る(今までどおり)。届かなければ、足りない分だけ増える
       const lastDone = done ? day : st.lastDone;
       // 1回だけのタスク(RAIDの「1回だけ」の作戦):1回済ませたら達成済み。済ませるまでは毎日出し、要再設定には落とさない
       const once = def.once || (def.interval || "").trim() === "1回";
       st = {
-        status: once ? (done ? "達成済み" : st.status) : nextStatus(st.status, check, total, miss, st.streak),
+        status: once ? (done ? "達成済み" : st.status) : nextStatus(st.status, check, total, miss, st.streak, ratio),
         total, streak, best, miss: once ? 0 : miss, lastDone,
-        genTotal: st.genTotal + (done ? 1 : 0),
+        genTotal: r9(st.genTotal + rr), exp: r9((st.exp || 0) + rr), tries: (st.tries || 0) + (rr > 0 ? 1 : 0),
         bank: quota > 0 ? Math.round((st.bank + (+rec.did || 0) - quota) * 100) / 100 : 0,
         prevBooking: rec.nextBooking || "",
       };
@@ -262,7 +284,7 @@
       generations  世代を上げた記録
     同じ変更がNotion経由でも入ってくることがあるが、2回効いても結果は同じになる。
   */
-  const EDIT_KEYS = ["name", "slot", "stance", "interval", "weight", "requirement", "quota", "kind"];
+  const EDIT_KEYS = ["name", "slot", "stance", "interval", "weight", "requirement", "quota", "goal", "kind"];
   function mergeOverlay(def, ov, today) {
     ov = ov || {};
     const e = ov.edits || {};
@@ -325,6 +347,23 @@
   // ── STAGE・WAVEの状態で、タスクを効かせるかどうか ──
   // ページの状態の記録(statusLog)から「進行中」の期間を出し、結びついたタスクに gate を付ける
   function gateOpen(g, day){ return g.ranges.some(([a, z]) => day >= a && (!z || day < z)); }
+  // ページの中でタスクを待機させた期間(holds:[{from, to}])を、そのページの進行中の期間から差し引く
+  function subtractHolds(ranges, holds){
+    let out = ranges.map(r => r.slice());
+    for (const h of holds || []) {
+      if (!h || !h.from) continue;
+      const hz = h.to || null, next = [];
+      for (const [a, z] of out) {
+        // 待機の前の部分
+        if (h.from > a) next.push([a, z && z < h.from ? z : h.from]);
+        // 待機の後の部分
+        if (hz && (!z || hz < z)) next.push([hz > a ? hz : a, z]);
+      }
+      out = next.filter(([a, z]) => !z || a < z);
+    }
+    return out;
+  }
+  const heldOn = (holds, day) => (holds || []).some(h => h && h.from && day >= h.from && (!h.to || day < h.to));
   // ALERT(防衛省の緊急対応)は、発生・対応中のあいだ効き、収束したら外れる
   // RAID(防衛省の主体的な侵攻)は、侵攻中のあいだ効き、制圧したら外れる
   const normSt = s => (s === "未着手" || s === "計画中" || !s) ? "作成中" : (s === "発生" || s === "対応中" || s === "侵攻中") ? "進行中" : (s === "収束" || s === "振り返り済み" || s === "制圧" || s === "引き渡し済み") ? "クリア" : s;
@@ -363,17 +402,19 @@
       for (const { p, explicit } of linked) {
         const log = (p.statusLog && p.statusLog.length ? p.statusLog : [{ date: p.created || "2000-01-01", status: p.status }]).slice().sort((a, b) => a.date < b.date ? -1 : 1);
         const from = log[0].date;
+        const holds = ((p.holds || {})[d0.id]) || [], hold = holds.filter(h => h && h.from && !h.to).slice(-1)[0] || null;
         why.push({ id: p.id, label: p.label, title: p.title || "", status: normSt(p.status), link: explicit ? "リンク" : "ラベル",
-          rule: "ページを作った日から従う(省アプリで進行中にしているあいだだけ効く)",
-          from: from || null });
+          rule: "ページを作った日から従う(省アプリで進行中にしているあいだだけ効く)" + (hold ? "。このページでは待機させている" + (hold.reason ? "(" + hold.reason + ")" : "") : ""),
+          from: from || null, hold });
         if (!from) continue;
         if (!start || from < start) start = from;
-        log.forEach((x, i) => { if (normSt(x.status) === "進行中") ranges.push([x.date, log[i + 1] ? log[i + 1].date : null]); });
+        const pr = []; log.forEach((x, i) => { if (normSt(x.status) === "進行中") pr.push([x.date, log[i + 1] ? log[i + 1].date : null]); });
+        subtractHolds(pr, holds).forEach(r => ranges.push(r));
       }
       if (orphans.length && (!start || strict < start)) start = strict;
       orphans.forEach(l => why.push({ id: null, label: l, title: "", status: "省アプリに無い", link: "ラベル", rule: "省アプリに無いSTAGE・WAVEなので、" + strict + " から待機中", from: strict }));
       if (!start) return Object.assign({}, d0, { gateWhy: why });
-      const info = linked.map(({ p }) => ({ id: p.id, label: p.label, title: p.title || "", status: normSt(p.status) }))
+      const info = linked.map(({ p }) => ({ id: p.id, label: p.label, title: p.title || "", status: normSt(p.status), holds: ((p.holds || {})[d0.id]) || [] }))
         .concat(orphans.map(l => ({ id: null, label: l, title: "", status: "省アプリに無い" })));
       return Object.assign({}, d0, { gate: { start, ranges, pages: info }, gateWhy: why });
     });
@@ -382,8 +423,10 @@
   // 今日、STAGE・WAVEを待っていて効力の無いタスクか。待っているもの(進行中でないページ)を返す
   function waitingOn(def, day){
     const g = def && def.gate; if (!g || day < g.start || gateOpen(g, day)) return null;
-    return (g.pages || []).filter(p => p.status !== "進行中");
+    // 進行中でないページと、進行中でもこのタスクを待機させているページ
+    return (g.pages || []).filter(p => p.status !== "進行中" || heldOn(p.holds, day)).map(p => p.status === "進行中" && heldOn(p.holds, day)
+      ? Object.assign({}, p, { status: "待機させている", hold: (p.holds || []).filter(h => heldOn([h], day)).slice(-1)[0] }) : p);
   }
-  const ENGINE_VERSION = "2026-10-10 e9";
-  return { ENGINE_VERSION, waitingOn, applyGates, gateOpen, replay, makeLogFor, cycleIndex, cycleTrack, mergeOverlay, allDefs, mergedLogFor, targetAt, nextStatus, isDue, addDays, daysBetween, DONE, EXCUSED, AUTO_DONE, GENERATED, RULES };
+  const ENGINE_VERSION = "2026-10-13 e10";
+  return { ENGINE_VERSION, ratioOf, subtractHolds, heldOn, waitingOn, applyGates, gateOpen, replay, makeLogFor, cycleIndex, cycleTrack, mergeOverlay, allDefs, mergedLogFor, targetAt, nextStatus, isDue, addDays, daysBetween, DONE, EXCUSED, AUTO_DONE, GENERATED, RULES };
 });
