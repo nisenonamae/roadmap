@@ -469,6 +469,8 @@ body.tj-lock{overflow:hidden}
 .bulk-row input{width:1.15rem;height:1.15rem;accent-color:var(--ink);flex:0 0 auto}
 .bulk-row .bn{font-weight:700;flex:1;min-width:0;word-break:break-word}.bulk-row small{color:var(--sub);font-size:.74rem;white-space:nowrap}
 
+.lens-box{border:1px solid var(--pc);border-left:5px solid var(--pc);background:#F6F3FC;border-radius:4px;padding:.45rem .75rem;margin:0 0 1rem}
+.lens-box .lb-h{font-size:.74rem;color:#6E6683;letter-spacing:.12em}.lens-box b{font-size:1.05rem}.lens-box .lb-q{margin-left:.5rem}.lens-box .lb-n{font-size:.8rem;color:#6E6683;margin-top:.1rem}
 .kensei-box{border:1px solid #A8842C;border-left:5px solid #2A2118;background:#FBF8F1;border-radius:4px;padding:.5rem .75rem;margin:0 0 1rem}
 .kensei-box .kb-h{font-size:.78rem;color:#6E6252;letter-spacing:.12em;margin-bottom:.2rem}
 .kensei-box .kb-i{display:flex;justify-content:space-between;gap:.6rem;align-items:center;padding:.3rem 0;border-top:1px dashed #D8CDB8}
@@ -737,7 +739,7 @@ body.tj-lock{overflow:hidden}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-13 r88";
+const APP_VERSION = "2026-10-14 r91";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -750,6 +752,8 @@ const APPLOG_DIR = "roadmap/tasks/applog";
 const CUTOVER_PATH = "roadmap/tasks/cutover.json";
 const STAFF_PATH = "roadmap/gov/staff.json";
 const SHIAN_PATH = "roadmap/shian/notes.json";
+const MINS_PATH = "roadmap/gov/ministries.json";
+const LENS_PATH = "roadmap/apps/lens/data.json";     // レンズ:今なっている人物(見るだけ)     // 省の名前(省アプリで直したもの)。画面にはタグではなく名前を出す
 const KENSEI_DATA = "roadmap/apps/kenseiin/data.json", KENSEI_CONS = "roadmap/apps/kenseiin/constitution.json";   // 憲政院(守る場面が来た制度を出す)     // 思案のリマインダー(「行軍表にも出す」を付けたもの)       // 参謀本部(作戦期・目標・緊急会議)。省アプリで決める   // 切り替え済みの印。あればNotionのタスク表はもう使っていない          // アプリでつけた記録。取り込みでは上書きされない
 const TEJUN_PATH = "roadmap/apps/tejunroku/data.json";   // 手順録の定義(手順書・範囲・部品・サイクル・結びつき)。手順録が書き、行軍表は読むだけ
 const TEJUN_RUNS = "roadmap/apps/tejunroku/runs";        // 手順の実行の記録。範囲の今の位置を出すのに使う
@@ -758,7 +762,7 @@ const KEY_TKVIEW = "roadmap-tkview";
 const KEY_CKVIEW = "roadmap-ckview";
 const CHECK_SLOTS = ["朝", "昼", "一日中", "夜"];
 const SLOT_ORDER = ["朝", "昼", "夜", "一日中"];
-const CHECK_OPTS = ["完了", "超過完了", "不完全な完了", "進行中", "不実行", "今日は該当しない"];
+const CHECK_OPTS = ["完了", "進行中", "不実行", "今日は該当しない"];      // 不完全な完了・超過完了は、量か%(実行率)で表す
 const LIVE = ["新規", "進行中", "定着", "熟達", "実験", "随時", "要再設定"];
 const PLAN_STATUS_PATH = "roadmap/plan_status.json";
 const ZOOMS = { "週": 30, "月": 9, "四半期": 3.2, "年": 1.3 };      // 1日あたりの幅(px)
@@ -826,6 +830,8 @@ const state = {
 };
 
 function clone(o){ return JSON.parse(JSON.stringify(o)); }
+// タグ → 省の名前(見つからなければタグのまま)
+function minName(tag){ const m = ((state.minNames || {})[tag]); return m || tag; }
 function esc(s){ return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 /* ───────── 天体制度の印(水金地火木土天海)。名前の先頭の「☿水 」などを、天体の絵の札にして出す ───────── */
 const TMARK = [
@@ -1141,6 +1147,14 @@ async function kenseiKeep(id, ok, reason){
     try { state.kensei.sha = await writeJson(KENSEI_DATA, state.kensei.data, state.kensei.sha); return; }
     catch (e) { if ((e.status === 409 || e.status === 422) && i < 2) { const f = await readJson(KENSEI_DATA); state.kensei.data = f.data || {}; state.kensei.sha = f.sha; mutate(state.kensei.data); continue; } return; }
   }
+}
+// レンズ:今なっている人物と、その口癖・決してしないこと
+function lensHtml(){
+  const L = state.lens; if (!L || !L.active) return "";
+  const p = (L.personas || []).find(x => x.id === L.active.id); if (!p) return "";
+  const g = (o, k) => k.split(".").reduce((a, x) => a == null ? a : a[x], o);
+  return '<div class="lens-box" style="--pc:' + esc(p.color || "#7A5AA0") + '"><div class="lb-h">いま、なっている人物</div><b>' + esc((p.emoji || "🎭") + " " + p.name) + "</b>" +
+    (g(p, "voice.catch") ? '<span class="lb-q">「' + esc(g(p, "voice.catch")) + "」</span>" : "") + (p.never ? '<div class="lb-n">決してしない:' + esc(p.never) + "</div>" : "") + "</div>";
 }
 // 流れを通しで回せた日は、疲れにくさを聞く
 function flowRateHtml(){
@@ -1595,7 +1609,7 @@ function nowMinutes(){
 
 function renderToday(){
   const sbBox = document.getElementById("staff-banner");
-  if (sbBox) sbBox.innerHTML = alertsHtml() + staffBanner() + kenseiHtml() + remindersHtml() + flowRateHtml();
+  if (sbBox) sbBox.innerHTML = lensHtml() + alertsHtml() + staffBanner() + kenseiHtml() + remindersHtml() + flowRateHtml();
   const doc = state.tasksDoc;
   const dateEl = document.getElementById("date");
   const notices = document.getElementById("notices");
@@ -2132,7 +2146,7 @@ function renderTimeline(){
       inner += '<button type="button" class="tl-it ' + cls + '" data-pid="' + esc(b.id) + '" style="left:' + left +
                'px;width:' + width + "px;top:" + ((r + markRow) * ROW + 4) + 'px" title="' + esc(label) + '">' + esc(label) + "</button>";
     }
-    html += '<div class="tl-row" style="--c:' + color + '"><div class="tl-label" style="color:' + color + '">' + esc(lane) +
+    html += '<div class="tl-row" style="--c:' + color + '"><div class="tl-label" style="color:' + color + '">' + esc(minName(lane)) +
             '</div><div class="tl-track" style="width:' + W + "px;height:" + h + 'px">' + inner +
             '<div class="tl-today" style="left:' + todayX + 'px"></div></div></div>';
   }
@@ -2158,7 +2172,7 @@ function renderPlanEditor(){
   if (!ed) { box.innerHTML = ""; return; }
   const it = ed.item;
   const lanes = laneOrder(knownLanes());
-  const laneOpts = lanes.map(l => '<option' + (l === (it.lane || "全体") ? " selected" : "") + ">" + esc(l) + "</option>").join("");
+  const laneOpts = lanes.map(l => '<option value="' + esc(l) + '"' + (l === (it.lane || "全体") ? " selected" : "") + ">" + esc(minName(l)) + "</option>").join("");
   const taskNames = ((state.tasksDoc && state.tasksDoc.tasks) || []).map(t => t.name);
   const datalist = '<datalist id="pl-tasks">' + taskNames.map(n => '<option value="' + esc(n) + '">').join("") + "</datalist>";
   const f = (label, html) => '<div class="f"><label>' + label + "</label>" + html + "</div>";
@@ -2390,6 +2404,7 @@ function taskStates(){
       check: row ? row.check : null,
       cycle: E.cycleIndex(def.cycle, rep.days, today),
       progress: lastProgress(rep.days).value,
+      ratio: row ? row.ratio : null, goal: +def.goal || +def.quota || 0, exp: s.exp || 0, tries: s.tries || 0,
       days: rep.days,
       progressDate: lastProgress(rep.days).date,
     };
@@ -2429,6 +2444,7 @@ function taskByName(name){
 function wqEditHtml(t){
   const id = esc(t.def.id);
   return '<div class="wq-box" data-wq-box="' + id + '"><div class="grid2"><div class="f"><label>重み</label><input data-wq="weight" type="number" step="any" min="0" value="' + ((+t.def.weight > 0) ? +t.def.weight : "") + '" placeholder="1"></div>' +
+    '<div class="f"><label>1日の目標量(空なら完了/未完了で数える)</label><input data-wq="goal" type="number" step="any" min="0" value="' + (+t.def.goal > 0 ? +t.def.goal : "") + '" placeholder="なし"></div>' +
     '<div class="f"><label>1日の分量(貯金。空なら使わない)</label><input data-wq="quota" type="number" step="any" min="0" value="' + (+t.def.quota > 0 ? +t.def.quota : "") + '" placeholder="使わない"></div></div>' +
     '<div class="row"><button type="button" class="btn" data-wq-save="' + id + '">保存する</button><button type="button" class="btn ghost" data-wq-x>やめる</button></div></div>';
 }
@@ -2780,12 +2796,12 @@ function renderTasks(){
   const fm = document.getElementById("tk-min"), fs = document.getElementById("tk-stat");
   const mins = Array.from(new Set(all.flatMap(t => t.def.ministries || []))).sort((a, b) => a.localeCompare(b, "ja"));
   const stats = Array.from(new Set(all.map(t => t.waiting ? "待機中" : t.status)));
-  const keep = (sel, opts) => {
+  const keep = (sel, opts, label) => {
     const cur = sel.value;
-    sel.innerHTML = sel.options[0].outerHTML + opts.map(o => '<option' + (o === cur ? " selected" : "") + ">" + esc(o) + "</option>").join("");
+    sel.innerHTML = sel.options[0].outerHTML + opts.map(o => '<option value="' + esc(o) + '"' + (o === cur ? " selected" : "") + ">" + esc(label ? label(o) : o) + "</option>").join("");
     if (!opts.includes(cur)) sel.value = "";
   };
-  keep(fm, mins); keep(fs, stats.sort((a, b) => (order[a] ?? 9) - (order[b] ?? 9)));
+  keep(fm, mins, minName); keep(fs, stats.sort((a, b) => (order[a] ?? 9) - (order[b] ?? 9)));
   const hit = t => (!q || t.def.name.toLowerCase().includes(q) || (t.def.aliases || []).some(a => a.toLowerCase().includes(q))) &&
                    (!fm.value || (t.def.ministries || []).includes(fm.value)) &&
                    (!fs.value || (t.waiting ? "待機中" : t.status) === fs.value);
@@ -2829,7 +2845,7 @@ function renderTasks(){
     const active = filtering ? arr : arr.filter(t => t.status !== "要再設定");
     if (!filtering) arr.filter(t => t.status === "要再設定").forEach(t => fallenAll.push(t));
     if (!active.length) continue;
-    html += '<div class="tk-group"><h2>' + esc(g) + "<span>" + active.length + "件</span></h2>" + tgRows(active, t => t.def.name, t => taskRowHtml(t), { scope: "tk", setAll: t => t.def && t.def.id }) + "</div>";
+    html += '<div class="tk-group"><h2>' + esc(v.group === "省" ? minName(g) : g) + "<span>" + active.length + "件</span></h2>" + tgRows(active, t => t.def.name, t => taskRowHtml(t), { scope: "tk", setAll: t => t.def && t.def.id }) + "</div>";
   }
   // 要再設定・休止中や終わったもの・削除したもの・WAVEとSTAGEのリンクは、札1行にまとめ、押したものだけを開く
   const rest = list.filter(t => !LIVE.includes(t.status));
@@ -2843,7 +2859,7 @@ function renderTasks(){
   } else if (sel === "reset") {
     const byM = {}; fallenAll.forEach(t => { const m = (t.def.ministries && t.def.ministries[0]) || "所属なし"; (byM[m] = byM[m] || []).push(t); });
     obody = '<div class="bulkbar"><button type="button" class="btn ghost" data-bulk="reset">まとめて立て直す</button><span class="note">選んだものを、一度に新規へ</span></div>' +
-      Object.keys(byM).map(m => '<div class="tk-sub">' + esc(m) + "</div>" + tgRows(byM[m].sort(sorter), t => t.def.name, t => taskRowHtml(t), { scope: "tk", setAll: t => t.def && t.def.id })).join("");
+      Object.keys(byM).map(m => '<div class="tk-sub">' + esc(minName(m)) + "</div>" + tgRows(byM[m].sort(sorter), t => t.def.name, t => taskRowHtml(t), { scope: "tk", setAll: t => t.def && t.def.id })).join("");
   } else if (sel === "rest") {
     obody = '<div class="bulkbar"><button type="button" class="btn ghost" data-bulk="rest">まとめて元に戻す</button><span class="note">休止中は再開、終わったものは新規として戻す</span></div>' +
       tgRows(rest.sort((a, b) => a.def.name.localeCompare(b.def.name, "ja")), t => t.def.name, t => taskRowHtml(t), { scope: "tk", setAll: t => t.def && t.def.id });
@@ -2872,7 +2888,7 @@ const BULK_LABEL = { rebuild: "立て直す(新規へ)", resume: "再開する(�
 function bulkHtml(kind, list){
   const byM = {}; list.forEach(t => { const m = (t.def.ministries && t.def.ministries[0]) || "所属なし"; (byM[m] = byM[m] || []).push(t); });
   return '<div class="bulk"><div class="bulkbar"><b>' + (kind === "reset" ? "まとめて立て直す" : "まとめて元に戻す") + '</b><button type="button" class="btn ghost" data-bulk-all>全部選ぶ</button><button type="button" class="btn ghost" data-bulk-none>選ぶのをやめる</button></div>' +
-    Object.keys(byM).map(m => '<div class="tk-sub">' + esc(m) + "</div>" + byM[m].map(t => '<label class="bulk-row"><input type="checkbox" data-bulk-id="' + esc(t.def.id) + '"><span class="bn">' + nameHtml(t.def.name) +
+    Object.keys(byM).map(m => '<div class="tk-sub">' + esc(minName(m)) + "</div>" + byM[m].map(t => '<label class="bulk-row"><input type="checkbox" data-bulk-id="' + esc(t.def.id) + '"><span class="bn">' + nameHtml(t.def.name) +
       "</span><small>" + esc(t.status) + " → " + esc(BULK_LABEL[bulkWhat(kind, t)]) + "</small></label>").join("")).join("") +
     '<div class="bulkbar"><button type="button" class="btn" data-bulk-do="' + kind + '">選んだものを' + (kind === "reset" ? "立て直す" : "元に戻す") + '(<span id="bulk-n">0</span>件)</button><button type="button" class="btn ghost" data-bulk-x>やめる</button></div></div>';
 }
@@ -3010,7 +3026,7 @@ function renderTodayRecords(list){
   const qEl = document.getElementById("ck-q"), mEl = document.getElementById("ck-min"), dEl = document.getElementById("ck-done");
   const words = fold(qEl ? qEl.value : "").split(/\s+/).filter(Boolean), fm = mEl ? mEl.value : "", fd = dEl ? dEl.value : "";
   if (mEl) { const mins = Array.from(new Set(today.flatMap(t => t.def.ministries || []))).sort((a, b) => a.localeCompare(b, "ja"));
-    mEl.innerHTML = '<option value="">すべての省</option>' + mins.map(m => "<option" + (m === fm ? " selected" : "") + ">" + esc(m) + "</option>").join(""); if (fm && !mins.includes(fm)) mEl.value = ""; }
+    mEl.innerHTML = '<option value="">すべての省</option>' + mins.map(m => '<option value="' + esc(m) + '"' + (m === fm ? " selected" : "") + ">" + esc(minName(m)) + "</option>").join(""); if (fm && !mins.includes(fm)) mEl.value = ""; }
   const hitCk = t => (!words.length || words.every(w => fold([t.def.name].concat(t.def.aliases || []).join(" ")).includes(w))) &&
     (!fm || (t.def.ministries || []).includes(fm)) && (!fd || (fd === "done" ? isDone(t) : !isDone(t)));
   const filtering = !!(words.length || (mEl && mEl.value) || fd);
@@ -3026,6 +3042,7 @@ function renderTodayRecords(list){
     if (mode === "prio" && isReach(t)) sub.push("今日やらないと落ちる");
     if (mode === "settle") sub.push(t.status + " 連続" + t.streak);
     if (isCompletion(t)) sub.push("進捗 " + Math.round(t.progress || 0) + "%");
+    { const rc = (t.row && t.row.rec) || {}; if (t.row && t.row.ratio != null && (rc.did != null && rc.did !== "" || rc.ratio != null && rc.ratio !== "")) sub.push("実行率 " + Math.round(t.row.ratio * 1000) / 10 + "%"); }
     const pos = yday ? null : cyclePos(t);
     if (t.row && t.row.prevBooking) sub.push("予約:" + t.row.prevBooking);
     return '<div class="rec" data-recrow="' + esc(t.def.id) + '"><div class="rn">' + (yday ? nameHtml(t.def.name) : tjNameHtml(t, t.def.name)) + "<small>" + esc(sub.filter(Boolean).join("　")) + "</small>" +
@@ -3071,7 +3088,7 @@ function renderWaveLinks(list){
   const urls = state.overlay.waveUrls || {};
   let i = 0;
   box.innerHTML = '<p class="hint" style="font-size:.82rem;color:var(--sub)">同じ省の同じWAVE・STAGEのタスクには、ここに入れた1つのリンクが全部に効きます。省が違えば別のページとして扱います。</p>' +
-    mins.map(g => '<h3 style="font-size:.88rem;margin:.8rem 0 .3rem">' + esc(g) + "</h3>" +
+    mins.map(g => '<h3 style="font-size:.88rem;margin:.8rem 0 .3rem">' + esc(minName(g)) + "</h3>" +
       Object.keys(groups[g]).sort((a, b) => a.localeCompare(b, "ja", { numeric: true })).map(l => {
         const key = g + "|" + l, id = "wl" + (i++);
         return '<div class="f" style="margin-bottom:.45rem"><label for="' + id + '">' + esc(l) + "(" + groups[g][l] + "件)</label>" +
@@ -3080,7 +3097,8 @@ function renderWaveLinks(list){
     '<div class="row" style="margin-top:.4rem"><button type="button" class="btn" data-wavelinks-save>リンクを保存する</button></div>';
 }
 
-const waitText = t => t.waiting && t.waiting.length ? t.waiting.map(p => p.label + (p.title ? " " + p.title : "") + "が" + p.status).join("、") : "";
+const waitText = t => t.waiting && t.waiting.length ? t.waiting.map(p => p.status === "待機させている" ? p.label + "で待機させている" + (p.hold && p.hold.reason ? "(" + p.hold.reason + ")" : "") + (p.hold && p.hold.to ? "〜" + (+p.hold.to.slice(5, 7)) + "/" + (+p.hold.to.slice(8, 10)) : "")
+  : p.label + (p.title ? " " + p.title : "") + "が" + p.status).join("、") : "";
 function taskRowHtml(t){
   const meta = t.waiting
     ? ['<span class="chip s-待機中" title="' + esc(waitText(t)) + '">待機中</span>', '<span class="wait-why">' + esc(waitText(t)) + "(" + esc(t.status) + "のまま)</span>"]
@@ -3098,7 +3116,7 @@ function taskRowHtml(t){
   // 重みと貯金(1日の分量と、今たまっている分)は、開かなくても見えるように
   const wt = (+t.def.weight > 0) ? +t.def.weight : 1, qd = +t.def.quota > 0 ? +t.def.quota : 0;
   const bank = t.row && t.row.bank != null ? t.row.bank : (t.rep && t.rep.next ? t.rep.next.bank : null);
-  meta.push('<span class="tk-wq" data-wq-edit="' + esc(t.def.id) + '" title="押すと、ここで直せる">重み ' + wt + (qd ? "・貯金 1日" + qd + (bank != null ? "(今 " + (Math.round(bank * 100) / 100) + ")" : "") : "") + " ✎</span>");
+  meta.push('<span class="tk-wq" data-wq-edit="' + esc(t.def.id) + '" title="押すと、ここで直せる">重み ' + wt + (+t.def.goal > 0 ? "・目標 " + +t.def.goal : "") + (qd ? "・貯金 1日" + qd + (bank != null ? "(今 " + (Math.round(bank * 100) / 100) + ")" : "") : "") + " ✎</span>");
   const pos = cyclePos(t);
   if (pos) meta.push('<span class="cyc">' + cycleChipHtml(pos) + "</span>");
   return '<button type="button" class="tk" data-tid="' + esc(t.def.id) + '"><div class="tn">' + nameHtml(t.def.name) +
@@ -3135,10 +3153,12 @@ function renderRecordSheet(){
           '">分<input data-rk="sec" type="number" min="0" max="59" placeholder="秒" value="' + (sec ? Math.round(sec % 60) : "") + '">秒</div></div>' +
         '<div class="f"><label for="rc-q">質(1〜9)</label><select id="rc-q" data-rk="quality"><option value="">—</option>' +
           [1,2,3,4,5,6,7,8,9].map(n => '<option' + (+r.quality === n ? " selected" : "") + ">" + n + "</option>").join("") + "</select></div>" +
-        (+d.quota > 0 ? '<div class="f"><label for="rc-did">やった量(1日' + d.quota + ')</label><input id="rc-did" data-rk="did" type="number" step="any" value="' + (r.did != null ? r.did : "") + '"></div>' : "") +
+        ((+d.goal || +d.quota) > 0 ? '<div class="f"><label for="rc-did">やった量(目標 ' + (+d.goal || +d.quota) + ')</label><input id="rc-did" data-rk="did" type="number" step="any" min="0" value="' + (r.did != null ? r.did : "") + '"></div>'
+          : '<div class="f"><label for="rc-ratio">実行率(%。どのくらいやれたか)</label><input id="rc-ratio" data-rk="ratio" type="number" step="any" min="0" placeholder="例:30" value="' + (r.ratio != null ? r.ratio : "") + '"></div>') +
         (isCompletion(t) ? '<div class="f"><label for="rc-pg">進捗率(%)' + (t.progressDate ? "　前回 " + esc(t.progressDate.slice(5)) : "") +
           '</label><input id="rc-pg" data-rk="progress" type="number" min="0" max="100" step="1" value="' + (t.progress != null ? Math.round(t.progress) : "") + '"></div>' : "") +
       "</div>" +
+      '<p class="note" style="font-size:.78rem;color:var(--sub)">どんなに少しでも、量か%を入れると、その割合だけ累計と経験に入ります。連続が伸びるのは100%以上の日だけ。届かない日は、足りない分だけ要再設定に近づきます。</p>' +
       '<div class="row"><button type="button" class="btn" data-rec-save>記録を保存する</button></div>';
   }
   box.innerHTML = '<div class="peditor tk-detail"><h2>' + nameHtml(d.name) + "</h2>" + rec +
@@ -3194,7 +3214,7 @@ function renderTaskDetail(){
     "(決まりの版 " + esc((window.TaskEngine && window.TaskEngine.ENGINE_VERSION) || "古い版") + ")</p></details>" : "";
   box.innerHTML = '<div class="peditor tk-detail">' +
     "<h2>" + nameHtml(d.name) + "</h2>" +
-    '<p class="now">' + esc((d.ministries || []).join("・") || "所属なし") + "　" + esc(d.slot || "") +
+    '<p class="now">' + esc((d.ministries || []).map(minName).join("・") || "所属なし") + "　" + esc(d.slot || "") +
       (d.aliases && d.aliases.length ? "　前の名前:" + esc(d.aliases.join("、")) : "") + "</p>" +
     '<div class="nums">' +
       "<div>状況<b>" + esc(t.status) + "</b></div>" +
@@ -3205,9 +3225,12 @@ function renderTaskDetail(){
       "<div>累計<b>" + t.total + "</b></div>" +
       "<div>連続<b>" + t.streak + "</b></div>" +
       "<div>最長連続<b>" + t.best + "</b></div>" +
-      "<div>未実行連続<b>" + t.miss + "</b></div>" +
+      "<div>未実行連続<b>" + (Math.round(t.miss * 100) / 100) + "</b></div>" +
+      (["新規", "進行中"].includes(t.status) ? "<div>ゆとり<b>" + Math.max(0, Math.round(((t.status === "新規" ? 2 : 3) - t.miss) * 100) / 100) + "日分</b></div>" : "") +
+      "<div>経験<b>" + (Math.round(t.exp * 100) / 100) + "日分</b></div>" +
+      "<div>手をつけた日<b>" + t.tries + "</b></div>" +
       "<div>最終達成日<b>" + esc(t.lastDone ? t.lastDone.slice(5) : "—") + "</b></div>" +
-    "</div>" + condBox + gateBox +
+    "</div>" + rebuildBox(t) + condBox + gateBox +
     "<h3>直近2週間</h3>" + '<div class="strip">' + strip + '</div><div class="strip-d">' + dates + "</div>" +
     "<h3>世代の歴史</h3>" + '<ul class="gens">' + gens + "</ul>" +
     "<h3>サイクル</h3>" + (tjPos ? cycleListHtml(tjPos) : "") +
@@ -3223,6 +3246,19 @@ function renderTaskDetail(){
     "</div>";
 }
 
+// 立て直しの材料:経験(立て直しても残る)と、実際にやれていた量
+function rebuildBox(t){
+  if (t.status !== "要再設定") return "";
+  const days = (t.days || []).slice(-30).filter(x => x.ratio !== null && x.ratio !== undefined), tried = days.filter(x => x.ratio > 0);
+  const avg = a => a.length ? a.reduce((s, x) => s + x.ratio, 0) / a.length : 0, pct = x => Math.round(x * 1000) / 10 + "%";
+  const goal = +t.def.goal || +t.def.quota || 0, dids = tried.filter(x => x.rec && x.rec.did != null && x.rec.did !== "").map(x => +x.rec.did);
+  const didAvg = dids.length ? Math.round(dids.reduce((a, b) => a + b, 0) / dids.length * 10) / 10 : null;
+  return '<div class="condbox"><h3>立て直しの材料</h3><ul>' +
+    "<li>経験:" + (Math.round(t.exp * 100) / 100) + "日分(手をつけた日 " + t.tries + "日)。立て直しても0に戻りません</li>" +
+    "<li>直近" + days.length + "日の平均の実行率:" + pct(avg(days)) + "・手をつけた日だけの平均:" + (tried.length ? pct(avg(tried)) : "—") + "</li>" +
+    (goal && didAvg != null ? "<li>手をつけた日に実際にやれていた量の平均:<b>" + didAvg + "</b>(今の目標は " + goal + ")。目標を見直すときの目安に</li>" : "") +
+    "</ul></div>";
+}
 // 完了を外すときに入れる値。アプリの記録を消すだけだと、定着・熟達の自動の完了や
 // Notionの完了に戻ってしまうので、その場合は「未着手」をはっきり記録する
 function uncheckValue(day, t){
@@ -3321,7 +3357,7 @@ const HALL_STREAK = 28;   // 殿堂入りの条件:4週間連続でトラブル�
 function taskFormHtml(v, mode){
   const mins = ministryNames();
   const minBoxes = mins.map(m => '<label><input type="checkbox" data-fm-min value="' + esc(m) + '"' +
-    ((v.ministries || []).includes(m) ? " checked" : "") + ">" + esc(m) + "</label>").join("");
+    ((v.ministries || []).includes(m) ? " checked" : "") + ">" + esc(minName(m)) + "</label>").join("");
   const sel = (k, cur, opts) => '<select data-fm="' + k + '">' + opts.map(o => '<option' + (o === cur ? " selected" : "") + ">" + esc(o) + "</option>").join("") + "</select>";
   const inp = (k, val, type, extra) => '<input data-fm="' + k + '" type="' + (type || "text") + '" value="' + esc(val == null ? "" : val) + '"' + (extra || "") + ">";
   return '<div class="grid2">' +
@@ -3332,7 +3368,8 @@ function taskFormHtml(v, mode){
 
       '<div class="f"><label>実行間隔</label>' + inp("interval", v.interval, "text", ' placeholder="空欄で毎日/月水金/3日"') + "</div>" +
       '<div class="f"><label>重み</label>' + inp("weight", v.weight, "number", ' step="any" placeholder="空欄で1"') + "</div>" +
-      '<div class="f"><label>1日の分量</label>' + inp("quota", v.quota, "number", ' step="any" placeholder="貯金を使うとき"') + "</div>" +
+      '<div class="f"><label>1日の目標量</label>' + inp("goal", v.goal, "number", ' step="any" placeholder="実行率を量で数えるとき"') + "</div>" +
+      '<div class="f"><label>1日の分量(貯金)</label>' + inp("quota", v.quota, "number", ' step="any" placeholder="貯金を使うとき"') + "</div>" +
     "</div>" +
     '<div class="f" style="margin-top:.5rem"><label>達成要件</label>' + inp("requirement", v.requirement) + "</div>" +
     '<div class="f" style="margin-top:.5rem"><label>省</label><div class="chk">' + (minBoxes || '<span class="note">省一覧がまだ取り込まれていません</span>') + "</div></div>" +
@@ -3386,7 +3423,7 @@ function readTaskForm(box){
   const num = k => val(k) === "" ? null : +val(k);
   return {
     name: box.querySelector('[data-fm="name"]') ? val("name") : undefined, slot: val("slot"), stance: val("stance"), kind: val("kind"),
-    target: num("target"), interval: val("interval"), weight: num("weight"), quota: num("quota"),
+    target: num("target"), interval: val("interval"), weight: num("weight"), quota: num("quota"), goal: num("goal"),
     requirement: val("requirement"),
     ministries: Array.from(box.querySelectorAll("[data-fm-min]:checked")).map(x => x.value),
     waves: box.querySelector('[data-fm="waves"]') ? (() => { try { return JSON.parse(val("waves") || "[]"); } catch (e) { return []; } })() : undefined,
@@ -3431,7 +3468,7 @@ function settingsHtml(t){
       "クリア条件も省アプリで決めます。" + ((d.waves || []).length ? "結びついているもの:" + d.waves.map(w => esc((w && w.label) || w)).join("・") : "まだSTAGE・WAVEに結びついていません。") + "</p>" +
     "<h3>中身</h3>" +
     taskFormHtml({ name: d.name, slot: d.slot, stance: d.stance, kind: d.kind, target: t.target, interval: d.interval,
-                   weight: d.weight, quota: d.quota, requirement: d.requirement, ministries: d.ministries, waves: d.waves }, "edit") +
+                   weight: d.weight, quota: d.quota, goal: d.goal, requirement: d.requirement, ministries: d.ministries, waves: d.waves }, "edit") +
     '<div class="row"><button type="button" class="btn" data-edit-save>中身を保存する</button></div>' +
     (state.cutover ? "" : '<p class="note" style="font-size:.78rem;color:var(--sub)">変えたことは毎朝4:40にNotionへも書き写されます。</p>') +
     '<h3>削除</h3><p class="note" style="font-size:.78rem;color:var(--sub)">タスクの削除は、省アプリのそのタスクのSTAGE・WAVEのページ(結びついていないタスクは省の地図の下)から行います。やめただけのタスクは、状況の「アーカイブ」を使ってください。</p>' +
@@ -3842,6 +3879,8 @@ async function loadAll(){
     }
     await loadTaskData();
     reconcileTasksDoc();
+    try { const ln = await readJson(LENS_PATH); state.lens = ln.data || null; } catch (e) { state.lens = null; }
+    try { const mn = await readJson(MINS_PATH), map = {}; ((mn.data && mn.data.ministries) || []).forEach(m => { if (m && m.tag) map[m.tag] = m.name || m.tag; }); state.minNames = map; lsSet("roadmap-minnames", map); } catch (e) {}
     try { const [kd, kc] = await Promise.all([readJson(KENSEI_DATA), readJson(KENSEI_CONS)]); state.kensei = kd.data && kc.data ? { data: kd.data, sha: kd.sha, cons: kc.data } : null; } catch (e) { state.kensei = null; }
     renderToday(); renderSettings(); renderPlan(); renderTasks();
     if (legacy.length) {
@@ -4179,7 +4218,8 @@ function bind(){
     const ws = e.target.closest("[data-wq-save]");
     if (ws) { const id = ws.dataset.wqSave, box = ws.closest("[data-wq-box]"), wv = box.querySelector('[data-wq="weight"]').value.trim(), qv = box.querySelector('[data-wq="quota"]').value.trim();
       if ((wv !== "" && !(+wv > 0)) || (qv !== "" && !(+qv >= 0))) { tkStatus("重みは0より大きい数、1日の分量は0以上の数にしてください。", true); return; }
-      const patch = { weight: wv === "" ? null : +wv, quota: qv === "" || +qv === 0 ? null : +qv };
+      const gv = box.querySelector('[data-wq="goal"]').value.trim();
+      const patch = { weight: wv === "" ? null : +wv, quota: qv === "" || +qv === 0 ? null : +qv, goal: gv === "" || +gv === 0 ? null : +gv };
       state.wqEdit = null; await tgSetApply([id], patch); tkStatus("重み・1日の分量を保存しました"); return; }
     const ti = e.target.closest("[data-tginfo]");
     if (ti) { const sb = ti.parentElement.querySelector("[data-tgset]"); if (sb) sb.click(); return; }
@@ -4214,6 +4254,7 @@ function bind(){
       quality: val("quality") ? +val("quality") : null,
     };
     if (box.querySelector('[data-rk="did"]')) patch.did = val("did") === "" ? null : +val("did");
+    if (box.querySelector('[data-rk="ratio"]')) patch.ratio = val("ratio") === "" ? null : Math.max(0, +val("ratio"));
     if (box.querySelector('[data-rk="progress"]')) {
       const pg = val("progress");
       patch.progress = pg === "" ? null : Math.max(0, Math.min(100, +pg));
@@ -4496,7 +4537,7 @@ function bind(){
         // まだNotionから戻ってきていない新しいタスクは、その定義も書き換える
         const nt = (state.overlay.newTasks || []).find(x => x.id === id);
         if (nt) Object.assign(nt, { slot: f.slot, stance: f.stance, kind: f.kind, interval: f.interval, weight: f.weight,
-          quota: f.quota, requirement: f.requirement, ministries: f.ministries });
+          quota: f.quota, goal: f.goal, requirement: f.requirement, ministries: f.ministries });
       });
       return;
     }
@@ -4917,6 +4958,7 @@ function boot(){
     state.overlaySha = cache.overlaySha || null;
     state.tejun = cache.tejun || null;
   }
+  state.minNames = lsGet("roadmap-minnames", {});
   renderToday(); renderSettings(); renderPlan(); renderTasks();
 
   if (conn && conn.owner && conn.token) {
