@@ -107,6 +107,7 @@ details.fold-sec>summary h2{margin:0;font-size:1rem}
 .slotset button{border:1px solid var(--rule);background:#fff;border-radius:3px;padding:.25rem .8rem;font:inherit;font-size:.9rem;cursor:pointer}
 .slotset button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
 .te-bar{flex-wrap:wrap}.te-bar select{flex:1 1 7rem;min-width:0}
+.next-q{width:100%;box-sizing:border-box;margin:.2rem 0 .25rem;padding:.3rem .45rem;border:1px solid var(--rule);border-radius:3px;font:inherit;font-size:.88rem}
 .te-bar{display:flex;gap:.4rem;margin:.3rem 0 .6rem}
 .te-bar input{flex:1;min-width:0;padding:.35rem .5rem;border:1px solid var(--rule);border-radius:3px;font:inherit}
 .te-bar select{padding:.3rem;border:1px solid var(--rule);border-radius:3px;font:inherit}
@@ -752,7 +753,7 @@ body.tj-lock{overflow:hidden}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-17 r92";
+const APP_VERSION = "2026-10-17 r93";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -1622,6 +1623,7 @@ function nowMinutes(){
 }
 
 function renderToday(){
+  if (isHiddenView("view-today")) return;
   const sbBox = document.getElementById("staff-banner");
   if (sbBox) sbBox.innerHTML = lensHtml() + alertsHtml() + staffBanner() + kenseiHtml() + remindersHtml() + flowRateHtml();
   const doc = state.tasksDoc;
@@ -1732,13 +1734,18 @@ function renderToday(){
   if (plan.ondemand.length) extra.push(['随時(条件が来たら)', plan.ondemand]);
   if (plan.reset.length) extra.push(['要再設定', plan.reset]);
 
-  for (const [label, arr] of extra) {
-    html += '<details class="more"><summary>' + esc(label) + "　" + arr.length + "件</summary><ul class=\"list\">" +
-      arr.map(t => '<li><span>' + nameHtml(t.name) + '</span><span class="r">' + esc(t.slot || "") +
-        "</span></li>").join("") + "</ul></details>";
-  }
+  // 下の一覧は、開いたときに中身を作る(閉じているあいだは見出しだけ。今日の画面を軽くするため)
+  state._moreLists = extra.map(([, arr]) => arr);
+  extra.forEach(([label, arr], k) => {
+    html += '<details class="more" data-more-lazy="' + k + '"><summary>' + esc(label) + "　" + arr.length + '件</summary><ul class="list"></ul></details>';
+  });
 
   planEl.innerHTML = html;
+  planEl.querySelectorAll("details[data-more-lazy]").forEach(dt => dt.addEventListener("toggle", () => {
+    const ul = dt.querySelector("ul.list"); if (!dt.open || ul.childElementCount) return;
+    const arr = (state._moreLists || [])[+dt.dataset.moreLazy] || [];
+    ul.innerHTML = arr.map(t => '<li><span>' + nameHtml(t.name) + '</span><span class="r">' + esc(t.slot || "") + "</span></li>").join("");
+  }));
   flashIn(planEl, "[data-done]", "data-done", ".stop");
 }
 
@@ -2790,6 +2797,7 @@ function progressOf(t){
 }
 
 function renderTasks(){
+  if (isHiddenView("view-tasks") && isHiddenView("view-check")) return;
   const box = document.getElementById("tk-list");
   if (!box) return;
   const defs = state.taskDefs;
@@ -3617,6 +3625,8 @@ function allTodayNames(){
 }
 
 function renderSettings(){
+  // 見えていないときは描かない(開いたときに showView が描く)。保存は画面ではなく state から行うので安全
+  if (isHiddenView("view-settings")) return;
   renderFlows();
   const s = state.settings;
   const today0 = allTodayNames(), tasks = today0.concat(waitingForSettings(today0));
@@ -3702,6 +3712,7 @@ function renderSettings(){
           '<div class="f"><label for="' + id + 'd">集中の型</label><select id="' + id + 'd" data-k="mode">' + modeOpts + "</select></div>" +
         "</div>" +
         '<div class="f" style="margin-top:.5rem"><label for="' + id + 'x">この後に続ける</label>' +
+        '<input type="search" class="next-q" data-next-q="' + id + 'x" placeholder="続ける先を名前で探す" aria-label="続ける先を探す">' +
         '<select id="' + id + 'x" data-k="next"><option value="">なし</option>' + nextOpts(t.name, c.next) + "</select></div>" +
         "<h4>ながら</h4>" +
         '<div class="f"><label for="' + id + 'n">ながらの扱い(どのタスクとも)</label><select id="' + id + 'n" data-k="nagara">' + nagOpts + "</select></div>" +
@@ -4083,7 +4094,13 @@ function flowStats(f){
   return { full, done, ease: eases.length ? eases.reduce((a, b) => a + b, 0) / eases.length : null };
 }
 // 流れを見つける。押した時刻があれば同時と順番まで、なければ同じ日に一緒に済ませている組
+let findFlowsMemo = { key: null, val: null };
 function findFlows(){
+  const fk = taskDay() + "|" + (taskCache.key || "") + "|" + (taskCache.bump || 0) + "|" + JSON.stringify(state.settings.flows || []) + "|" + Object.keys(state.appLogs || {}).map(m => m + ":" + ((state.appLogShas || {})[m] || "")).join(",");
+  if (findFlowsMemo.key === fk) return findFlowsMemo.val;
+  const val = findFlowsRaw(); findFlowsMemo = { key: fk, val }; return val;
+}
+function findFlowsRaw(){
   const byId = new Map(taskStates().map(t => [t.def.id, t]));
   const taken = new Set(((state.settings.flows || []).flatMap(f => f.steps.flat())));
   const timedDays = [];
@@ -4119,8 +4136,9 @@ function findFlows(){
   // 同じ時間帯で、同じ日に一緒に済ませていることが多い組(直近21日)
   const live = taskStates().filter(t => LIVE.includes(t.status));
   const doneDays = new Map(), rowDays = new Map();
+  const TD = taskDay(), FROM21 = addDays(TD, -21);
   for (const t of live) {
-    const rs = (t.days || []).filter(x => x.date >= addDays(taskDay(), -21) && x.date < taskDay());
+    const rs = (t.days || []).filter(x => x.date >= FROM21 && x.date < TD);
     rowDays.set(t.def.id, new Set(rs.map(x => x.date)));
     doneDays.set(t.def.id, new Set(rs.filter(x => FLOW_DONE().has(x.check)).map(x => x.date)));
   }
@@ -4181,6 +4199,8 @@ function showToast(text, undo){
 
 /* ───────── 操作 ───────── */
 
+// その画面が見えていないか(画面が無いときは描く)
+function isHiddenView(id){ const v = document.getElementById(id); return !!(v && v.hidden) && !window.__renderAll; }
 function showView(name){
   document.querySelectorAll(".view").forEach(v => v.hidden = (v.id !== "view-" + name));
   if (name === "today") renderToday();
@@ -4844,7 +4864,19 @@ function bind(){
     d.open ? state.teOpen.add(d.dataset.name) : state.teOpen.delete(d.dataset.name);
     if (d.open) fillTaskEdit(d);
   }, true);
-  document.getElementById("te-q").addEventListener("input", e => { state.teQ = e.target.value; renderSettings(); });
+  // 打ち終わるのを少し待ってから描く(1文字ごとに全部を描き直さない)
+  edits.addEventListener("input", e => {
+    const q = e.target.closest && e.target.closest("[data-next-q]"); if (!q) return;
+    const sel = document.getElementById(q.dataset.nextQ); if (!sel) return;
+    if (!sel.dataset.allOpts) sel.dataset.allOpts = sel.innerHTML;
+    const word = q.value.trim().toLowerCase(), cur = sel.value, tmp = document.createElement("select"); tmp.innerHTML = sel.dataset.allOpts;
+    const keep = o => !o.value || o.value === cur || !word || o.textContent.toLowerCase().includes(word);
+    Array.from(tmp.querySelectorAll("option")).forEach(o => { if (!keep(o)) o.remove(); });
+    Array.from(tmp.querySelectorAll("optgroup")).forEach(g => { if (!g.children.length) g.remove(); });
+    sel.innerHTML = tmp.innerHTML; sel.value = cur;
+  });
+  let teQTimer = null;
+  document.getElementById("te-q").addEventListener("input", e => { state.teQ = e.target.value; clearTimeout(teQTimer); teQTimer = setTimeout(renderSettings, 90); });
   document.getElementById("te-f").addEventListener("change", e => { state.teF = e.target.value; renderSettings(); });
   document.getElementById("te-m").addEventListener("change", e => { state.teM = e.target.value; renderSettings(); });
   document.getElementById("te-s").addEventListener("change", e => { state.teS = e.target.value; renderSettings(); });
