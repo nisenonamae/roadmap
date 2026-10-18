@@ -108,6 +108,13 @@ details.fold-sec>summary h2{margin:0;font-size:1rem}
 .slotset button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
 .te-bar{flex-wrap:wrap}.te-bar select{flex:1 1 7rem;min-width:0}
 .next-bar{display:flex;gap:.3rem;margin:.2rem 0 .25rem}
+.trig-box{border:1px solid var(--rule);border-radius:6px;padding:.5rem .7rem;margin:0 0 .8rem;background:#fff}
+.trig-h{margin:0 0 .3rem;font-size:.9rem;color:var(--sub)}
+.trig-g{padding:.35rem 0;border-top:1px dashed var(--rule)}.trig-g:first-of-type{border-top:0}
+.trig-g.fired{background:#fff8e6;margin:0 -.7rem;padding:.35rem .7rem}
+.trig-top{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}.trig-top b{flex:1;min-width:0}.trig-at{font-size:.82rem;color:#9a6a12}
+.trig-list{list-style:none;margin:.25rem 0 0;padding:0}.trig-list li{display:flex;align-items:center;gap:.5rem;padding:.2rem 0;font-size:.92rem}
+.trig-list li>span:first-child{flex:1;min-width:0}.trig-list li.done>span:first-child{text-decoration:line-through;color:var(--sub)}.trig-min{font-size:.8rem;color:var(--sub)}
 .next-q{flex:1;min-width:0;box-sizing:border-box;padding:.3rem .45rem;border:1px solid var(--rule);border-radius:3px;font:inherit;font-size:.88rem}
 .next-m{flex:0 1 9rem;min-width:0;padding:.3rem .3rem;border:1px solid var(--rule);border-radius:3px;font:inherit;font-size:.85rem;background:#fff}
 .te-bar{display:flex;gap:.4rem;margin:.3rem 0 .6rem}
@@ -755,7 +762,7 @@ body.tj-lock{overflow:hidden}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-17 r95";
+const APP_VERSION = "2026-10-17 r96";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -1086,6 +1093,7 @@ function cfgOf(settings, name){
     win: (toMin(s.winStart) !== null && toMin(s.winEnd) !== null && toMin(s.winEnd) > toMin(s.winStart))
       ? { start: toMin(s.winStart), end: toMin(s.winEnd) } : null,    // このタスクだけの時間の枠
     winStart: s.winStart || "", winEnd: s.winEnd || "",
+    trigger: String(s.trigger || "").trim(),   // きっかけ(これが起きたらやる)。付けたタスクは時刻表に置かない
     configured: configured,
   };
 }
@@ -1344,9 +1352,10 @@ function buildPlan(tasksDoc, settings, doneLocal, events, nowMin){
   // ただし流れに入れたタスクは、流れの一部として時刻表に入れる
   const FLOWS = (settings.flows || []).filter(f => f.enabled !== false && (f.steps || []).some(st => st.length));
   const inFlow = new Set(FLOWS.flatMap(f => f.steps.flat()));
-  const loose = [];
+  const loose = [], trig = [];
   for (const t of groups.schedulable) {
     const x = { task: t, c: cfgOf(settings, t.name) };
+    if (x.c.trigger) { trig.push(x); continue; }        // きっかけ待ち。時刻表には入れない
     all.push(x);
     if (!t.done && !x.c.configured && !inFlow.has(t.name)) { loose.push(x); continue; }
     const sl = curSlot(t); if (byBlock[sl]) byBlock[sl].push(x); else flex.push(x);
@@ -1612,12 +1621,30 @@ function buildPlan(tasksDoc, settings, doneLocal, events, nowMin){
 
   const unconfigured = loose.length;
   return { blocks, alone, sections, leftover, done: groups.done, reset: groups.reset,
-           ondemand: groups.ondemand, unconfigured, loose: loose.map(x => x.task), overflowToday };
+           ondemand: groups.ondemand, unconfigured, loose: loose.map(x => x.task), trig, overflowToday };
 }
 
 /* ───────── 描画:今日 ───────── */
 
-const KEY_REPLAN = "roadmap-replan", KEY_DOING = "roadmap-doing";
+const KEY_REPLAN = "roadmap-replan", KEY_DOING = "roadmap-doing", KEY_TRIG = "roadmap-trig";
+// きっかけ待ち:きっかけごとにまとめて出す。「きっかけが来た」を押すと、そのきっかけのタスクが「今やる」になる
+function trigFired(date){ const v = lsGet(KEY_TRIG, null); return v && v.date === date ? (v.fired || {}) : {}; }
+function trigHtml(plan, date){
+  const xs = plan.trig || []; if (!xs.length) return "";
+  const groups = new Map(); xs.forEach(x => { const k = x.c.trigger; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(x); });
+  const fired = trigFired(date);
+  let h = '<div class="trig-box"><h3 class="trig-h">きっかけ待ち</h3>';
+  for (const [label, arr] of groups) {
+    const at = fired[label], left = arr.filter(x => !x.task.done).length;
+    h += '<div class="trig-g' + (at != null ? " fired" : "") + '"><div class="trig-top"><b>' + esc(label) + "</b>" +
+      (at != null ? '<span class="trig-at">来た ' + fmt(at) + (left ? " ・ 今やる" : " ・ 済み") + '</span><button type="button" class="linkbtn" data-trig-reset="' + esc(label) + '">戻す</button>'
+                  : '<button type="button" class="btn sm" data-trig-fire="' + esc(label) + '">きっかけが来た</button>') + "</div>" +
+      '<ul class="trig-list">' + arr.map(x => '<li class="' + (x.task.done ? "done" : "") + '"><span>' + nameHtml(x.task.name) + '</span><span class="trig-min">' + dur(x.c.min) + "</span>" +
+        (x.task.done ? '<button type="button" data-undo="' + esc(x.task.name) + '">戻す</button>' : (at != null ? '<button type="button" class="btn sm" data-done="' + esc(x.task.name) + '">済み</button>' : "")) + "</li>").join("") +
+      "</ul></div>";
+  }
+  return h + "</div>";
+}
 function nowHM(){ const t = new Date(Date.now() + 9 * 3600e3); return window.__roadmapNowHM || t.toISOString().slice(11, 16); }
 function nowMinutes(){
   const t = new Date(Date.now() + 9 * 3600e3), h = t.getUTCHours(), m = t.getUTCMinutes();
@@ -1742,6 +1769,7 @@ function renderToday(){
     html += '<details class="more" data-more-lazy="' + k + '"><summary>' + esc(label) + "　" + arr.length + '件</summary><ul class="list"></ul></details>';
   });
 
+  html = trigHtml(plan, doc.date) + html;
   planEl.innerHTML = html;
   planEl.querySelectorAll("details[data-more-lazy]").forEach(dt => dt.addEventListener("toggle", () => {
     const ul = dt.querySelector("ul.list"); if (!dt.open || ul.childElementCount) return;
@@ -3720,11 +3748,15 @@ function renderSettings(){
     const mSel = document.getElementById("te-m"), pSel = document.getElementById("te-p");
     if (mSel) { const ms = realMins(Array.from(new Set(tasks.flatMap(x => x.ministries || [])))).sort((a, b) => minName(a).localeCompare(minName(b), "ja")); mSel.innerHTML = '<option value="">すべての省</option>' + ms.map(m => '<option value="' + esc(m) + '"' + (m === fm ? " selected" : "") + ">" + esc(minName(m)) + "</option>").join(""); }
     if (pSel) { pSel.innerHTML = '<option value="">すべての場所</option>' + (s.places || []).map(p => '<option' + (p === fp ? " selected" : "") + ">" + esc(p) + "</option>").join(""); }
+    // きっかけの候補(今使っているもの)
+    const trigs = Array.from(new Set(Object.values(s.tasks || {}).map(x => String((x && x.trigger) || "").trim()).filter(Boolean)));
+    let dl = document.getElementById("trig-list"); if (!dl) { dl = document.createElement("datalist"); dl.id = "trig-list"; document.body.appendChild(dl); }
+    dl.innerHTML = trigs.map(x => "<option>" + esc(x) + "</option>").join("");
     const bodies = state._teBodies = new Map();       // カードの中身は、開いたときに作る(閉じたカードは名前の行だけ)
     const card = (t, i) => {
       const c = cfgOf(s, t.name);
       const id = "t" + i;
-      const sum = (curSlot(t) || "一日中") + (c.configured ? "・" + c.min + "分・" + c.place + (c.fixed ? "・" + c.fixed : "") + (c.win ? "・" + c.winStart + "〜" + c.winEnd : "") : "");
+      const sum = (c.trigger ? "きっかけ:" + c.trigger : (curSlot(t) || "一日中")) + (c.configured ? "・" + c.min + "分・" + c.place + (c.fixed ? "・" + c.fixed : "") + (c.win ? "・" + c.winStart + "〜" + c.winEnd : "") : "");
       const open = (state.teOpen || new Set()).has(t.name);
       const head = '<details class="task-edit" data-name="' + esc(t.name) + '"' + (open ? " open" : "") + '><summary><span class="tn2">' + nameHtml(t.name) +
           (t.waiting ? '<span class="tbadge wait" title="STAGE・WAVEが進行中になった日から、今日のタブに入ります">待機中</span>' : "") +
@@ -3748,6 +3780,8 @@ function renderSettings(){
         '<div class="grid2" style="margin-top:.4rem"><div class="f"><label for="' + id + 'ws">このタスクだけの時間の枠(から)</label><input id="' + id + 'ws" data-k="winStart" type="time" value="' + esc(c.winStart) + '"></div>' +
           '<div class="f"><label for="' + id + 'we">(まで)</label><input id="' + id + 'we" data-k="winEnd" type="time" value="' + esc(c.winEnd) + '"></div></div>' +
         '<p class="hint" style="margin:.1rem 0 0">この時間の中に入れるのを優先し、どうしても入らなければはみ出して置きます。</p>' +
+        '<div class="f" style="margin-top:.5rem"><label for="' + id + 'g">きっかけ(これが起きたらやる。空なら時刻で置く)</label><input id="' + id + 'g" data-k="trigger" list="trig-list" placeholder="例:閉門したら" value="' + esc(c.trigger) + '"></div>' +
+        '<p class="hint" style="margin:.1rem 0 0">きっかけを付けると、時刻表には置かず、今日の画面の「きっかけ待ち」に出ます。同じきっかけのタスクは、まとめて出ます。</p>' +
         "<h4>並べ方</h4>" +
         '<div class="grid2">' +
           '<div class="f"><label for="' + id + 'r">優先度</label><select id="' + id + 'r" data-k="priority">' + prOpts + "</select></div>" +
@@ -3894,7 +3928,7 @@ function setPairRule(name, other, kind, on){
 function updateTaskSummary(row){
   const c = cfgOf(state.settings, row.dataset.name);
   const ts = row.querySelector("summary .ts"), tn = row.querySelector("summary .tn2");
-  if (ts) ts.textContent = c.min + "分・" + c.place + "・" + c.organs.join("") + (c.fixed ? "・" + c.fixed : "") + (c.win ? "・" + c.winStart + "〜" + c.winEnd : "");
+  if (ts) ts.textContent = (c.trigger ? "きっかけ:" + c.trigger + "・" : "") + c.min + "分・" + c.place + (c.fixed ? "・" + c.fixed : "") + (c.win ? "・" + c.winStart + "〜" + c.winEnd : "");
   if (tn) tn.innerHTML = nameHtml(row.dataset.name) + (c.nagara === "no" ? '<span class="tbadge no">ながらにしない</span>' : "") + (c.nagara === "pref" ? '<span class="tbadge pref">ながら優先</span>' : "");
 }
 
@@ -4275,6 +4309,10 @@ function bind(){
   document.getElementById("plan").addEventListener("click", e => {
     if (replanBox(e)) return;
     const tjb = e.target.closest("[data-tjopen]"); if (tjb) { openTejun(tjb.dataset.tjopen); return; }
+    const tf = e.target.closest("[data-trig-fire], [data-trig-reset]");
+    if (tf) { const date = (state.tasksDoc || {}).date || taskDay(), v = lsGet(KEY_TRIG, null), fired = v && v.date === date ? v.fired || {} : {};
+      if (tf.dataset.trigFire) fired[tf.dataset.trigFire] = nowMinutes(); else delete fired[tf.dataset.trigReset];
+      lsSet(KEY_TRIG, { date, fired }); renderToday(); return; }
     const doc = state.tasksDoc; if (!doc) return;
     const d = e.target.closest("[data-done]");
     const u = e.target.closest("[data-undo]");
