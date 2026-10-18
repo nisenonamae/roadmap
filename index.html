@@ -108,6 +108,16 @@ details.fold-sec>summary h2{margin:0;font-size:1rem}
 .slotset button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
 .te-bar{flex-wrap:wrap}.te-bar select{flex:1 1 7rem;min-width:0}
 .next-bar{display:flex;gap:.3rem;margin:.2rem 0 .25rem}
+.avbox{margin-top:.5rem;padding:.4rem .5rem;border:1px dashed var(--rule);border-radius:5px}.avchk{display:flex;gap:.4rem;align-items:center;font-weight:600;font-size:.9rem}
+.av-box{border:1px solid var(--rule);border-radius:6px;padding:.5rem .7rem;margin:0 0 .8rem;background:#fff}
+.av-g{padding:.4rem 0;border-top:1px dashed var(--rule)}.av-g:first-of-type{border-top:0}
+.av-warn{margin:.2rem 0;font-size:.85rem;font-weight:700;color:#b3283c}
+.av-segs{display:flex;flex-direction:column;gap:.25rem;margin-top:.3rem}
+.av-seg{display:flex;align-items:center;gap:.4rem;font-size:.88rem}.av-seg>span{flex:1;min-width:0;color:var(--sub)}
+.av-seg button{border:1px solid var(--rule);background:#fff;border-radius:3px;padding:.2rem .6rem;font:inherit;font-size:.85rem;cursor:pointer}
+.av-seg button[aria-pressed="true"]:first-of-type{background:#2f7a4f;color:#fff;border-color:#2f7a4f}
+.av-seg button[aria-pressed="true"]:last-of-type{background:#b3283c;color:#fff;border-color:#b3283c}
+.av-urge{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-top:.35rem;font-size:.85rem}.av-inst{color:#2f4f8a}
 #tt-dlg{position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;padding:1rem}#tt-dlg[hidden]{display:none}
 .tt-in{background:#fff;border-radius:8px;padding:1rem;max-width:26rem;width:100%;box-shadow:0 6px 24px rgba(0,0,0,.2)}.tt-in h3{margin:0 0 .6rem;font-size:1rem}
 .tt-row{padding:.4rem 0;border-top:1px solid var(--rule)}.tt-f{display:flex;align-items:center;gap:.35rem;margin-top:.3rem;flex-wrap:wrap}
@@ -767,7 +777,7 @@ body.tj-lock{overflow:hidden}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-18 r98";
+const APP_VERSION = "2026-10-18 r99";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -1100,6 +1110,8 @@ function cfgOf(settings, name){
     winStart: s.winStart || "", winEnd: s.winEnd || "",
     trigger: String(s.trigger || "").trim(),   // きっかけ(これが起きたらやる)。付けたタスクは時刻表に置かない
     timeBy: String(s.timeBy || "").trim(),     // 時刻は、このタスクで決める(その日に決めた時刻だけで置く)
+    nodo: !!s.nodo,                            // しないタスク(「〇〇をしない」)。時刻表には置かず、区切りごとに自分でチェックする
+    instead: String(s.instead || "").trim(), avStart: s.avStart || "", avEnd: s.avEnd || "", avSeg: Math.max(1, Math.min(4, +s.avSeg || 1)),
     configured: configured,
   };
 }
@@ -1358,9 +1370,10 @@ function buildPlan(tasksDoc, settings, doneLocal, events, nowMin){
   // ただし流れに入れたタスクは、流れの一部として時刻表に入れる
   const FLOWS = (settings.flows || []).filter(f => f.enabled !== false && (f.steps || []).some(st => st.length));
   const inFlow = new Set(FLOWS.flatMap(f => f.steps.flat()));
-  const loose = [], trig = [];
+  const loose = [], trig = [], nodo = [];
   for (const t of groups.schedulable) {
     const x = { task: t, c: cfgOf(settings, t.name) };
+    if (x.c.nodo) { nodo.push(x); continue; }            // しないタスク。時刻表には入れない
     if (x.c.trigger) { trig.push(x); continue; }        // きっかけ待ち。時刻表には入れない
     if (x.c.timeBy) {                                    // 時刻は別のタスクで決める
       const dt = (((settings.dayTimes || {})[(tasksDoc && tasksDoc.date) || ""]) || {})[t.name];
@@ -1632,7 +1645,7 @@ function buildPlan(tasksDoc, settings, doneLocal, events, nowMin){
 
   const unconfigured = loose.length;
   return { blocks, alone, sections, leftover, done: groups.done, reset: groups.reset,
-           ondemand: groups.ondemand, unconfigured, loose: loose.map(x => x.task), trig, overflowToday };
+           ondemand: groups.ondemand, unconfigured, loose: loose.map(x => x.task), trig, nodo, overflowToday };
 }
 
 /* ───────── 描画:今日 ───────── */
@@ -1670,6 +1683,43 @@ function timedByIt(name){
   const date = (state.tasksDoc || {}).date || taskDay(), tk = taskByName(name), alias = new Set([name].concat(tk ? [tk.def.name].concat(tk.def.aliases || []) : []));
   return Object.keys(state.settings.tasks || {}).filter(n => { const c = cfgOf(state.settings, n); return c.timeBy && alias.has(c.timeBy) && !dayTimeOf(date, n); });
 }
+// しないタスク:区切りごとに「守れた」「破った」を自分で押す。記録は rec.av = { segs: [true/false/null…], urges }、実行率は守れた区切りの割合
+// 守る時間帯の言い方(終わりが始めより早ければ、日付をまたぐ。00:00 は夜の12時)
+function avLabel(c){ if (!c.avStart && !c.avEnd) return "一日中"; return (c.avStart || "朝") + "〜" + (c.avEnd === "00:00" ? "24:00" : (c.avEnd || "翌朝")); }
+function avRec(date, id){ return (((state.appLogs[date.slice(0, 7)] || {})[date] || {})[id] || {}); }
+function avSegs(c){
+  const a = toMin(c.avStart), b0 = toMin(c.avEnd), ds = toMin((state.settings.dayStart) || "04:00") || 240;
+  const from = a !== null ? a : ds, to0 = b0 !== null ? b0 : ds + 1440, to = to0 <= from ? to0 + 1440 : to0, n = c.avSeg || 1, step = (to - from) / n;
+  return Array.from({ length: n }, (_, i) => ({ s: Math.round(from + step * i), e: Math.round(from + step * (i + 1)) }));
+}
+function avoidHtml(plan, date){
+  const xs = plan.nodo || []; if (!xs.length) return "";
+  const nowM = nowMinutes(), y = addDays(date, -1);
+  let h = '<div class="av-box"><h3 class="trig-h">しないこと</h3>';
+  for (const x of xs) {
+    const tk = taskByName(x.task.name), id = tk ? tk.def.id : x.task.name, rec = avRec(date, id), av = rec.av || {}, segs = avSegs(x.c), marks = av.segs || [];
+    const win = segs[0].s, wend = segs[segs.length - 1].e, nm = nowM < win ? nowM + 1440 : nowM;
+    const phase = nm < win ? "これから" : nm < wend ? "守っている最中" : "時間帯は終わった。チェックしよう";
+    const yv = tk && (tk.days || []).find(d => d.date === y), yBroke = yv && yv.ratio !== null && yv.ratio !== undefined && yv.ratio < 1;
+    h += '<div class="av-g" data-av-id="' + esc(id) + '"><div class="trig-top"><b>' + nameHtml(x.task.name) + '</b><span class="trig-at">' + esc(avLabel(x.c)) + " ・ " + esc(phase) + "</span></div>" +
+      (yBroke ? '<p class="av-warn">昨日は破った。今日は必ず守る日</p>' : "") +
+      '<div class="av-segs">' + segs.map((g, i) => { const m = marks[i];
+        return '<div class="av-seg' + (m === true ? " ok" : m === false ? " ng" : "") + '"><span>' + (segs.length > 1 ? esc(fmt(g.s % 1440) + "〜" + fmt(g.e % 1440)) : "今日") + "</span>" +
+          '<button type="button" data-av-mark="' + esc(id) + ":" + i + ':1" aria-pressed="' + (m === true) + '">守れた</button><button type="button" data-av-mark="' + esc(id) + ":" + i + ':0" aria-pressed="' + (m === false) + '">破った</button></div>'; }).join("") + "</div>" +
+      '<div class="av-urge"><button type="button" class="btn sm ghost" data-av-urge="' + esc(id) + '">やりたくなった</button><span>こらえた ' + (av.urges || 0) + "回</span>" +
+        (state.avShow === id && x.c.instead ? '<b class="av-inst">代わりに:' + esc(x.c.instead) + "</b>" : "") + "</div></div>";
+  }
+  return h + "</div>";
+}
+async function avMark(date, id, i, val, nSeg){
+  const rec = avRec(date, id), av = Object.assign({ segs: [], urges: 0 }, rec.av || {}), segs = Array.from({ length: nSeg }, (_, k) => (av.segs || [])[k] ?? null);
+  segs[i] = segs[i] === val ? null : val;                     // 同じ方をもう一度押すと、付けていない状態に戻る
+  av.segs = segs;
+  const marked = segs.filter(v => v !== null).length, kept = segs.filter(v => v === true).length;
+  const patch = { av, ratio: marked ? Math.round(kept / nSeg * 10000) / 100 : null, check: marked && kept === nSeg ? "完了" : null };
+  await commitAppLog(date, () => setAppRecord(date, id, patch));
+}
+function lastPlanAvoid(){ return state._planAvoid || []; }
 function trigFired(date){ const v = lsGet(KEY_TRIG, null); return v && v.date === date ? (v.fired || {}) : {}; }
 function trigHtml(plan, date){
   const xs = plan.trig || []; if (!xs.length) return "";
@@ -1818,7 +1868,8 @@ function renderToday(){
     html += '<details class="more" data-more-lazy="' + k + '"><summary>' + esc(label) + "　" + arr.length + '件</summary><ul class="list"></ul></details>';
   });
 
-  html = trigHtml(plan, doc.date) + html;
+  state._planAvoid = plan.nodo || [];
+  html = avoidHtml(plan, doc.date) + trigHtml(plan, doc.date) + html;
   planEl.innerHTML = html;
   planEl.querySelectorAll("details[data-more-lazy]").forEach(dt => dt.addEventListener("toggle", () => {
     const ul = dt.querySelector("ul.list"); if (!dt.open || ul.childElementCount) return;
@@ -3811,7 +3862,7 @@ function renderSettings(){
     const card = (t, i) => {
       const c = cfgOf(s, t.name);
       const id = "t" + i;
-      const sum = (c.trigger ? "きっかけ:" + c.trigger : c.timeBy ? "時刻:" + c.timeBy + "で決める" : (curSlot(t) || "一日中")) + (c.configured ? "・" + c.min + "分・" + c.place + (c.fixed ? "・" + c.fixed : "") + (c.win ? "・" + c.winStart + "〜" + c.winEnd : "") : "");
+      const sum = (c.nodo ? "しない(" + avLabel(c) + ")" : c.trigger ? "きっかけ:" + c.trigger : c.timeBy ? "時刻:" + c.timeBy + "で決める" : (curSlot(t) || "一日中")) + (c.configured ? "・" + c.min + "分・" + c.place + (c.fixed ? "・" + c.fixed : "") + (c.win ? "・" + c.winStart + "〜" + c.winEnd : "") : "");
       const open = (state.teOpen || new Set()).has(t.name);
       const head = '<details class="task-edit" data-name="' + esc(t.name) + '"' + (open ? " open" : "") + '><summary><span class="tn2">' + nameHtml(t.name) +
           (t.waiting ? '<span class="tbadge wait" title="STAGE・WAVEが進行中になった日から、今日のタブに入ります">待機中</span>' : "") +
@@ -3835,6 +3886,12 @@ function renderSettings(){
         '<div class="grid2" style="margin-top:.4rem"><div class="f"><label for="' + id + 'ws">このタスクだけの時間の枠(から)</label><input id="' + id + 'ws" data-k="winStart" type="time" value="' + esc(c.winStart) + '"></div>' +
           '<div class="f"><label for="' + id + 'we">(まで)</label><input id="' + id + 'we" data-k="winEnd" type="time" value="' + esc(c.winEnd) + '"></div></div>' +
         '<p class="hint" style="margin:.1rem 0 0">この時間の中に入れるのを優先し、どうしても入らなければはみ出して置きます。</p>' +
+        '<div class="avbox"><label class="avchk"><input type="checkbox" data-k="nodo"' + (c.nodo ? " checked" : "") + '> しないタスク(「〇〇をしない」)</label>' +
+          '<div class="grid2"><div class="f"><label for="' + id + 'ai">したくなったら、代わりにやること</label><input id="' + id + 'ai" data-k="instead" value="' + esc(c.instead) + '" placeholder="例:Ankiを5枚"></div>' +
+          '<div class="f"><label for="' + id + 'as">区切りの数(区切りごとにチェック)</label><select id="' + id + 'as" data-k="avSeg">' + [1, 2, 3, 4].map(n => '<option value="' + n + '"' + (n === c.avSeg ? " selected" : "") + ">" + n + "つ</option>").join("") + "</select></div>" +
+          '<div class="f"><label for="' + id + 'a1">守る時間帯(始め。空なら一日中)</label><input id="' + id + 'a1" type="time" data-k="avStart" value="' + esc(c.avStart) + '"></div>' +
+          '<div class="f"><label for="' + id + 'a2">守る時間帯(終わり。夜の12時は 00:00)</label><input id="' + id + 'a2" type="time" data-k="avEnd" value="' + esc(c.avEnd) + '"></div></div>' +
+          '<p class="hint" style="margin:.1rem 0 0">しないタスクは時刻表には置かず、今日の画面の「しないこと」に出ます。区切りごとに「守れた」「破った」を自分で押し、守れた区切りの割合がその日の実行率になります。</p></div>' +
         '<div class="f" style="margin-top:.5rem"><label for="' + id + 'g">きっかけ(これが起きたらやる。空なら時刻で置く)</label><input id="' + id + 'g" data-k="trigger" list="trig-list" placeholder="例:閉門したら" value="' + esc(c.trigger) + '"></div>' +
         '<p class="hint" style="margin:.1rem 0 0">きっかけを付けると、時刻表には置かず、今日の画面の「きっかけ待ち」に出ます。同じきっかけのタスクは、まとめて出ます。</p>' +
         '<div class="f" style="margin-top:.5rem"><label for="' + id + 'tb">時刻は、このタスクで決める</label><select id="' + id + 'tb" data-k="timeBy"><option value="">なし(ふつうに置く)</option>' +
@@ -3986,7 +4043,7 @@ function setPairRule(name, other, kind, on){
 function updateTaskSummary(row){
   const c = cfgOf(state.settings, row.dataset.name);
   const ts = row.querySelector("summary .ts"), tn = row.querySelector("summary .tn2");
-  if (ts) ts.textContent = (c.trigger ? "きっかけ:" + c.trigger + "・" : "") + (c.timeBy ? "時刻:" + c.timeBy + "で決める・" : "") + c.min + "分・" + c.place + (c.fixed ? "・" + c.fixed : "") + (c.win ? "・" + c.winStart + "〜" + c.winEnd : "");
+  if (ts) ts.textContent = (c.nodo ? "しない(" + avLabel(c) + ")・" : "") + (c.trigger ? "きっかけ:" + c.trigger + "・" : "") + (c.timeBy ? "時刻:" + c.timeBy + "で決める・" : "") + c.min + "分・" + c.place + (c.fixed ? "・" + c.fixed : "") + (c.win ? "・" + c.winStart + "〜" + c.winEnd : "");
   if (tn) tn.innerHTML = nameHtml(row.dataset.name) + (c.nagara === "no" ? '<span class="tbadge no">ながらにしない</span>' : "") + (c.nagara === "pref" ? '<span class="tbadge pref">ながら優先</span>' : "");
 }
 
@@ -4367,6 +4424,12 @@ function bind(){
   document.getElementById("plan").addEventListener("click", e => {
     if (replanBox(e)) return;
     const tjb = e.target.closest("[data-tjopen]"); if (tjb) { openTejun(tjb.dataset.tjopen); return; }
+    const avm = e.target.closest("[data-av-mark]");
+    if (avm) { const [id, i, v] = avm.dataset.avMark.split(":"), date = (state.tasksDoc || {}).date || taskDay(), x = ((lastPlanAvoid() || []).find(z => { const tk = taskByName(z.task.name); return (tk ? tk.def.id : z.task.name) === id; }));
+      avMark(date, id, +i, v === "1", x ? avSegs(x.c).length : 1); return; }
+    const avu = e.target.closest("[data-av-urge]");
+    if (avu) { const id = avu.dataset.avUrge, date = (state.tasksDoc || {}).date || taskDay(), rec = avRec(date, id), av = Object.assign({ segs: [], urges: 0 }, rec.av || {});
+      av.urges = (av.urges || 0) + 1; state.avShow = id; commitAppLog(date, () => setAppRecord(date, id, { av })); return; }
     const ttb = e.target.closest("[data-tt-set]"); if (ttb) { askDayTime([ttb.dataset.ttSet]); return; }
     const dn = e.target.closest("[data-done]"); if (dn) { const ws = timedByIt(dn.dataset.done); if (ws.length) setTimeout(() => askDayTime(ws), 50); }
     const tf = e.target.closest("[data-trig-fire], [data-trig-reset]");
@@ -4994,6 +5057,8 @@ function bind(){
     const t = ensureTask(row.dataset.name);
     if (k === "min") t.min = Math.max(1, +e.target.value || 1);
     else if (k === "priority") t.priority = +e.target.value;
+    else if (e.target.type === "checkbox") t[k] = e.target.checked;
+    else if (k === "avSeg") t.avSeg = +e.target.value || 1;
     else t[k] = e.target.value;
     markDirty();
     updateTaskSummary(row);
