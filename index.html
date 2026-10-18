@@ -767,7 +767,7 @@ body.tj-lock{overflow:hidden}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-17 r97";
+const APP_VERSION = "2026-10-18 r98";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -3063,11 +3063,16 @@ async function bulkApply(kind, ids){
    前の日の行から次の日の行を出し直して比べる。同じ答えが出ればルール通り。 */
 const AUDIT_DONE = new Set(["完了", "超過完了", "不完全な完了"]);
 const NA = "今日は該当しない";
+// 細かい進捗(e10)の決まり:その日の実行率 r(量・%で記録した日はその割合、そうでなければ済んだら1・済まなければ0)で、
+//   累計 = 前の累計 + r / 連続 = r が1以上なら+1、届かなければ0 / 未実行連続 = r が1以上なら0、届かなければ 足りない分(1 − r)だけ増える
+const r9a = x => Math.round(x * 1e9) / 1e9;
 function expectNext(prev){
-  const done = AUDIT_DONE.has(prev.check), na = prev.check === NA, dropped = !done && !na;
-  const total = prev.total + (done ? 1 : 0);
+  const hasR = prev.ratio !== undefined, na = hasR ? prev.ratio === null : prev.check === NA;
+  const r = na ? 0 : (hasR ? Math.max(0, +prev.ratio || 0) : (AUDIT_DONE.has(prev.check) ? 1 : 0));
+  const done = !na && r >= 1, dropped = !done && !na;
+  const total = r9a(prev.total + r);
   const streak = done ? prev.streak + 1 : (na ? prev.streak : 0);
-  const miss = done ? 0 : (na ? prev.miss : prev.miss + 1);
+  const miss = done ? 0 : (na ? prev.miss : r9a(prev.miss + 1 - r));
   let status = prev.status, why = "";
   if (prev.status === "新規") {
     if (total >= 3) { status = "進行中"; why = "累計が3に届いた"; }
@@ -5189,7 +5194,7 @@ function boot(){
 }
 
 window.__roadmapAct = actQ;
-window.__roadmap = { findFlows, flowStats, buildPlan, cfgOf, classify, state, loadAll, saveSettings, saveEvents, eventsFor,
+window.__roadmap = { expectNext, findFlows, flowStats, buildPlan, cfgOf, classify, state, loadAll, saveSettings, saveEvents, eventsFor,
                      togglePreset, setPreset, removeEvent, editEventTime, setDone, getDone, commitEvents,
                      commitPlan, normalizePlan, validatePlanItem, newItem, taskStates, commitOverlay,
                      commitAppLog, setAppRecord, taskDay, taskIdFor, cyclePos, openTejun, closeTejun,
