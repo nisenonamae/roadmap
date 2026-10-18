@@ -755,7 +755,7 @@ body.tj-lock{overflow:hidden}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-17 r94";
+const APP_VERSION = "2026-10-17 r95";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -2463,8 +2463,10 @@ function nextMinMap(){
   try { taskStates().forEach(x => { if (!m.has(x.def.name) || !(m.get(x.def.name) || []).length) m.set(x.def.name, x.def.ministries || []); (x.def.aliases || []).forEach(a => { if (!m.has(a)) m.set(a, x.def.ministries || []); }); }); } catch (e) {}
   return m;
 }
+// 省アプリの省の一覧(ministries.json)に載っているタグだけを、省として扱う(STAGE・WAVEなどのタグは除く)
+function realMins(list){ const known = state.minNames || {}; return Object.keys(known).length ? list.filter(m => m in known) : list; }
 function nextMinOpts(){
-  const ms = Array.from(new Set(Array.from(nextMinMap().values()).flat())).sort((a, b) => minName(a).localeCompare(minName(b), "ja"));
+  const ms = realMins(Array.from(new Set(Array.from(nextMinMap().values()).flat()))).sort((a, b) => minName(a).localeCompare(minName(b), "ja"));
   return ms.map(x => '<option value="' + esc(x) + '">' + esc(minName(x)) + "</option>").join("");
 }
 // タスクの今の時間帯(省アプリや設定で今日変えたものも)。引けなければ、朝の一覧の値
@@ -2500,6 +2502,31 @@ function tgInfoHtml(ts){
   return '<span class="tg-info" data-tginfo>重み 合計' + w + "・" + q + "</span>";
 }
 // 天体のまとまりに、1日の分量(貯金)・実行間隔・時間帯をまとめて設定する欄(空のままの項目は変えない)
+// 設定の画面の「まとめて設定」:所要・場所・時間帯・優先度・集中の型・ながらを、まとまりの天体すべてに(空欄は変えない)
+function teCfgHtml(key, names){
+  const s = state.settings, o = (v, l) => '<option value="' + esc(v) + '">' + esc(l) + "</option>", keep = o("", "変えない");
+  return '<div class="tgset-box" data-tecfg-box="' + esc(key) + '" data-names="' + esc(JSON.stringify(names)) + '"><div class="grid2">' +
+    '<div class="f"><label>所要(分)</label><input type="number" min="1" step="1" data-tc="min" placeholder="変えない"></div>' +
+    '<div class="f"><label>場所</label><select data-tc="place">' + keep + (s.places || []).map(p => o(p, p)).join("") + "</select></div>" +
+    '<div class="f"><label>時間帯(すぐ保存)</label><select data-tc="slot">' + keep + ["朝", "昼", "夜", "一日中"].map(v => o(v, v)).join("") + "</select></div>" +
+    '<div class="f"><label>優先度</label><select data-tc="priority">' + keep + [-2, -1, 0, 1, 2].map(v => o(String(v), v > 0 ? "+" + v : String(v))).join("") + "</select></div>" +
+    '<div class="f"><label>集中の型</label><select data-tc="mode">' + keep + MODES.map(([v, l]) => o(v || "-", l || "なし")).join("") + "</select></div>" +
+    '<div class="f"><label>ながら</label><select data-tc="nagara">' + keep + o("-", "ふつう") + o("no", "ながらにしない") + o("pref", "ながらを優先") + "</select></div>" +
+    '</div><div class="row" style="margin-top:.5rem;display:flex;gap:.5rem"><button type="button" class="btn" data-tecfg-do>全部の天体(' + names.length + 'つ)に設定する</button><button type="button" class="btn ghost" data-tecfg-x>やめる</button></div></div>';
+}
+async function teCfgApply(box){
+  const names = JSON.parse(box.dataset.names || "[]"), v = k => box.querySelector('[data-tc="' + k + '"]').value.trim();
+  const patch = {}; if (v("min") !== "" && +v("min") > 0) patch.min = +v("min"); if (v("place")) patch.place = v("place");
+  if (v("priority") !== "") patch.priority = +v("priority"); if (v("mode")) patch.mode = v("mode") === "-" ? "" : v("mode"); if (v("nagara")) patch.nagara = v("nagara") === "-" ? "" : v("nagara");
+  const slot = v("slot");
+  if (!Object.keys(patch).length && !slot) return "変える項目を入れてください。";
+  if (Object.keys(patch).length) { names.forEach(n => Object.assign(ensureTask(n), patch)); markDirty(); }
+  if (slot) { const ids = names.map(n => taskByName(n)).filter(Boolean).map(x => x.def.id);
+    (state.tasksDoc && state.tasksDoc.tasks || []).forEach(x => { if (names.includes(x.name)) x.slot = slot; });
+    await tgSetApply(ids, { slot }); taskCache.key = null; }
+  state.teCfg = null; renderSettings(); renderToday();
+  return names.length + "つの天体に設定しました" + (Object.keys(patch).length ? "。下の「保存する」で保存されます" : "") + (slot ? "(時間帯は保存済み)" : "");
+}
 function tgSetHtml(key, ids){
   return '<div class="tg-setbox" data-tgset-box="' + esc(key) + '" data-ids="' + esc(ids.join(",")) + '"><div class="grid2">' +
     '<div class="f"><label>重み(合計。天体の数で等分)</label><input data-tgs="weight" type="number" step="any" min="0" placeholder="変えない"></div>' +
@@ -2542,8 +2569,10 @@ function tgRows(items, nameOf, row, opts){
     out += '<div class="tgrp"><button type="button" class="tg-tog" data-tgtog="' + esc(ok) + '" aria-expanded="' + open + '" aria-label="' + (open ? "たたむ" : "全部の天体を見る") + '">' + (open ? "▾" : "▸") + "</button>" +
       '<span class="tg-marks">' + mem.map(z => tmarkHtml(z[2].index).replace('class="tmark"', 'class="tmark mini' + (isDone && !isDone(z[0]) ? " dim" : "") + '"')).join("") + "</span>" +
       '<span class="tg-base">' + esc(g.base) + '</span><span class="tg-sum">' + (doneN != null ? "済 " + doneN + "/" + mem.length : mem.length + "つの天体") + "</span>" +
-      (opts.setAll ? tgInfoHtml(mem.map(z => z[0])) + '<button type="button" class="linkbtn" data-tgset="' + esc(ok) + '">まとめて設定</button>' : "") + "</div>" +
-      (opts.setAll && state.tgSet === ok ? tgSetHtml(ok, mem.map(z => opts.setAll(z[0])).filter(Boolean)) : "");
+      (opts.setAll ? tgInfoHtml(mem.map(z => z[0])) + '<button type="button" class="linkbtn" data-tgset="' + esc(ok) + '">まとめて設定</button>' : "") +
+      (opts.cfgAll ? '<button type="button" class="linkbtn" data-tecfg="' + esc(ok) + '">まとめて設定</button>' : "") + "</div>" +
+      (opts.setAll && state.tgSet === ok ? tgSetHtml(ok, mem.map(z => opts.setAll(z[0])).filter(Boolean)) : "") +
+      (opts.cfgAll && state.teCfg === ok ? teCfgHtml(ok, mem.map(z => nameOf(z[0]))) : "");
     if (open) out += '<div class="tg-body">' + mem.map(z => row(z[0], z[1])).join("") + "</div>";
     else if (opts.showNext) { const nx = mem.find(z => !isDone || !isDone(z[0])); if (nx) out += '<div class="tg-body">' + row(nx[0], nx[1]) + "</div>"; }
   });
@@ -2838,7 +2867,7 @@ function renderTasks(){
   // 絞り込み:名前・省・状況
   const q = (document.getElementById("tk-q").value || "").trim().toLowerCase();
   const fm = document.getElementById("tk-min"), fs = document.getElementById("tk-stat");
-  const mins = Array.from(new Set(all.flatMap(t => t.def.ministries || []))).sort((a, b) => a.localeCompare(b, "ja"));
+  const mins = realMins(Array.from(new Set(all.flatMap(t => t.def.ministries || [])))).sort((a, b) => minName(a).localeCompare(minName(b), "ja"));   // STAGE・WAVEのタグは除く
   const stats = Array.from(new Set(all.map(t => t.waiting ? "待機中" : t.status)));
   const keep = (sel, opts, label) => {
     const cur = sel.value;
@@ -3689,7 +3718,7 @@ function renderSettings(){
       return (!q || t.name.toLowerCase().includes(q)) && okF && (!fm || (t.ministries || []).includes(fm)) && (!fs || sl === fs) && (!fp || (c.configured && c.place === fp)); };
     // 省と場所の絞り込みの選択肢(今ある値から)
     const mSel = document.getElementById("te-m"), pSel = document.getElementById("te-p");
-    if (mSel) { const ms = Array.from(new Set(tasks.flatMap(x => x.ministries || []))); mSel.innerHTML = '<option value="">すべての省</option>' + ms.map(m => '<option value="' + esc(m) + '"' + (m === fm ? " selected" : "") + ">" + esc(minName(m)) + "</option>").join(""); }
+    if (mSel) { const ms = realMins(Array.from(new Set(tasks.flatMap(x => x.ministries || [])))).sort((a, b) => minName(a).localeCompare(minName(b), "ja")); mSel.innerHTML = '<option value="">すべての省</option>' + ms.map(m => '<option value="' + esc(m) + '"' + (m === fm ? " selected" : "") + ">" + esc(minName(m)) + "</option>").join(""); }
     if (pSel) { pSel.innerHTML = '<option value="">すべての場所</option>' + (s.places || []).map(p => '<option' + (p === fp ? " selected" : "") + ">" + esc(p) + "</option>").join(""); }
     const bodies = state._teBodies = new Map();       // カードの中身は、開いたときに作る(閉じたカードは名前の行だけ)
     const card = (t, i) => {
@@ -3739,8 +3768,8 @@ function renderSettings(){
     const shown = live.filter(hit), unset = shown.filter(t => !cfgOf(s, t.name).configured), setd = shown.filter(t => cfgOf(s, t.name).configured);
     const fall = fallen.filter(hit);
     box.innerHTML = (!shown.length && !fall.length ? '<div class="empty">当てはまるタスクはありません。</div>' : "") +
-      (unset.length ? '<div class="te-group">まだ設定していない ' + unset.length + "件</div>" + tgRows(unset, t => t.name, (t, i) => card(t, i), { scope: "te" }) : "") +
-      (setd.length ? '<div class="te-group">設定ずみ ' + setd.length + "件</div>" + tgRows(setd, t => t.name, (t, i) => card(t, unset.length + i), { scope: "te" }) : "") +
+      (unset.length ? '<div class="te-group">まだ設定していない ' + unset.length + "件</div>" + tgRows(unset, t => t.name, (t, i) => card(t, i), { scope: "te", cfgAll: true }) : "") +
+      (setd.length ? '<div class="te-group">設定ずみ ' + setd.length + "件</div>" + tgRows(setd, t => t.name, (t, i) => card(t, unset.length + i), { scope: "te", cfgAll: true }) : "") +
       (fall.length
         ? '<details class="more"><summary>要再設定　' + fall.length +
           "件</summary>" + tgRows(fall, t => t.name, (t, i) => card(t, shown.length + i), { scope: "te" }) + "</details>"
@@ -4918,6 +4947,11 @@ function bind(){
   edits.addEventListener("click", e => {
     const rm = e.target.closest("[data-rm-list]");
     if (rm) { const row = rm.closest(".task-edit"), name = row.dataset.name; setPairRule(name, rm.dataset.rmName, rm.dataset.rmList, false); markDirty(); renderSettings(); afterPairEdit(name, "外しました"); return; }
+    const tc = e.target.closest("[data-tecfg]");
+    if (tc) { state.teCfg = state.teCfg === tc.dataset.tecfg ? null : tc.dataset.tecfg; renderSettings(); return; }
+    if (e.target.closest("[data-tecfg-x]")) { state.teCfg = null; renderSettings(); return; }
+    const tcd = e.target.closest("[data-tecfg-do]");
+    if (tcd) { teCfgApply(tcd.closest("[data-tecfg-box]")).then(msg => { const st = document.getElementById("save-status"); if (st) { st.classList.toggle("err", /入れてください/.test(msg)); st.textContent = msg; } }); return; }
     const sb = e.target.closest("[data-slotset]");
     if (sb) { const row = sb.closest(".task-edit"); setTaskSlot(row.dataset.name, sb.dataset.slotset).then(ok => { const st = document.getElementById("save-status"); if (ok && st) { st.classList.remove("err"); st.textContent = row.dataset.name + " の時間帯を「" + sb.dataset.slotset + "」にしました"; } }); return; }
     const b = e.target.closest("[data-organ]"); if (!b) return;
