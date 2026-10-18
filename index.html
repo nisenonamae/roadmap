@@ -107,7 +107,9 @@ details.fold-sec>summary h2{margin:0;font-size:1rem}
 .slotset button{border:1px solid var(--rule);background:#fff;border-radius:3px;padding:.25rem .8rem;font:inherit;font-size:.9rem;cursor:pointer}
 .slotset button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
 .te-bar{flex-wrap:wrap}.te-bar select{flex:1 1 7rem;min-width:0}
-.next-q{width:100%;box-sizing:border-box;margin:.2rem 0 .25rem;padding:.3rem .45rem;border:1px solid var(--rule);border-radius:3px;font:inherit;font-size:.88rem}
+.next-bar{display:flex;gap:.3rem;margin:.2rem 0 .25rem}
+.next-q{flex:1;min-width:0;box-sizing:border-box;padding:.3rem .45rem;border:1px solid var(--rule);border-radius:3px;font:inherit;font-size:.88rem}
+.next-m{flex:0 1 9rem;min-width:0;padding:.3rem .3rem;border:1px solid var(--rule);border-radius:3px;font:inherit;font-size:.85rem;background:#fff}
 .te-bar{display:flex;gap:.4rem;margin:.3rem 0 .6rem}
 .te-bar input{flex:1;min-width:0;padding:.35rem .5rem;border:1px solid var(--rule);border-radius:3px;font:inherit}
 .te-bar select{padding:.3rem;border:1px solid var(--rule);border-radius:3px;font:inherit}
@@ -753,7 +755,7 @@ body.tj-lock{overflow:hidden}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-17 r93";
+const APP_VERSION = "2026-10-17 r94";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -2454,6 +2456,17 @@ function lastProgress(days){
 // その日の記録。アプリでつけたものがあれば、取り込んだものより優先する
 function mergedLogFor(id){ return window.TaskEngine.mergedLogFor(state.taskLogs, state.appLogs, id); }
 
+// 「この後に続ける」の省の絞り込み:今あるタスクの省の一覧と、タスクの名前 → 省
+function nextMinMap(){
+  const m = new Map();
+  ((state.tasksDoc && state.tasksDoc.tasks) || []).forEach(x => m.set(x.name, x.ministries || []));
+  try { taskStates().forEach(x => { if (!m.has(x.def.name) || !(m.get(x.def.name) || []).length) m.set(x.def.name, x.def.ministries || []); (x.def.aliases || []).forEach(a => { if (!m.has(a)) m.set(a, x.def.ministries || []); }); }); } catch (e) {}
+  return m;
+}
+function nextMinOpts(){
+  const ms = Array.from(new Set(Array.from(nextMinMap().values()).flat())).sort((a, b) => minName(a).localeCompare(minName(b), "ja"));
+  return ms.map(x => '<option value="' + esc(x) + '">' + esc(minName(x)) + "</option>").join("");
+}
 // タスクの今の時間帯(省アプリや設定で今日変えたものも)。引けなければ、朝の一覧の値
 function curSlot(t){ let d = null; try { d = state.taskDefs ? taskByName(t.name) : null; } catch (e) {} return (d && d.def.slot) || t.slot || ""; }
 // 時間帯を変える(タスクの中身として保存する。今日の一覧にもすぐ効かせる)
@@ -3712,7 +3725,8 @@ function renderSettings(){
           '<div class="f"><label for="' + id + 'd">集中の型</label><select id="' + id + 'd" data-k="mode">' + modeOpts + "</select></div>" +
         "</div>" +
         '<div class="f" style="margin-top:.5rem"><label for="' + id + 'x">この後に続ける</label>' +
-        '<input type="search" class="next-q" data-next-q="' + id + 'x" placeholder="続ける先を名前で探す" aria-label="続ける先を探す">' +
+        '<div class="next-bar"><input type="search" class="next-q" data-next-q="' + id + 'x" placeholder="続ける先を名前で探す" aria-label="続ける先を探す">' +
+        '<select class="next-m" data-next-m="' + id + 'x" aria-label="続ける先を省で絞る"><option value="">すべての省</option>' + nextMinOpts() + "</select></div>" +
         '<select id="' + id + 'x" data-k="next"><option value="">なし</option>' + nextOpts(t.name, c.next) + "</select></div>" +
         "<h4>ながら</h4>" +
         '<div class="f"><label for="' + id + 'n">ながらの扱い(どのタスクとも)</label><select id="' + id + 'n" data-k="nagara">' + nagOpts + "</select></div>" +
@@ -4865,16 +4879,20 @@ function bind(){
     if (d.open) fillTaskEdit(d);
   }, true);
   // 打ち終わるのを少し待ってから描く(1文字ごとに全部を描き直さない)
-  edits.addEventListener("input", e => {
-    const q = e.target.closest && e.target.closest("[data-next-q]"); if (!q) return;
-    const sel = document.getElementById(q.dataset.nextQ); if (!sel) return;
+  const nextFilter = e => {
+    const el = e.target.closest && e.target.closest("[data-next-q], [data-next-m]"); if (!el) return;
+    const sid = el.dataset.nextQ || el.dataset.nextM, sel = document.getElementById(sid); if (!sel) return;
+    const box = el.closest(".next-bar"), qEl = box.querySelector("[data-next-q]"), mEl = box.querySelector("[data-next-m]");
     if (!sel.dataset.allOpts) sel.dataset.allOpts = sel.innerHTML;
-    const word = q.value.trim().toLowerCase(), cur = sel.value, tmp = document.createElement("select"); tmp.innerHTML = sel.dataset.allOpts;
-    const keep = o => !o.value || o.value === cur || !word || o.textContent.toLowerCase().includes(word);
+    const word = qEl.value.trim().toLowerCase(), mn = mEl.value, mins = mn ? nextMinMap() : null;
+    const cur = sel.value, tmp = document.createElement("select"); tmp.innerHTML = sel.dataset.allOpts;
+    const keep = o => !o.value || o.value === cur || ((!word || o.textContent.toLowerCase().includes(word)) && (!mn || (mins.get(o.value) || []).includes(mn)));
     Array.from(tmp.querySelectorAll("option")).forEach(o => { if (!keep(o)) o.remove(); });
     Array.from(tmp.querySelectorAll("optgroup")).forEach(g => { if (!g.children.length) g.remove(); });
     sel.innerHTML = tmp.innerHTML; sel.value = cur;
-  });
+  };
+  edits.addEventListener("input", nextFilter);
+  edits.addEventListener("change", e => { if (e.target.closest && e.target.closest("[data-next-m]")) { e.stopPropagation(); nextFilter(e); } }, true);
   let teQTimer = null;
   document.getElementById("te-q").addEventListener("input", e => { state.teQ = e.target.value; clearTimeout(teQTimer); teQTimer = setTimeout(renderSettings, 90); });
   document.getElementById("te-f").addEventListener("change", e => { state.teF = e.target.value; renderSettings(); });
