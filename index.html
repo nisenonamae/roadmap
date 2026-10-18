@@ -98,6 +98,15 @@ details.fold-sec>summary::-webkit-details-marker{display:none}
 details.fold-sec>summary::before{content:"▸";color:var(--sub);transition:transform .15s}
 details.fold-sec[open]>summary::before{transform:rotate(90deg)}
 details.fold-sec>summary h2{margin:0;font-size:1rem}
+.setseg{display:flex;gap:.3rem;overflow-x:auto;scrollbar-width:none;margin:.2rem 0 .6rem;padding-bottom:.2rem}
+.setseg button{flex:none;border:1px solid var(--rule);background:#fff;border-radius:999px;padding:.3rem .8rem;font:inherit;font-size:.88rem;white-space:nowrap;cursor:pointer}
+.setseg button[aria-selected="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+#view-settings.tabbed details.fold-sec{border-top:0}
+#view-settings.tabbed details.fold-sec>summary{display:none}
+.slotset{display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.2rem}
+.slotset button{border:1px solid var(--rule);background:#fff;border-radius:3px;padding:.25rem .8rem;font:inherit;font-size:.9rem;cursor:pointer}
+.slotset button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.te-bar{flex-wrap:wrap}.te-bar select{flex:1 1 7rem;min-width:0}
 .te-bar{display:flex;gap:.4rem;margin:.3rem 0 .6rem}
 .te-bar input{flex:1;min-width:0;padding:.35rem .5rem;border:1px solid var(--rule);border-radius:3px;font:inherit}
 .te-bar select{padding:.3rem;border:1px solid var(--rule);border-radius:3px;font:inherit}
@@ -623,12 +632,16 @@ body.tj-lock{overflow:hidden}
 
   <section class="view" id="view-settings" hidden>
     <header class="head"><h1>設定</h1><div class="date">組み立ての材料</div></header>
+    <div class="setseg" id="setseg" role="tablist"></div>
 
     <details class="sec fold-sec" data-sec="タスク"><summary><h2>タスク</h2></summary>
-      <p class="hint">所要時間・場所・使う器官を入れると、ながらの組み合わせと順番が正確になります。まだ設定していないものが上に並びます。<br>
+      <p class="hint">所要時間・場所・時間帯を入れると、順番が正確になります。ながらは「一緒にやりたいタスク」か「ながらを優先」で決まります。まだ設定していないものが上に並びます。<br>
       「この後に続ける」を指定すると、2つが必ず隣り合います。軽いほうを先に置いて、重いほうへの踏み台にするときに使います。</p>
-      <div class="te-bar"><input id="te-q" type="search" placeholder="名前で探す"><select id="te-f">
-        <option value="">すべて</option><option value="unset">未設定だけ</option><option value="no">ながらにしない</option><option value="pref">ながらを優先</option></select></div>
+      <div class="te-bar"><input id="te-q" type="search" placeholder="名前で探す"><select id="te-f" aria-label="設定の状態で絞る">
+        <option value="">すべて</option><option value="set">設定済みだけ</option><option value="unset">未設定だけ</option><option value="wait">待機中だけ</option><option value="no">ながらにしない</option><option value="pref">ながらを優先</option></select>
+        <select id="te-m" aria-label="省で絞る"><option value="">すべての省</option></select>
+        <select id="te-s" aria-label="時間帯で絞る"><option value="">すべての時間帯</option><option>朝</option><option>昼</option><option>夜</option><option>一日中</option></select>
+        <select id="te-p" aria-label="場所で絞る"><option value="">すべての場所</option></select></div>
       <div id="task-edits"></div>
     </details>
 
@@ -739,7 +752,7 @@ body.tj-lock{overflow:hidden}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-14 r91";
+const APP_VERSION = "2026-10-17 r92";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -1256,7 +1269,7 @@ function buildPlan(tasksDoc, settings, doneLocal, events, nowMin){
     return true;
   }
 
-  // 主タスクに、使う器官が重ならず場所の合うものを同時に重ねる
+  // 主タスクに、組にしたタスクか「ながらを優先」のタスクで、場所の合うものを同時に重ねる
   // 組み合わせの相性(どちらか一方に設定してあれば効く)
   const avoids = (a, b) => a.c.avoid.includes(b.task.name) || b.c.avoid.includes(a.task.name);
   const pairs = (a, b) => a.c.pair.includes(b.task.name) || b.c.pair.includes(a.task.name);
@@ -1275,7 +1288,8 @@ function buildPlan(tasksDoc, settings, doneLocal, events, nowMin){
       if (x.task.done || x.c.fixed || follower(x)) continue;
       if (x.c.min > item.c.min) continue;
       if (!(x.c.place === ANYWHERE || x.c.place === item.c.place)) continue;
-      if (!wanted && x.c.organs.some(o => used.has(o))) continue;   // 自分で決めた組は、器官が重なっていても重ねる
+      // 器官ではなく、自分で決めた組か、どちらかが「ながらを優先」のときだけ重ねる
+      if (!(wanted || item.c.nagara === "pref" || x.c.nagara === "pref")) continue;
       if (!take(x, pool)) continue;
       x.c.organs.forEach(o => used.add(o));
       item.nagara.push(x);
@@ -1332,7 +1346,7 @@ function buildPlan(tasksDoc, settings, doneLocal, events, nowMin){
     const x = { task: t, c: cfgOf(settings, t.name) };
     all.push(x);
     if (!t.done && !x.c.configured && !inFlow.has(t.name)) { loose.push(x); continue; }
-    if (byBlock[t.slot]) byBlock[t.slot].push(x); else flex.push(x);
+    const sl = curSlot(t); if (byBlock[sl]) byBlock[sl].push(x); else flex.push(x);
   }
 
   // 「この後に続ける」で繋いだタスクは、ひとつながりとして動かす。
@@ -2433,6 +2447,15 @@ function lastProgress(days){
 // その日の記録。アプリでつけたものがあれば、取り込んだものより優先する
 function mergedLogFor(id){ return window.TaskEngine.mergedLogFor(state.taskLogs, state.appLogs, id); }
 
+// タスクの今の時間帯(省アプリや設定で今日変えたものも)。引けなければ、朝の一覧の値
+function curSlot(t){ let d = null; try { d = state.taskDefs ? taskByName(t.name) : null; } catch (e) {} return (d && d.def.slot) || t.slot || ""; }
+// 時間帯を変える(タスクの中身として保存する。今日の一覧にもすぐ効かせる)
+async function setTaskSlot(name, slot){
+  const tk = taskByName(name); if (!tk) return false;
+  (state.tasksDoc && state.tasksDoc.tasks || []).forEach(x => { if (x.name === name) x.slot = slot; });
+  await tgSetApply([tk.def.id], { slot });
+  taskCache.key = null; renderSettings(); renderToday(); return true;
+}
 // 行軍表の今日のタブから、名前でタスクを引く(改名前の名前でも引ける)
 function taskByName(name){
   const n = (name || "").trim();
@@ -3635,16 +3658,21 @@ function renderSettings(){
     const isReset = t => t.status === "要再設定";
     const live = sorted.filter(t => !isReset(t));
     const fallen = sorted.filter(isReset);
-    const NAG = [["", "ふつう(器官が空いていれば)"], ["no", "ながらにしない"], ["pref", "ながらを優先"]];
+    const NAG = [["", "ふつう(一緒にやりたいタスクとだけ)"], ["no", "ながらにしない"], ["pref", "ながらを優先(自分より長いタスクに乗せてもらう)"]];
     const allNames = partnerNames();
-    const q = (state.teQ || "").trim().toLowerCase(), f = state.teF || "";
-    const hit = t => { const c = cfgOf(s, t.name);
-      return (!q || t.name.toLowerCase().includes(q)) && (!f || (f === "unset" ? !c.configured : c.nagara === f)); };
+    const q = (state.teQ || "").trim().toLowerCase(), f = state.teF || "", fm = state.teM || "", fs = state.teS || "", fp = state.teP || "";
+    const hit = t => { const c = cfgOf(s, t.name), sl = curSlot(t) || "一日中";
+      const okF = !f || (f === "unset" ? !c.configured : f === "set" ? c.configured : f === "wait" ? !!t.waiting : c.nagara === f);
+      return (!q || t.name.toLowerCase().includes(q)) && okF && (!fm || (t.ministries || []).includes(fm)) && (!fs || sl === fs) && (!fp || (c.configured && c.place === fp)); };
+    // 省と場所の絞り込みの選択肢(今ある値から)
+    const mSel = document.getElementById("te-m"), pSel = document.getElementById("te-p");
+    if (mSel) { const ms = Array.from(new Set(tasks.flatMap(x => x.ministries || []))); mSel.innerHTML = '<option value="">すべての省</option>' + ms.map(m => '<option value="' + esc(m) + '"' + (m === fm ? " selected" : "") + ">" + esc(minName(m)) + "</option>").join(""); }
+    if (pSel) { pSel.innerHTML = '<option value="">すべての場所</option>' + (s.places || []).map(p => '<option' + (p === fp ? " selected" : "") + ">" + esc(p) + "</option>").join(""); }
     const bodies = state._teBodies = new Map();       // カードの中身は、開いたときに作る(閉じたカードは名前の行だけ)
     const card = (t, i) => {
       const c = cfgOf(s, t.name);
       const id = "t" + i;
-      const sum = c.configured ? c.min + "分・" + c.place + "・" + c.organs.join("") + (c.fixed ? "・" + c.fixed : "") + (c.win ? "・" + c.winStart + "〜" + c.winEnd : "") : (t.slot || "時間帯なし");
+      const sum = (curSlot(t) || "一日中") + (c.configured ? "・" + c.min + "分・" + c.place + (c.fixed ? "・" + c.fixed : "") + (c.win ? "・" + c.winStart + "〜" + c.winEnd : "") : "");
       const open = (state.teOpen || new Set()).has(t.name);
       const head = '<details class="task-edit" data-name="' + esc(t.name) + '"' + (open ? " open" : "") + '><summary><span class="tn2">' + nameHtml(t.name) +
           (t.waiting ? '<span class="tbadge wait" title="STAGE・WAVEが進行中になった日から、今日のタブに入ります">待機中</span>' : "") +
@@ -3655,11 +3683,12 @@ function renderSettings(){
         .map(p => '<option' + (p === c.place ? " selected" : "") + ">" + esc(p) + "</option>").join("");
       const modeOpts = MODES.map(([v, l]) => '<option value="' + v + '"' + (v === c.mode ? " selected" : "") + ">" + (l || "なし") + "</option>").join("");
       const prOpts = [-2,-1,0,1,2].map(v => '<option value="' + v + '"' + (v === c.priority ? " selected" : "") + ">" + (v > 0 ? "+" + v : v) + "</option>").join("");
-      const organs = ORGANS.map(o => '<button type="button" aria-pressed="' + (c.organs.includes(o)) + '" data-organ="' + o + '">' + o + "</button>").join("");
+      const sl = curSlot(t) || "一日中", slotBtns = ["朝", "昼", "夜", "一日中"].map(v => '<button type="button" aria-pressed="' + (v === sl) + '" data-slotset="' + v + '">' + v + "</button>").join("");
       const nagOpts = NAG.map(([v, l]) => '<option value="' + v + '"' + (v === c.nagara ? " selected" : "") + ">" + l + "</option>").join("");
       return '<div class="te-body">' +
         "<h4>基本</h4>" +
-        '<div class="grid2">' +
+        '<div class="f"><label>時間帯(押すとすぐ保存)</label><div class="slotset" role="group" aria-label="時間帯">' + slotBtns + "</div></div>" +
+        '<div class="grid2" style="margin-top:.4rem">' +
           '<div class="f"><label for="' + id + 'm">所要(分)</label><input id="' + id + 'm" data-k="min" type="number" min="1" step="1" value="' + c.min + '"></div>' +
           '<div class="f"><label for="' + id + 'p">場所</label><select id="' + id + 'p" data-k="place">' + opts + "</select></div>" +
           '<div class="f"><label for="' + id + 'f">固定の時刻</label><input id="' + id + 'f" data-k="fixed" type="time" value="' + esc(c.fixed) + '"></div>' +
@@ -3677,7 +3706,6 @@ function renderSettings(){
         "<h4>ながら</h4>" +
         '<div class="f"><label for="' + id + 'n">ながらの扱い(どのタスクとも)</label><select id="' + id + 'n" data-k="nagara">' + nagOpts + "</select></div>" +
         pairPicker(t.name, "pair", "一緒にやりたいタスク", allNames) + pairPicker(t.name, "avoid", "一緒にしないタスク", allNames) +
-        '<div class="organs" role="group" aria-label="使う器官">' + organs + "</div>" +
         "</div>";
       };
       bodies.set(t.name, body);
@@ -4818,16 +4846,30 @@ function bind(){
   }, true);
   document.getElementById("te-q").addEventListener("input", e => { state.teQ = e.target.value; renderSettings(); });
   document.getElementById("te-f").addEventListener("change", e => { state.teF = e.target.value; renderSettings(); });
-  // 各欄の開閉を覚えておく
+  document.getElementById("te-m").addEventListener("change", e => { state.teM = e.target.value; renderSettings(); });
+  document.getElementById("te-s").addEventListener("change", e => { state.teS = e.target.value; renderSettings(); });
+  document.getElementById("te-p").addEventListener("change", e => { state.teP = e.target.value; renderSettings(); });
+  // 設定の欄は、上の横並びの切り替えで1つずつ出す(最後に開いていた欄を覚えておく)
+  const SEG_KEY = "roadmap-setseg", secs = Array.from(document.querySelectorAll("#view-settings details.fold-sec"));
+  const showSec = name => { secs.forEach(d => { const on = d.dataset.sec === name; d.hidden = !on; if (on) d.open = true; });
+    document.querySelectorAll("#setseg button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.seg === name))); lsSet(SEG_KEY, name); };
+  document.getElementById("view-settings").classList.add("tabbed");
+  document.getElementById("setseg").innerHTML = secs.map(d => '<button type="button" role="tab" data-seg="' + esc(d.dataset.sec) + '">' + esc(d.dataset.sec) + "</button>").join("");
+  document.getElementById("setseg").addEventListener("click", e => { const b = e.target.closest("[data-seg]"); if (b) showSec(b.dataset.seg); });
+  showSec(secs.some(d => d.dataset.sec === lsGet(SEG_KEY, "")) ? lsGet(SEG_KEY, "") : "タスク");
+  // 各欄の開閉を覚えておく(切り替えの形では使わない)
   const SEC_KEY = "roadmap-secs";
   const secOpen = lsGet(SEC_KEY, { "タスク": true });
   document.querySelectorAll("details.fold-sec").forEach(d => {
+    if (document.getElementById("view-settings").classList.contains("tabbed")) return;
     d.open = !!secOpen[d.dataset.sec];
     d.addEventListener("toggle", () => { const v = lsGet(SEC_KEY, {}); v[d.dataset.sec] = d.open; lsSet(SEC_KEY, v); });
   });
   edits.addEventListener("click", e => {
     const rm = e.target.closest("[data-rm-list]");
     if (rm) { const row = rm.closest(".task-edit"), name = row.dataset.name; setPairRule(name, rm.dataset.rmName, rm.dataset.rmList, false); markDirty(); renderSettings(); afterPairEdit(name, "外しました"); return; }
+    const sb = e.target.closest("[data-slotset]");
+    if (sb) { const row = sb.closest(".task-edit"); setTaskSlot(row.dataset.name, sb.dataset.slotset).then(ok => { const st = document.getElementById("save-status"); if (ok && st) { st.classList.remove("err"); st.textContent = row.dataset.name + " の時間帯を「" + sb.dataset.slotset + "」にしました"; } }); return; }
     const b = e.target.closest("[data-organ]"); if (!b) return;
     const row = b.closest(".task-edit");
     const t = ensureTask(row.dataset.name);
