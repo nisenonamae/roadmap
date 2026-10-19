@@ -113,7 +113,9 @@ details.fold-sec>summary h2{margin:0;font-size:1rem}
 .av-box>summary{cursor:pointer;font-size:.86rem;color:var(--sub);padding:.1rem 0}.av-box>summary b{color:var(--ink)}.av-wait{color:#b3283c;font-weight:700}
 .av-row{display:flex;align-items:center;gap:.4rem;padding:.25rem 0;border-top:1px dashed var(--rule);font-size:.88rem}
 .av-nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.av-y{flex:none;font-style:normal;font-size:.68rem;color:#fff;background:#b3283c;border-radius:3px;padding:0 .25rem}
-.av-tm{font-size:.72rem;color:var(--sub);white-space:nowrap}.av-pills{display:flex;gap:.2rem}
+.av-tm{font-size:.72rem;color:var(--sub);white-space:nowrap}.av-pills{display:flex;gap:.15rem;align-items:flex-start}
+.av-pw{display:flex;flex-direction:column;align-items:center;min-width:2.1rem}.av-pt{font-size:.6rem;line-height:1.1;color:var(--sub);margin-top:.1rem;white-space:nowrap}.av-pt.now{color:#2f4f8a;font-weight:700}
+.av-nowseg{color:#2f4f8a;font-weight:600}
 .av-pill{width:1.55rem;height:1.55rem;border-radius:50%;border:1.5px solid var(--rule);background:#fff;font:inherit;font-size:.8rem;line-height:1;padding:0;cursor:pointer;color:#fff}
 .av-pill.ok{background:#2f7a4f;border-color:#2f7a4f}.av-pill.ng{background:#b3283c;border-color:#b3283c}.av-pill.due{border-color:#b3283c;border-style:dashed}.av-pill.now{border-color:#2f4f8a}
 .av-urge-b{border:1px solid var(--rule);background:#fff;border-radius:999px;padding:.1rem .45rem;font:inherit;font-size:.82rem;cursor:pointer}.av-urge-b b{margin-left:.15rem;font-size:.75rem}
@@ -784,7 +786,7 @@ body.tj-lock{overflow:hidden}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-18 r100";
+const APP_VERSION = "2026-10-18 r101";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -1702,20 +1704,21 @@ function avSegs(c){
 function avoidHtml(plan, date){
   const xs = plan.nodo || []; if (!xs.length) return "";
   const nowM = nowMinutes(), y = addDays(date, -1);
-  let kept = 0, all = 0, wait = 0, rows = "";
+  let kept = 0, all = 0, wait = 0, rows = "", nowSeg = "";
+  const hm = m => { m = ((m % 1440) + 1440) % 1440; const h = Math.floor(m / 60), mi = m % 60; return mi ? h + ":" + String(mi).padStart(2, "0") : String(h); };
   for (const x of xs) {
     const tk = taskByName(x.task.name), id = tk ? tk.def.id : x.task.name, av = avRec(date, id).av || {}, segs = avSegs(x.c), marks = av.segs || [];
     const yv = tk && (tk.days || []).find(d => d.date === y), yBroke = yv && yv.ratio !== null && yv.ratio !== undefined && yv.ratio < 1;
     const ds = toMin((state.settings.dayStart) || "04:00") || 240, nm = nowM < ds ? nowM + 1440 : nowM;   // 一日の始めより前(夜中)は、前の日の続きとして比べる
     const pills = segs.map((g, i) => { const m = marks[i] ?? null, past = nm >= g.e, cur = nm >= g.s && nm < g.e;
-      all++; if (m === true) kept++; if (m === null && past) wait++;
-      return '<button type="button" class="av-pill' + (m === true ? " ok" : m === false ? " ng" : past ? " due" : cur ? " now" : "") + '" data-av-cyc="' + esc(id) + ":" + i + '" title="' + esc(fmt(g.s % 1440) + "〜" + fmt(g.e % 1440)) + "(押すたびに 未→守れた→破った)" + '">' + (m === true ? "✓" : m === false ? "✗" : "") + "</button>"; }).join("");
+      all++; if (m === true) kept++; if (m === null && past) wait++; if (cur && !nowSeg) nowSeg = fmt(g.s % 1440) + "〜" + (g.e % 1440 === 0 ? "24:00" : fmt(g.e % 1440)) + (xs.length > 1 ? "(" + x.task.name + ")" : "");
+      return '<span class="av-pw"><button type="button" class="av-pill' + (m === true ? " ok" : m === false ? " ng" : past ? " due" : cur ? " now" : "") + '" data-av-cyc="' + esc(id) + ":" + i + '" title="' + esc(fmt(g.s % 1440) + "〜" + fmt(g.e % 1440)) + "(押すたびに 未→守れた→破った)" + '">' + (m === true ? "✓" : m === false ? "✗" : "") + '</button><small class="av-pt' + (cur ? " now" : "") + '">' + esc(hm(g.s) + "–" + (g.e % 1440 === 0 ? "24" : hm(g.e))) + "</small></span>"; }).join("");
     rows += '<div class="av-row" data-av-id="' + esc(id) + '"><span class="av-nm">' + nameHtml(x.task.name) + '</span>' + (yBroke ? '<i class="av-y" title="昨日は破った。今日は必ず守る日">昨日✗</i>' : "") +
-      '<span class="av-tm">' + esc(avLabel(x.c)) + '</span><span class="av-pills">' + pills + '</span>' +
+      (segs.length > 1 ? "" : '<span class="av-tm">' + esc(avLabel(x.c)) + "</span>") + '<span class="av-pills" title="' + esc(avLabel(x.c)) + '">' + pills + '</span>' +
       '<button type="button" class="av-urge-b" data-av-urge="' + esc(id) + '" title="やりたくなった(代わりにやることを出す)">✋' + (av.urges ? "<b>" + av.urges + "</b>" : "") + "</button></div>";
   }
   const open = state.avOpen != null ? state.avOpen : wait > 0;
-  return '<details class="av-box" data-av-box' + (open ? " open" : "") + '><summary><b>しないこと</b> ' + xs.length + "件 ・ 守れた " + kept + "/" + all + (wait ? ' ・ <span class="av-wait">チェック待ち ' + wait + "</span>" : "") + "</summary>" + rows + "</details>";
+  return '<details class="av-box" data-av-box' + (open ? " open" : "") + '><summary><b>しないこと</b> ' + xs.length + "件 ・ 守れた " + kept + "/" + all + (nowSeg ? ' ・ <span class="av-nowseg">いま ' + esc(nowSeg) + "</span>" : "") + (wait ? ' ・ <span class="av-wait">チェック待ち ' + wait + "</span>" : "") + "</summary>" + rows + "</details>";
 }
 async function avSet(date, id, i, val, nSeg){
   const rec = avRec(date, id), av = Object.assign({ segs: [], urges: 0 }, rec.av || {}), segs = Array.from({ length: nSeg }, (_, k) => (av.segs || [])[k] ?? null);
