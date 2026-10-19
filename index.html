@@ -109,7 +109,14 @@ details.fold-sec>summary h2{margin:0;font-size:1rem}
 .te-bar{flex-wrap:wrap}.te-bar select{flex:1 1 7rem;min-width:0}
 .next-bar{display:flex;gap:.3rem;margin:.2rem 0 .25rem}
 .avbox{margin-top:.5rem;padding:.4rem .5rem;border:1px dashed var(--rule);border-radius:5px}.avchk{display:flex;gap:.4rem;align-items:center;font-weight:600;font-size:.9rem}
-.av-box{border:1px solid var(--rule);border-radius:6px;padding:.5rem .7rem;margin:0 0 .8rem;background:#fff}
+.av-box{border:1px solid var(--rule);border-radius:6px;padding:.3rem .6rem;margin:0 0 .6rem;background:#fff}
+.av-box>summary{cursor:pointer;font-size:.86rem;color:var(--sub);padding:.1rem 0}.av-box>summary b{color:var(--ink)}.av-wait{color:#b3283c;font-weight:700}
+.av-row{display:flex;align-items:center;gap:.4rem;padding:.25rem 0;border-top:1px dashed var(--rule);font-size:.88rem}
+.av-nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.av-y{flex:none;font-style:normal;font-size:.68rem;color:#fff;background:#b3283c;border-radius:3px;padding:0 .25rem}
+.av-tm{font-size:.72rem;color:var(--sub);white-space:nowrap}.av-pills{display:flex;gap:.2rem}
+.av-pill{width:1.55rem;height:1.55rem;border-radius:50%;border:1.5px solid var(--rule);background:#fff;font:inherit;font-size:.8rem;line-height:1;padding:0;cursor:pointer;color:#fff}
+.av-pill.ok{background:#2f7a4f;border-color:#2f7a4f}.av-pill.ng{background:#b3283c;border-color:#b3283c}.av-pill.due{border-color:#b3283c;border-style:dashed}.av-pill.now{border-color:#2f4f8a}
+.av-urge-b{border:1px solid var(--rule);background:#fff;border-radius:999px;padding:.1rem .45rem;font:inherit;font-size:.82rem;cursor:pointer}.av-urge-b b{margin-left:.15rem;font-size:.75rem}
 .av-g{padding:.4rem 0;border-top:1px dashed var(--rule)}.av-g:first-of-type{border-top:0}
 .av-warn{margin:.2rem 0;font-size:.85rem;font-weight:700;color:#b3283c}
 .av-segs{display:flex;flex-direction:column;gap:.25rem;margin-top:.3rem}
@@ -777,7 +784,7 @@ body.tj-lock{overflow:hidden}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-18 r99";
+const APP_VERSION = "2026-10-18 r100";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -1695,25 +1702,24 @@ function avSegs(c){
 function avoidHtml(plan, date){
   const xs = plan.nodo || []; if (!xs.length) return "";
   const nowM = nowMinutes(), y = addDays(date, -1);
-  let h = '<div class="av-box"><h3 class="trig-h">しないこと</h3>';
+  let kept = 0, all = 0, wait = 0, rows = "";
   for (const x of xs) {
-    const tk = taskByName(x.task.name), id = tk ? tk.def.id : x.task.name, rec = avRec(date, id), av = rec.av || {}, segs = avSegs(x.c), marks = av.segs || [];
-    const win = segs[0].s, wend = segs[segs.length - 1].e, nm = nowM < win ? nowM + 1440 : nowM;
-    const phase = nm < win ? "これから" : nm < wend ? "守っている最中" : "時間帯は終わった。チェックしよう";
+    const tk = taskByName(x.task.name), id = tk ? tk.def.id : x.task.name, av = avRec(date, id).av || {}, segs = avSegs(x.c), marks = av.segs || [];
     const yv = tk && (tk.days || []).find(d => d.date === y), yBroke = yv && yv.ratio !== null && yv.ratio !== undefined && yv.ratio < 1;
-    h += '<div class="av-g" data-av-id="' + esc(id) + '"><div class="trig-top"><b>' + nameHtml(x.task.name) + '</b><span class="trig-at">' + esc(avLabel(x.c)) + " ・ " + esc(phase) + "</span></div>" +
-      (yBroke ? '<p class="av-warn">昨日は破った。今日は必ず守る日</p>' : "") +
-      '<div class="av-segs">' + segs.map((g, i) => { const m = marks[i];
-        return '<div class="av-seg' + (m === true ? " ok" : m === false ? " ng" : "") + '"><span>' + (segs.length > 1 ? esc(fmt(g.s % 1440) + "〜" + fmt(g.e % 1440)) : "今日") + "</span>" +
-          '<button type="button" data-av-mark="' + esc(id) + ":" + i + ':1" aria-pressed="' + (m === true) + '">守れた</button><button type="button" data-av-mark="' + esc(id) + ":" + i + ':0" aria-pressed="' + (m === false) + '">破った</button></div>'; }).join("") + "</div>" +
-      '<div class="av-urge"><button type="button" class="btn sm ghost" data-av-urge="' + esc(id) + '">やりたくなった</button><span>こらえた ' + (av.urges || 0) + "回</span>" +
-        (state.avShow === id && x.c.instead ? '<b class="av-inst">代わりに:' + esc(x.c.instead) + "</b>" : "") + "</div></div>";
+    const ds = toMin((state.settings.dayStart) || "04:00") || 240, nm = nowM < ds ? nowM + 1440 : nowM;   // 一日の始めより前(夜中)は、前の日の続きとして比べる
+    const pills = segs.map((g, i) => { const m = marks[i] ?? null, past = nm >= g.e, cur = nm >= g.s && nm < g.e;
+      all++; if (m === true) kept++; if (m === null && past) wait++;
+      return '<button type="button" class="av-pill' + (m === true ? " ok" : m === false ? " ng" : past ? " due" : cur ? " now" : "") + '" data-av-cyc="' + esc(id) + ":" + i + '" title="' + esc(fmt(g.s % 1440) + "〜" + fmt(g.e % 1440)) + "(押すたびに 未→守れた→破った)" + '">' + (m === true ? "✓" : m === false ? "✗" : "") + "</button>"; }).join("");
+    rows += '<div class="av-row" data-av-id="' + esc(id) + '"><span class="av-nm">' + nameHtml(x.task.name) + '</span>' + (yBroke ? '<i class="av-y" title="昨日は破った。今日は必ず守る日">昨日✗</i>' : "") +
+      '<span class="av-tm">' + esc(avLabel(x.c)) + '</span><span class="av-pills">' + pills + '</span>' +
+      '<button type="button" class="av-urge-b" data-av-urge="' + esc(id) + '" title="やりたくなった(代わりにやることを出す)">✋' + (av.urges ? "<b>" + av.urges + "</b>" : "") + "</button></div>";
   }
-  return h + "</div>";
+  const open = state.avOpen != null ? state.avOpen : wait > 0;
+  return '<details class="av-box" data-av-box' + (open ? " open" : "") + '><summary><b>しないこと</b> ' + xs.length + "件 ・ 守れた " + kept + "/" + all + (wait ? ' ・ <span class="av-wait">チェック待ち ' + wait + "</span>" : "") + "</summary>" + rows + "</details>";
 }
-async function avMark(date, id, i, val, nSeg){
+async function avSet(date, id, i, val, nSeg){
   const rec = avRec(date, id), av = Object.assign({ segs: [], urges: 0 }, rec.av || {}), segs = Array.from({ length: nSeg }, (_, k) => (av.segs || [])[k] ?? null);
-  segs[i] = segs[i] === val ? null : val;                     // 同じ方をもう一度押すと、付けていない状態に戻る
+  segs[i] = val;
   av.segs = segs;
   const marked = segs.filter(v => v !== null).length, kept = segs.filter(v => v === true).length;
   const patch = { av, ratio: marked ? Math.round(kept / nSeg * 10000) / 100 : null, check: marked && kept === nSeg ? "完了" : null };
@@ -1871,6 +1877,7 @@ function renderToday(){
   state._planAvoid = plan.nodo || [];
   html = avoidHtml(plan, doc.date) + trigHtml(plan, doc.date) + html;
   planEl.innerHTML = html;
+  const avb = planEl.querySelector("[data-av-box]"); if (avb) avb.addEventListener("toggle", () => { state.avOpen = avb.open; });
   planEl.querySelectorAll("details[data-more-lazy]").forEach(dt => dt.addEventListener("toggle", () => {
     const ul = dt.querySelector("ul.list"); if (!dt.open || ul.childElementCount) return;
     const arr = (state._moreLists || [])[+dt.dataset.moreLazy] || [];
@@ -4424,12 +4431,17 @@ function bind(){
   document.getElementById("plan").addEventListener("click", e => {
     if (replanBox(e)) return;
     const tjb = e.target.closest("[data-tjopen]"); if (tjb) { openTejun(tjb.dataset.tjopen); return; }
-    const avm = e.target.closest("[data-av-mark]");
-    if (avm) { const [id, i, v] = avm.dataset.avMark.split(":"), date = (state.tasksDoc || {}).date || taskDay(), x = ((lastPlanAvoid() || []).find(z => { const tk = taskByName(z.task.name); return (tk ? tk.def.id : z.task.name) === id; }));
-      avMark(date, id, +i, v === "1", x ? avSegs(x.c).length : 1); return; }
+    const avc = e.target.closest("[data-av-cyc]");
+    if (avc) { const [id, i] = avc.dataset.avCyc.split(":"), date = (state.tasksDoc || {}).date || taskDay(), x = lastPlanAvoid().find(z => { const tk = taskByName(z.task.name); return (tk ? tk.def.id : z.task.name) === id; });
+      const n = x ? avSegs(x.c).length : 1, cur = ((avRec(date, id).av || {}).segs || [])[+i] ?? null, next = cur === null ? true : cur === true ? false : null;
+      state.avOpen = true; avSet(date, id, +i, next, n); return; }
     const avu = e.target.closest("[data-av-urge]");
     if (avu) { const id = avu.dataset.avUrge, date = (state.tasksDoc || {}).date || taskDay(), rec = avRec(date, id), av = Object.assign({ segs: [], urges: 0 }, rec.av || {});
-      av.urges = (av.urges || 0) + 1; state.avShow = id; commitAppLog(date, () => setAppRecord(date, id, { av })); return; }
+      const x = lastPlanAvoid().find(z => { const tk = taskByName(z.task.name); return (tk ? tk.def.id : z.task.name) === id; });
+      av.urges = (av.urges || 0) + 1; state.avOpen = true; commitAppLog(date, () => setAppRecord(date, id, { av }));
+      showToast("こらえた " + av.urges + "回目。" + (x && x.c.instead ? "代わりに:" + x.c.instead : "代わりにやることは、設定で決められます"), () => {
+        const a2 = Object.assign({}, avRec(date, id).av || {}); a2.urges = Math.max(0, (a2.urges || 1) - 1); commitAppLog(date, () => setAppRecord(date, id, { av: a2 })); });
+      return; }
     const ttb = e.target.closest("[data-tt-set]"); if (ttb) { askDayTime([ttb.dataset.ttSet]); return; }
     const dn = e.target.closest("[data-done]"); if (dn) { const ws = timedByIt(dn.dataset.done); if (ws.length) setTimeout(() => askDayTime(ws), 50); }
     const tf = e.target.closest("[data-trig-fire], [data-trig-reset]");
