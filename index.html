@@ -108,6 +108,14 @@ details.fold-sec>summary h2{margin:0;font-size:1rem}
 .slotset button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
 .te-bar{flex-wrap:wrap}.te-bar select{flex:1 1 7rem;min-width:0}
 .next-bar{display:flex;gap:.3rem;margin:.2rem 0 .25rem}
+.ksl{margin-top:.5rem}
+.sc-n{font-size:.8rem;color:var(--sub);margin:.3rem 0}
+.sc-r{display:flex;gap:.4rem;align-items:flex-start;padding:.25rem 0;border-top:1px dashed var(--rule)}.sc-l{flex:0 0 3.2rem;font-size:.78rem;color:var(--sub);padding-top:.15rem}
+.sc-cs{display:flex;flex-wrap:wrap;gap:.25rem}.sc-c{border:1px solid var(--rule);background:#fff;border-radius:12px;padding:.05rem .55rem;font:inherit;font-size:.8rem;cursor:pointer}
+.sc-c[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.sc-add{display:flex;gap:.35rem;margin:.35rem 0 .1rem}.sc-add input{flex:1;min-width:0;border:1px solid var(--rule);border-radius:4px;padding:.2rem .4rem;font:inherit;font-size:.82rem}
+.sc-miss{margin-top:.4rem;padding-top:.3rem;border-top:1px solid var(--rule)}.sc-miss b{font-size:.8rem}
+.sc-m{display:flex;align-items:center;gap:.4rem;padding:.2rem 0;font-size:.84rem}.sc-m span{flex:1;min-width:0}.sc-m select{max-width:55%;font:inherit;font-size:.8rem}
 .avbox{margin-top:.5rem;padding:.4rem .5rem;border:1px dashed var(--rule);border-radius:5px}.avchk{display:flex;gap:.4rem;align-items:center;font-weight:600;font-size:.9rem}
 .av-box{border:1px solid var(--rule);border-radius:6px;padding:.3rem .6rem;margin:0 0 .6rem;background:#fff}
 .av-box>summary{cursor:pointer;font-size:.86rem;color:var(--sub);padding:.1rem 0}.av-box>summary b{color:var(--ink)}.av-wait{color:#b3283c;font-weight:700}
@@ -786,7 +794,7 @@ body.tj-lock{overflow:hidden}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-18 r101";
+const APP_VERSION = "2026-10-20 r105";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -802,6 +810,10 @@ const SHIAN_PATH = "roadmap/shian/notes.json";
 const MINS_PATH = "roadmap/gov/ministries.json";
 const LENS_PATH = "roadmap/apps/lens/data.json";     // レンズ:今なっている人物(見るだけ)     // 省の名前(省アプリで直したもの)。画面にはタグではなく名前を出す
 const KENSEI_DATA = "roadmap/apps/kenseiin/data.json", KENSEI_CONS = "roadmap/apps/kenseiin/constitution.json";   // 憲政院(守る場面が来た制度を出す)     // 思案のリマインダー(「行軍表にも出す」を付けたもの)       // 参謀本部(作戦期・目標・緊急会議)。省アプリで決める   // 切り替え済みの印。あればNotionのタスク表はもう使っていない          // アプリでつけた記録。取り込みでは上書きされない
+const SECURITY_PATH = "roadmap/gov/security.json";      // 安全保障:脅威の台帳と、毎日の偵察・崩れの記録(行軍表が書く)
+const GOVERNANCE_PATH = "roadmap/gov/governance.json";  // 統治の計算の結果(行軍表が書き、国力年報が読む)
+const PRESTIGE_PATH = "roadmap/gov/prestige.json";      // 威信の計算の結果(行軍表が書き、国力年報が読む)
+const AMB_PATH = "roadmap/gov/ambition.json", TIDE_PATH = "roadmap/gov/tide.json";   // 偉業と気持ちの記録(省アプリが書く。行軍表は読むだけ)
 const TEJUN_PATH = "roadmap/apps/tejunroku/data.json";   // 手順録の定義(手順書・範囲・部品・サイクル・結びつき)。手順録が書き、行軍表は読むだけ
 const TEJUN_RUNS = "roadmap/apps/tejunroku/runs";        // 手順の実行の記録。範囲の今の位置を出すのに使う
 const TEJUN_APP = "https://nisenonamae.github.io/tejunroku/";
@@ -1119,6 +1131,7 @@ function cfgOf(settings, name){
     winStart: s.winStart || "", winEnd: s.winEnd || "",
     trigger: String(s.trigger || "").trim(),   // きっかけ(これが起きたらやる)。付けたタスクは時刻表に置かない
     timeBy: String(s.timeBy || "").trim(),     // 時刻は、このタスクで決める(その日に決めた時刻だけで置く)
+    keystone: !!s.keystone,                    // 要石:終わっていないと、ほかのタスクにも影が落ちるタスク(統治の安寧で使う)
     nodo: !!s.nodo,                            // しないタスク(「〇〇をしない」)。時刻表には置かず、区切りごとに自分でチェックする
     instead: String(s.instead || "").trim(), avStart: s.avStart || "", avEnd: s.avEnd || "", avSeg: Math.max(1, Math.min(4, +s.avSeg || 1)),
     configured: configured,
@@ -1664,6 +1677,7 @@ const KEY_REPLAN = "roadmap-replan", KEY_DOING = "roadmap-doing", KEY_TRIG = "ro
 // その日だけの時刻:settings.dayTimes[日付][タスク名] = { start, min }。設定と一緒に保存し、7日より前は消す
 function dayTimeOf(date, name){ return (((state.settings.dayTimes || {})[date]) || {})[name] || null; }
 async function setDayTime(date, name, start, min){
+  scheduleGov(5000);
   const s = state.settings; s.dayTimes = s.dayTimes || {};
   const keepFrom = addDays(taskDay(), -7); Object.keys(s.dayTimes).forEach(d => { if (d < keepFrom) delete s.dayTimes[d]; });
   (s.dayTimes[date] = s.dayTimes[date] || {})[name] = { start, min: Math.max(1, +min || 1) };
@@ -1727,6 +1741,181 @@ async function avSet(date, id, i, val, nSeg){
   const marked = segs.filter(v => v !== null).length, kept = segs.filter(v => v === true).length;
   const patch = { av, ratio: marked ? Math.round(kept / nSeg * 10000) / 100 : null, check: marked && kept === nSeg ? "完了" : null };
   await commitAppLog(date, () => setAppRecord(date, id, patch));
+}
+/* ───── 安全保障:偵察と崩れの記録 ─────
+   偵察:今日「来そう」な脅威と、実際に「来た」脅威を押して付ける。崩れの記録:昨日できなかったタスクに「何が邪魔した?」を付ける(付けた脅威は「来た」になる) */
+async function saveSecurity(mutate){
+  const sc = state.security = state.security || { version: 1, threats: [], days: {} }; mutate(sc); renderToday();
+  for (let i = 0; i < 3; i++) {
+    try { state.securitySha = await writeJson(SECURITY_PATH, sc, state.securitySha); scheduleGov(4000); return true; }
+    catch (e) { if ((e.status === 409 || e.status === 422) && i < 2) { const r = await readJson(SECURITY_PATH); state.security = Object.assign({ version: 1, threats: [], days: {} }, r.data || {}); state.securitySha = r.sha; mutate(state.security); continue; } showToast("偵察の記録を保存できませんでした"); return false; }
+  }
+}
+function secDay(d){ const sc = state.security || { days: {} }; return (sc.days || {})[d] || { scout: [], came: [], hits: [] }; }
+function scoutHtml(date){
+  const sc = state.security || { threats: [] }, threats = (sc.threats || []).filter(x => !x.deleted), dd = secDay(date), y = addDays(date, -1);
+  const misses = taskStates().filter(t => !t.waiting).map(t => ({ t, r: (t.rep.days || []).find(x => x.date === y) })).filter(x => x.r && x.r.ratio != null && x.r.ratio < 1);
+  const yd = secDay(y), hitOf = n => (yd.hits || []).find(h => h.task === n);
+  const open = state.scoutOpen != null ? state.scoutOpen : (!dd.scout.length && threats.length > 0) || misses.some(m => !hitOf(m.t.def.name));
+  const chip = (id, list, attr) => '<button type="button" class="sc-c" data-' + attr + '="' + esc(id) + '" aria-pressed="' + (list || []).includes(id) + '">' + esc((threats.find(x => x.id === id) || { name: id }).name) + "</button>";
+  let h = '<details class="av-box sc-box" data-sc-box' + (open ? " open" : "") + '><summary><b>偵察</b> 来そう ' + dd.scout.length + " ・ 来た " + dd.came.length + (misses.length ? ' ・ <span class="av-wait">昨日の崩れ ' + misses.filter(m => !hitOf(m.t.def.name)).length + "</span>" : "") + "</summary>";
+  if (!threats.length) h += '<p class="sc-n">脅威の台帳がまだ空です。下で足すと、毎朝ここで「来そう」「来た」を押せます。</p>';
+  else h += '<div class="sc-r"><span class="sc-l">来そう</span><span class="sc-cs">' + threats.map(x => chip(x.id, dd.scout, "sc-scout")).join("") + '</span></div><div class="sc-r"><span class="sc-l">来た</span><span class="sc-cs">' + threats.map(x => chip(x.id, dd.came, "sc-came")).join("") + "</span></div>";
+  h += '<div class="sc-add"><input id="sc-new" placeholder="脅威を足す(例:家族がうるさい)"><button type="button" class="btn sm ghost" data-sc-add>足す</button></div>';
+  if (misses.length) h += '<div class="sc-miss"><b>昨日できなかったタスク:何が邪魔した?</b>' + misses.map(m => { const n = m.t.def.name, hv = hitOf(n);
+      return '<div class="sc-m"><span>' + nameHtml(n) + '</span><select data-sc-hit="' + esc(n) + '"><option value="">—</option>' + threats.map(x => '<option value="' + esc(x.id) + '"' + (hv && hv.threat === x.id ? " selected" : "") + ">" + esc(x.name) + "</option>").join("") + '<option value="none"' + (hv && hv.threat === "none" ? " selected" : "") + ">脅威ではない</option></select></div>"; }).join("") + "</div>";
+  return h + "</details>";
+}
+
+/* ───── 統治:場面ごとに、株価のように値が動く(上限100) ─────
+   ○なら 値 + (100 − 値) × 割合、×なら 値 − 値 × 割合。割合 = そのタスクの重み ÷ 全タスクの重み。
+   要素・防復・安寧・統治が、それぞれ同じ場面から別々に動く。計算は昨日までの記録で行い、結果を governance.json に書き出す(国力年報が読む) */
+const GOV_EL = { "防復": ["被害を抑える", "初動", "修復", "補填"], "安寧": ["継続", "立ち直り", "取り戻し", "要石", "先回り"] };
+function computeGovernance(){
+  const E = window.TaskEngine, today = taskDay(), last = addDays(today, -1), ts = taskStates().filter(t => t.def && t.rep);
+  if (!ts.length) return null;
+  const W = {}, tags = {}; ts.forEach(t => { W[t.def.id] = Math.max(0.1, +t.def.weight || 1); tags[t.def.id] = t.def.ministries || []; });
+  const totalW = Object.values(W).reduce((a, b) => a + b, 0) || 1, share = id => (W[id] || 1) / totalW;
+  const rows = {}; let first = last; ts.forEach(t => { const m = {}; (t.rep.days || []).forEach(r => { m[r.date] = r; if (r.date < first) first = r.date; }); rows[t.def.id] = m; });
+  const keys = ["統治", "防復", "安寧"].concat(GOV_EL["防復"], GOV_EL["安寧"]), val = {}, series = {}, scenes = [];
+  keys.forEach(k => { val[k] = null; series[k] = []; });
+  // 何も分かっていないうちは五分五分(50%)から始める
+  const move = (k, ok, r) => { if (val[k] == null) val[k] = 50; val[k] = ok ? val[k] + (100 - val[k]) * r : val[k] - val[k] * r; };
+  const scene = (d, el, ok, r, what) => { const grp = GOV_EL["防復"].includes(el) ? "防復" : "安寧"; r = Math.max(0, Math.min(0.999, r)); move(el, ok, r); move(grp, ok, r); move("統治", ok, r); scenes.push({ d, el, ok, what }); };
+  // ALERT(省アプリのページ)
+  const pages = ((state.pagesDoc && state.pagesDoc.pages) || []);
+  const alerts = pages.filter(p => p.kind === "ALERT" && !p.deleted).map(p => {
+    const log = (p.statusLog || []), start = (log.find(x => x.status === "発生") || log[0] || { date: p.detected || p.created }).date || p.created;
+    const end = (log.find(x => ["収束", "失敗"].includes(x.status) && x.date >= start) || { date: null }).date || today;
+    const targets = (Array.isArray(p.targets) && p.targets.length ? p.targets : (p.target ? [p.target] : []));
+    const acts = p.actions || [], firstAct = acts.map(a => a.doneAt).filter(Boolean).sort()[0] || null;
+    return { id: p.id, label: (p.label || "ALERT") + (p.title ? " " + p.title : ""), from: start, to: end, targets, firstAct, acts };
+  }).filter(a => a.from);
+  const tasksOf = tg => ts.filter(t => (t.def.ministries || []).some(m => tg.includes(m)));
+  const sc = state.security || { days: {}, threats: [] }, tname = id => ((sc.threats || []).find(x => x.id === id) || { name: id }).name;
+  const prev = {}, deficit = {}, missRun = {}, fallen = {}, dates = [];
+  for (let d = first; d <= last; d = addDays(d, 1)) {
+    dates.push(d);
+    const act = alerts.filter(a => a.from <= d && d <= a.to);
+    alerts.filter(a => a.from === d).forEach(a => scene(d, "初動", a.firstAct === d, tasksOf(a.targets).reduce((x, t) => x + share(t.def.id), 0) || 0.1, a.label));
+    ts.forEach(t => {
+      const id = t.def.id, r = rows[id][d]; if (!r || r.ratio === null || r.ratio === undefined) return;
+      const ratio = +r.ratio, ok = ratio >= 1, w = share(id), name = t.def.name;
+      if (prev[id] === true) scene(d, "継続", ok, w, name); else if (prev[id] === false) scene(d, "立ち直り", ok, w, name);
+      if (ratio < 1) { if (deficit[id] > 0) scene(d, "取り戻し", false, w, name); deficit[id] = 1 - ratio; }
+      else if (ratio > 1 && deficit[id] > 0) { deficit[id] -= ratio - 1; if (deficit[id] <= 1e-9) { scene(d, "取り戻し", true, w, name); deficit[id] = 0; } }
+      if (cfgOf(state.settings, name).keystone) scene(d, "要石", ok, w, name);
+      const hit = act.find(a => (t.def.ministries || []).some(m => a.targets.includes(m)));
+      if (hit) { scene(d, "被害を抑える", ok, w, name); missRun[id] = ok ? 0 : (missRun[id] || 0) + 1; if (missRun[id] === 3) fallen[id] = hit.id; }
+      if (ok && fallen[id]) { scene(d, "修復", true, w, name); delete fallen[id]; }
+      prev[id] = ok;
+    });
+    alerts.filter(a => a.to === d && a.to !== today).forEach(a => Object.keys(fallen).filter(id => fallen[id] === a.id).forEach(id => { scene(d, "修復", false, share(id), (ts.find(t => t.def.id === id) || { def: { name: id } }).def.name); delete fallen[id]; }));
+    // 補填:ALERTの対応(期日つき)を、期日までに済ませたか
+    alerts.forEach(a => a.acts.filter(x => x.due === d).forEach(x => scene(d, "補填", !!(x.doneAt && x.doneAt <= d), tasksOf(a.targets).reduce((s0, t) => s0 + share(t.def.id), 0) / Math.max(1, a.acts.length) || 0.05, a.label + ":" + (x.text || "対応"))));
+    // 先回り:来た脅威を、偵察で前もって挙げていたか
+    const sd = (sc.days || {})[d]; if (sd) (sd.came || []).forEach(th => { const hitW = (sd.hits || []).filter(h => h.threat === th).reduce((s0, h) => { const tk = ts.find(t => t.def.name === h.task); return s0 + (tk ? share(tk.def.id) : 0); }, 0);
+      scene(d, "先回り", (sd.scout || []).includes(th), hitW || 1 / ts.length, tname(th)); });
+    keys.forEach(k => series[k].push(val[k] == null ? null : Math.round(val[k] * 10) / 10));
+  }
+  const round = v => v == null ? null : Math.round(v * 10) / 10;
+  // 格:割合を、威信と同じEloの目盛りに直したもの(0 が五分五分、マイナスは崩れるほうが多い=荒れている)
+  const grade = v => v == null ? null : Math.round(400 * Math.log10(Math.max(1e-6, Math.min(100 - 1e-6, v)) / (100 - Math.max(1e-6, Math.min(100 - 1e-6, v)))));
+  const from = dates.length > 180 ? dates.length - 180 : 0;    // 書き出すのは直近180日分
+  const out = { version: 2, generated: today, through: last, dates: dates.slice(from), series: {}, val: {}, grade: {}, scenes: scenes.filter(x => x.d >= addDays(last, -13)) };
+  keys.forEach(k => { out.series[k] = series[k].slice(from); out.val[k] = round(val[k]); out.grade[k] = grade(val[k]); });
+  return out;
+}
+/* ───── 威信:偉業と約束の戦績で決まる格(グリコ式のEloレーティング) ─────
+   威信の動き = 速さ(記録の確かさから自動) × 重さ × (結果 − 期待)
+   重さ:偉業 = 規模 × 懸け具合 × 裏付け、約束 = 規模。期待 = 1 ÷ (1 + 10^((難しさ − 威信) ÷ 400))
+   威信は0から始まる(マイナスは、威信が損なわれている=荒れていることを表す)。難しさ = −400 × log10(見込み ÷ (1 − 見込み))。見込み:偉業は宣言した日までの結びついたタスクの実行の割合、約束はこれまで約束を守った割合(どちらも1件目を数えないよう、ラプラスの継起の規則で (済んだ数 + 1) ÷ (数 + 2)) */
+const TIDE_DAYS = { "その日だけ": 1, "3日": 3, "1週間": 7, "1か月": 30 }, TIDE_SURE = { "はっきり": 1, "なんとなく": 0.6 }, TIDE_FRAC = { "少し": 0.25, "半分": 0.5, "ほとんど": 0.9 };
+function feelAt(entries, e, day){   // 時勢・偉業の記録が、その日に効いている大きさ(絶対値)。省アプリと同じ決まり
+  if (e.deleted || e.type === "cancel" || day < e.date) return 0;
+  const D = TIDE_DAYS[e.vague] || 1, k = Math.min(1, (Math.round((Date.parse(day) - Date.parse(e.date)) / 864e5) + 1) / D);
+  let r = 1; if (e.type === "plus") entries.filter(c => c.type === "cancel" && c.target === e.id && !c.deleted && c.date <= day).forEach(c => { r *= 1 - (TIDE_FRAC[c.frac] || 0.5); });
+  const size = e.type === "plus" ? (+e.heat || 0) : (+e.heat || 0) * (TIDE_SURE[e.sure] || 1);
+  return { size: size * k * (e.type === "plus" ? r : 1), plus: e.type === "plus" };
+}
+function computePrestige(){
+  const today = taskDay(), last = addDays(today, -1), ts = taskStates().filter(t => t.def && t.rep); if (!ts.length) return null;
+  const W = {}; ts.forEach(t => { W[t.def.id] = Math.max(0.1, +t.def.weight || 1); }); const totalW = Object.values(W).reduce((a, b) => a + b, 0) || 1;
+  const byMin = tg => ts.filter(t => (t.def.ministries || []).some(m => (tg || []).includes(m)));
+  const shareOf = list => list.length ? list.reduce((a, t) => a + W[t.def.id], 0) / totalW : 1 / ts.length;
+  const laplace = (sum, n) => (sum + 1) / (n + 2);
+  const execBefore = (list, day) => { let s0 = 0, n = 0; (list.length ? list : ts).forEach(t => (t.rep.days || []).forEach(r => { if (r.date < day && r.ratio != null) { s0 += Math.min(1, +r.ratio || 0); n++; } })); return laplace(s0, n); };
+  const doneOn = (list, day) => (list.length ? list : ts).some(t => (t.rep.days || []).some(r => r.date === day && r.ratio != null && +r.ratio >= 1));
+  const matches = [];
+  // 偉業(省アプリの「偉業」。結果を付けて終えたもの)
+  const amb = state.ambition || { feats: [], entries: [] }, aes = (amb.entries || []).filter(e => !e.deleted), tes = ((state.tide || {}).entries || []).filter(e => !e.deleted);
+  const held = day => tes.concat(aes).reduce((a, e) => { const f = feelAt(e.feat ? aes : tes, e, day); return a + (f ? f.size : 0); }, 0);
+  (amb.feats || []).filter(f => f.status === "終わり" && f.result != null && f.ended && f.ended <= last).forEach(f => {
+    const links = ts.filter(t => (f.links || []).includes(t.def.id)), mine = aes.filter(e => e.feat === f.id);
+    const p = execBefore(links, f.created || f.ended), scale = shareOf(links);
+    let sum = 0, n = 0; for (let d = f.created || f.ended; d <= f.ended; d = addDays(d, 1)) { const h = held(d); const own = mine.reduce((a, e) => { const v = feelAt(aes, e, d); return a + (v && v.plus ? v.size : 0); }, 0); sum += h > 0 ? own / h : 0; n++; }
+    const stake = n ? sum / n : 0, recDays = Array.from(new Set(mine.filter(e => e.type !== "cancel").map(e => e.date)));
+    const back = recDays.length ? recDays.filter(d => doneOn(links, d)).length / recDays.length : 0;
+    matches.push({ d: f.ended, kind: "偉業", name: f.name, s: +f.result, p, w: scale * stake * back, parts: { 規模: scale, 懸け具合: stake, 裏付け: back } });
+  });
+  // 約束:作戦期の目標・RAID・ALERT の期限
+  const promises = [];
+  ((state.staff && state.staff.terms) || []).filter(tm => tm.issuedAt).forEach(tm => (tm.goals || []).forEach(g => { if (!g.due || g.due > last || !(+g.target > 0)) return;
+    const vals = (g.values || []).filter(v => !v.date || v.date <= g.due), actual = vals.length ? +vals[vals.length - 1].value : 0;
+    promises.push({ d: g.due, name: "作戦期の目標:" + (g.text || ""), s: Math.max(0, Math.min(1, actual / +g.target)), scale: shareOf(byMin(g.tags || (g.tag ? [g.tag] : []))) }); }));
+  ((state.pagesDoc && state.pagesDoc.pages) || []).filter(p => (p.kind === "RAID" || p.kind === "ALERT") && p.due && p.due <= last && !p.deleted).forEach(p => {
+    const goal = p.kind === "RAID" ? ["制圧", "引き渡し済み"] : ["収束"], log = p.statusLog || [], ok = log.some(x => goal.includes(x.status) && x.date <= p.due);
+    const tg = Array.isArray(p.targets) && p.targets.length ? p.targets : (p.target ? [p.target] : []);
+    promises.push({ d: p.due, name: p.kind + ":" + (p.title || p.label || ""), s: ok ? 1 : (p.kind === "RAID" && +p.progress > 0 ? Math.min(1, +p.progress / 100) : 0), scale: shareOf(byMin(tg)) }); });
+  promises.sort((a, b) => a.d < b.d ? -1 : 1); let kept = 0, cnt = 0;
+  promises.forEach(x => { matches.push({ d: x.d, kind: "約束", name: x.name, s: x.s, p: laplace(kept, cnt), w: x.scale, parts: { 規模: x.scale } }); kept += x.s; cnt++; });
+  // グリコ式で順に格を動かす(始まりは 0・確かさ 350。350 と 400 はレーティングの決まった目盛り)
+  matches.sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : 0);
+  const q = Math.LN10 / 400; let r = 0, RD = 350; const hist = [], by = { 偉業: 0, 信用: 0 };
+  matches.forEach(m => {
+    const D = -400 * Math.log10(m.p / (1 - m.p)), E = 1 / (1 + Math.pow(10, (D - r) / 400)), d2 = 1 / (q * q * E * (1 - E));
+    const delta = m.w * q / (1 / (RD * RD) + 1 / d2) * (m.s - E); r += delta; RD = Math.sqrt(1 / (1 / (RD * RD) + m.w / d2));
+    m.E = Math.round(E * 1000) / 1000; m.delta = Math.round(delta * 10) / 10; m.after = Math.round(r * 10) / 10; by[m.kind === "偉業" ? "偉業" : "信用"] += delta; hist.push({ d: m.d, r: m.after });
+  });
+  // これからの勝負:今の威信で、成功したら・失敗したらどれだけ動くか(今日までの記録で計算)
+  const pending = [], swing = (p, w) => { const D = -400 * Math.log10(p / (1 - p)), E = 1 / (1 + Math.pow(10, (D - r) / 400)), d2 = 1 / (q * q * E * (1 - E)), k = w * q / (1 / (RD * RD) + 1 / d2);
+    return { E: Math.round(E * 1000) / 1000, win: Math.round(k * (1 - E) * 10) / 10, lose: Math.round(-k * E * 10) / 10 }; };
+  (amb.feats || []).filter(f => f.status !== "終わり" && !f.deleted).forEach(f => {
+    const links = ts.filter(t => (f.links || []).includes(t.def.id)), mine = aes.filter(e => e.feat === f.id), start = f.created || last;
+    let sum = 0, n = 0; for (let d = start; d <= last; d = addDays(d, 1)) { const h = held(d); const own = mine.reduce((a, e) => { const v = feelAt(aes, e, d); return a + (v && v.plus ? v.size : 0); }, 0); sum += h > 0 ? own / h : 0; n++; }
+    const stake = n ? sum / n : 0, recDays = Array.from(new Set(mine.filter(e => e.type !== "cancel").map(e => e.date))), back = recDays.length ? recDays.filter(d => doneOn(links, d)).length / recDays.length : 0;
+    const scale = shareOf(links), sw = swing(execBefore(links, start), scale * stake * back);
+    pending.push(Object.assign({ kind: "偉業", name: f.name, due: f.due || "", parts: { 規模: Math.round(scale * 1000) / 1000, 懸け具合: Math.round(stake * 1000) / 1000, 裏付け: Math.round(back * 1000) / 1000 } }, sw));
+  });
+  const pk = laplace(kept, cnt);
+  ((state.staff && state.staff.terms) || []).filter(tm => tm.issuedAt && !tm.closedAt).forEach(tm => (tm.goals || []).forEach(g => { if (!g.due || g.due <= last || !(+g.target > 0)) return;
+    pending.push(Object.assign({ kind: "約束", name: "作戦期の目標:" + (g.text || ""), due: g.due }, swing(pk, shareOf(byMin(g.tags || (g.tag ? [g.tag] : [])))))); }));
+  ((state.pagesDoc && state.pagesDoc.pages) || []).filter(p => (p.kind === "RAID" || p.kind === "ALERT") && p.due && p.due > last && !p.deleted && !["制圧", "引き渡し済み", "収束", "失敗", "中止"].includes(p.status)).forEach(p => {
+    const tg = Array.isArray(p.targets) && p.targets.length ? p.targets : (p.target ? [p.target] : []);
+    pending.push(Object.assign({ kind: "約束", name: p.kind + ":" + (p.title || p.label || ""), due: p.due }, swing(pk, shareOf(byMin(tg))))); });
+  pending.sort((a, b) => b.win - a.win);
+  return { version: 1, generated: today, rating: Math.round(r * 10) / 10, rd: Math.round(RD * 10) / 10, history: hist, pending, byKind: { 偉業: Math.round(by.偉業 * 10) / 10, 信用: Math.round(by.信用 * 10) / 10 },
+    matches: matches.slice(-40).map(m => ({ d: m.d, kind: m.kind, name: m.name, s: Math.round(m.s * 100) / 100, p: Math.round(m.p * 1000) / 1000, E: m.E, w: Math.round(m.w * 1000) / 1000, delta: m.delta, after: m.after,
+      parts: Object.fromEntries(Object.entries(m.parts).map(([k, v]) => [k, Math.round(v * 1000) / 1000])) })) };
+}
+async function savePrestige(){
+  if (!state.conn) return; const out = computePrestige(); if (!out) return;
+  const key = out.rating + "|" + out.generated + "|" + out.matches.length; if (key === state.preSavedKey) return;
+  for (let i = 0; i < 3; i++) {
+    try { state.preSha = await writeJson(PRESTIGE_PATH, out, state.preSha); state.preSavedKey = key; return; }
+    catch (e) { if ((e.status === 409 || e.status === 422) && i < 2) { const r = await readJson(PRESTIGE_PATH); state.preSha = r.sha; continue; } return; }
+  }
+}
+let govTimer = null;
+function scheduleGov(ms){ clearTimeout(govTimer); govTimer = setTimeout(() => { saveGovernance().catch(() => {}).then(() => savePrestige().catch(() => {})); }, ms || 3000); }
+async function saveGovernance(){
+  if (!state.conn || !window.TaskEngine) return;
+  const out = computeGovernance(); if (!out) return;
+  const key = JSON.stringify(out.val) + "|" + out.generated + "|" + out.scenes.length; if (key === state.govSavedKey) return;
+  for (let i = 0; i < 3; i++) {
+    try { state.govSha = await writeJson(GOVERNANCE_PATH, out, state.govSha); state.govSavedKey = key; return; }
+    catch (e) { if ((e.status === 409 || e.status === 422) && i < 2) { const r = await readJson(GOVERNANCE_PATH); state.govSha = r.sha; continue; } return; }
+  }
 }
 function lastPlanAvoid(){ return state._planAvoid || []; }
 function trigFired(date){ const v = lsGet(KEY_TRIG, null); return v && v.date === date ? (v.fired || {}) : {}; }
@@ -1878,9 +2067,10 @@ function renderToday(){
   });
 
   state._planAvoid = plan.nodo || [];
-  html = avoidHtml(plan, doc.date) + trigHtml(plan, doc.date) + html;
+  html = scoutHtml(doc.date) + avoidHtml(plan, doc.date) + trigHtml(plan, doc.date) + html;
   planEl.innerHTML = html;
-  const avb = planEl.querySelector("[data-av-box]"); if (avb) avb.addEventListener("toggle", () => { state.avOpen = avb.open; });
+  const avb = planEl.querySelector("[data-av-box]:not([data-sc-box])"); if (avb) avb.addEventListener("toggle", () => { state.avOpen = avb.open; });
+  const scb = planEl.querySelector("[data-sc-box]"); if (scb) scb.addEventListener("toggle", () => { state.scoutOpen = scb.open; });
   planEl.querySelectorAll("details[data-more-lazy]").forEach(dt => dt.addEventListener("toggle", () => {
     const ul = dt.querySelector("ul.list"); if (!dt.open || ul.childElementCount) return;
     const arr = (state._moreLists || [])[+dt.dataset.moreLazy] || [];
@@ -3896,6 +4086,7 @@ function renderSettings(){
         '<div class="grid2" style="margin-top:.4rem"><div class="f"><label for="' + id + 'ws">このタスクだけの時間の枠(から)</label><input id="' + id + 'ws" data-k="winStart" type="time" value="' + esc(c.winStart) + '"></div>' +
           '<div class="f"><label for="' + id + 'we">(まで)</label><input id="' + id + 'we" data-k="winEnd" type="time" value="' + esc(c.winEnd) + '"></div></div>' +
         '<p class="hint" style="margin:.1rem 0 0">この時間の中に入れるのを優先し、どうしても入らなければはみ出して置きます。</p>' +
+        '<label class="avchk ksl"><input type="checkbox" data-k="keystone"' + (c.keystone ? " checked" : "") + '> 要石(終わっていないと、ほかのタスクにも影が落ちる)</label>' +
         '<div class="avbox"><label class="avchk"><input type="checkbox" data-k="nodo"' + (c.nodo ? " checked" : "") + '> しないタスク(「〇〇をしない」)</label>' +
           '<div class="grid2"><div class="f"><label for="' + id + 'ai">したくなったら、代わりにやること</label><input id="' + id + 'ai" data-k="instead" value="' + esc(c.instead) + '" placeholder="例:Ankiを5枚"></div>' +
           '<div class="f"><label for="' + id + 'as">区切りの数(区切りごとにチェック)</label><select id="' + id + 'as" data-k="avSeg">' + [1, 2, 3, 4].map(n => '<option value="' + n + '"' + (n === c.avSeg ? " selected" : "") + ">" + n + "つ</option>").join("") + "</select></div>" +
@@ -4121,9 +4312,13 @@ async function loadAll(){
     await loadTaskData();
     reconcileTasksDoc();
     try { const ln = await readJson(LENS_PATH); state.lens = ln.data || null; } catch (e) { state.lens = null; }
+    try { const sc = await readJson(SECURITY_PATH); state.security = Object.assign({ version: 1, threats: [], days: {} }, sc.data || {}); state.securitySha = sc.sha; } catch (e) { state.security = { version: 1, threats: [], days: {} }; }
+    try { const gv = await readJson(GOVERNANCE_PATH); state.govSha = gv.sha; state.govSavedKey = gv.data ? JSON.stringify(gv.data.val) + "|" + gv.data.generated : ""; } catch (e) {}
+    try { const [am, td, pr] = await Promise.all([readJson(AMB_PATH), readJson(TIDE_PATH), readJson(PRESTIGE_PATH)]); state.ambition = am.data || null; state.tide = td.data || null; state.preSha = pr.sha; state.preSavedKey = pr.data ? pr.data.rating + "|" + pr.data.generated + "|" + (pr.data.matches || []).length : ""; } catch (e) {}
     try { const mn = await readJson(MINS_PATH), map = {}; ((mn.data && mn.data.ministries) || []).forEach(m => { if (m && m.tag) map[m.tag] = m.name || m.tag; }); state.minNames = map; lsSet("roadmap-minnames", map); } catch (e) {}
     try { const [kd, kc] = await Promise.all([readJson(KENSEI_DATA), readJson(KENSEI_CONS)]); state.kensei = kd.data && kc.data ? { data: kd.data, sha: kd.sha, cons: kc.data } : null; } catch (e) { state.kensei = null; }
     renderToday(); renderSettings(); renderPlan(); renderTasks();
+    scheduleGov(1500);
     if (legacy.length) {
       const date = state.tasksDoc.date;
       await commitEvents(() => legacy.forEach(n => setDone(date, n, true)));
@@ -4434,6 +4629,11 @@ function bind(){
   document.getElementById("plan").addEventListener("click", e => {
     if (replanBox(e)) return;
     const tjb = e.target.closest("[data-tjopen]"); if (tjb) { openTejun(tjb.dataset.tjopen); return; }
+    const scs = e.target.closest("[data-sc-scout], [data-sc-came]");
+    if (scs) { const date = (state.tasksDoc || {}).date || taskDay(), id = scs.dataset.scScout || scs.dataset.scCame, k = scs.dataset.scScout ? "scout" : "came"; state.scoutOpen = true;
+      saveSecurity(sc => { sc.days = sc.days || {}; const dd = sc.days[date] = Object.assign({ scout: [], came: [], hits: [] }, sc.days[date] || {}); dd[k] = dd[k].includes(id) ? dd[k].filter(x => x !== id) : dd[k].concat([id]); }); return; }
+    if (e.target.closest("[data-sc-add]")) { const inp = document.getElementById("sc-new"), name = (inp && inp.value || "").trim(); if (!name) return; state.scoutOpen = true;
+      saveSecurity(sc => { sc.threats = sc.threats || []; if (!sc.threats.some(x => x.name === name && !x.deleted)) sc.threats.push({ id: "th" + Date.now().toString(36), name, created: taskDay() }); }); return; }
     const avc = e.target.closest("[data-av-cyc]");
     if (avc) { const [id, i] = avc.dataset.avCyc.split(":"), date = (state.tasksDoc || {}).date || taskDay(), x = lastPlanAvoid().find(z => { const tk = taskByName(z.task.name); return (tk ? tk.def.id : z.task.name) === id; });
       const n = x ? avSegs(x.c).length : 1, cur = ((avRec(date, id).av || {}).segs || [])[+i] ?? null, next = cur === null ? true : cur === true ? false : null;
@@ -5099,6 +5299,13 @@ function bind(){
     sel.innerHTML = tmp.innerHTML; sel.value = cur;
   };
   edits.addEventListener("input", nextFilter);
+  document.getElementById("plan").addEventListener("change", e => {
+    const hs = e.target.closest && e.target.closest("[data-sc-hit]"); if (!hs) return;
+    const date = (state.tasksDoc || {}).date || taskDay(), y = addDays(date, -1), task = hs.dataset.scHit, th = hs.value; state.scoutOpen = true;
+    saveSecurity(sc => { sc.days = sc.days || {}; const dd = sc.days[y] = Object.assign({ scout: [], came: [], hits: [] }, sc.days[y] || {});
+      dd.hits = (dd.hits || []).filter(h => h.task !== task); if (th) dd.hits.push({ task, threat: th });
+      if (th && th !== "none" && !dd.came.includes(th)) dd.came.push(th); });
+  });
   edits.addEventListener("change", e => { if (e.target.closest && e.target.closest("[data-next-m]")) { e.stopPropagation(); nextFilter(e); } }, true);
   let teQTimer = null;
   document.getElementById("te-q").addEventListener("input", e => { state.teQ = e.target.value; clearTimeout(teQTimer); teQTimer = setTimeout(renderSettings, 90); });
@@ -5274,7 +5481,7 @@ function boot(){
 }
 
 window.__roadmapAct = actQ;
-window.__roadmap = { expectNext, findFlows, flowStats, buildPlan, cfgOf, classify, state, loadAll, saveSettings, saveEvents, eventsFor,
+window.__roadmap = { computePrestige, savePrestige, computeGovernance, saveGovernance, expectNext, findFlows, flowStats, buildPlan, cfgOf, classify, state, loadAll, saveSettings, saveEvents, eventsFor,
                      togglePreset, setPreset, removeEvent, editEventTime, setDone, getDone, commitEvents,
                      commitPlan, normalizePlan, validatePlanItem, newItem, taskStates, commitOverlay,
                      commitAppLog, setAppRecord, taskDay, taskIdFor, cyclePos, openTejun, closeTejun,
