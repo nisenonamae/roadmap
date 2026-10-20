@@ -109,6 +109,8 @@ details.fold-sec>summary h2{margin:0;font-size:1rem}
 .te-bar{flex-wrap:wrap}.te-bar select{flex:1 1 7rem;min-width:0}
 .next-bar{display:flex;gap:.3rem;margin:.2rem 0 .25rem}
 .ksl{margin-top:.5rem}
+.ck-bulk{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem .4rem;margin:.2rem 0 .6rem;padding:.4rem .5rem;border:1px dashed var(--rule);border-radius:5px;font-size:.84rem}
+.ck-bulk>span{flex:1 1 100%;color:var(--sub)}.ck-bulk b{color:var(--ink)}
 .sc-n{font-size:.8rem;color:var(--sub);margin:.3rem 0}
 .sc-r{display:flex;gap:.4rem;align-items:flex-start;padding:.25rem 0;border-top:1px dashed var(--rule)}.sc-l{flex:0 0 3.2rem;font-size:.78rem;color:var(--sub);padding-top:.15rem}
 .sc-cs{display:flex;flex-wrap:wrap;gap:.25rem}.sc-c{border:1px solid var(--rule);background:#fff;border-radius:12px;padding:.05rem .55rem;font:inherit;font-size:.8rem;cursor:pointer}
@@ -794,7 +796,7 @@ body.tj-lock{overflow:hidden}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-20 r105";
+const APP_VERSION = "2026-10-20 r106";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -3439,9 +3441,12 @@ function renderTodayRecords(list){
   const filtering = !!(words.length || (mEl && mEl.value) || fd);
   // 済みにしても、その場に✓で残す(折りたたむのは今日のタブの行軍表だけ)
   const open = today.filter(hitCk), fin = today.filter(isDone);
+  state.ckShown = open.map(t => t.def.id);
   let html = '<div class="rec-list"><h2>' + (yday ? "昨日(" + day.slice(5).replace("-", "/") + ")の記録" : "今日の記録") + '　<span style="font-size:.8rem;color:var(--sub);font-weight:400">' +
              fin.length + " / " + today.length + (filtering ? "　絞り込み " + open.length + "件" : "") + "</span></h2>" +
-             (yday ? '<p class="notice" style="font-size:.84rem">昨日の記録を直しています。直すと、今日の累計・連続・状況もすぐに数え直されます。国力には明日の朝の計算から入ります。</p>' : "");
+             (yday ? '<p class="notice" style="font-size:.84rem">昨日の記録を直しています。直すと、今日の累計・連続・状況もすぐに数え直されます。国力には明日の朝の計算から入ります。</p>' : "") +
+             (open.length > 1 ? '<div class="ck-bulk"><span>' + (filtering ? "絞り込んだ " : "表示中の ") + "<b>" + open.length + "</b>件をまとめて</span>" +
+               [["完了", "完了"], ["不実行", "不実行"], ["今日は該当しない", "該当しない"], ["", "付けていない状態に戻す"]].map(([v, l]) => '<button type="button" class="btn ghost sm" data-ck-bulk="' + esc(v) + '">' + l + "</button>").join("") + "</div>" : "");
   const recRow = t => {
     const done = isDone(t), miss = t.check === "不実行";
     const sub = [t.check || "未着手"];
@@ -4845,6 +4850,17 @@ function bind(){
   // 今日の記録:○で完了、もう一度で取り消し。「記録」で詳しく
   document.getElementById("tk-today").addEventListener("click", async e => {
     const tjb = e.target.closest("[data-tjopen]"); if (tjb) { openTejun(tjb.dataset.tjopen); return; }
+    const cb = e.target.closest("[data-ck-bulk]");
+    if (cb) {
+      const day = checkDay(), v = cb.dataset.ckBulk, ids = (state.ckShown || []).slice(), label = v || "付けていない状態";
+      if (!ids.length) return;
+      if (!confirm("表示中の " + ids.length + " 件を、まとめて「" + label + "」にしますか。")) return;
+      const m = day.slice(0, 7), before = {}; ids.forEach(id => { before[id] = (((state.appLogs[m] || {})[day] || {})[id] || {}).check || null; });
+      await commitAppLog(day, () => ids.forEach(id => { const t0 = taskStates().find(x => x.def.id === id), t = t0 && dayView(t0, day); if (!t || !t.row) return;
+        setAppRecord(day, id, { check: v ? v : uncheckValue(day, t) }); }));
+      showToast(ids.length + "件を「" + label + "」にしました", () => commitAppLog(day, () => ids.forEach(id => setAppRecord(day, id, { check: before[id] }))));
+      return;
+    }
     const q = e.target.closest("[data-quick]");
     const r = e.target.closest("[data-record]");
     const today = checkDay();
