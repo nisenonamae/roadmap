@@ -115,6 +115,7 @@ details.fold-sec>summary h2{margin:0;font-size:1rem}
 .sc-r{display:flex;gap:.4rem;align-items:flex-start;padding:.25rem 0;border-top:1px dashed var(--rule)}.sc-l{flex:0 0 3.2rem;font-size:.78rem;color:var(--sub);padding-top:.15rem}
 .sc-cs{display:flex;flex-wrap:wrap;gap:.25rem}.sc-c{border:1px solid var(--rule);background:#fff;border-radius:12px;padding:.05rem .55rem;font:inherit;font-size:.8rem;cursor:pointer}
 .sc-c[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.sc-preps{margin:.3rem 0 .1rem;display:flex;flex-direction:column;gap:.3rem}.sc-prep{border-left:3px solid var(--ink);padding:.15rem .5rem;font-size:.82rem;background:#fff}.sc-prep b{display:block;font-size:.78rem;margin-bottom:.1rem}
 .sc-add{display:flex;gap:.35rem;margin:.35rem 0 .1rem}.sc-add input{flex:1;min-width:0;border:1px solid var(--rule);border-radius:4px;padding:.2rem .4rem;font:inherit;font-size:.82rem}
 .sc-miss{margin-top:.4rem;padding-top:.3rem;border-top:1px solid var(--rule)}.sc-miss b{font-size:.8rem}
 .sc-m{display:flex;align-items:center;gap:.4rem;padding:.2rem 0;font-size:.84rem}.sc-m span{flex:1;min-width:0}.sc-m select{max-width:55%;font:inherit;font-size:.8rem}
@@ -796,7 +797,7 @@ body.tj-lock{overflow:hidden}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-20 r106";
+const APP_VERSION = "2026-10-21 r107";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -1759,11 +1760,15 @@ function scoutHtml(date){
   const misses = taskStates().filter(t => !t.waiting).map(t => ({ t, r: (t.rep.days || []).find(x => x.date === y) })).filter(x => x.r && x.r.ratio != null && x.r.ratio < 1);
   const yd = secDay(y), hitOf = n => (yd.hits || []).find(h => h.task === n);
   const open = state.scoutOpen != null ? state.scoutOpen : (!dd.scout.length && threats.length > 0) || misses.some(m => !hitOf(m.t.def.name));
-  const chip = (id, list, attr) => '<button type="button" class="sc-c" data-' + attr + '="' + esc(id) + '" aria-pressed="' + (list || []).includes(id) + '">' + esc((threats.find(x => x.id === id) || { name: id }).name) + "</button>";
+  const chip = (id, list, attr) => { const th = threats.find(x => x.id === id) || { name: id };
+    return '<button type="button" class="sc-c" data-' + attr + '="' + esc(id) + '" aria-pressed="' + (list || []).includes(id) + '"' + (th.signal ? ' title="合図:' + esc(th.signal) + '"' : "") + ">" + esc(th.name) + "</button>"; };
   let h = '<details class="av-box sc-box" data-sc-box' + (open ? " open" : "") + '><summary><b>偵察</b> 来そう ' + dd.scout.length + " ・ 来た " + dd.came.length + (misses.length ? ' ・ <span class="av-wait">昨日の崩れ ' + misses.filter(m => !hitOf(m.t.def.name)).length + "</span>" : "") + "</summary>";
   if (!threats.length) h += '<p class="sc-n">脅威の台帳がまだ空です。下で足すと、毎朝ここで「来そう」「来た」を押せます。</p>';
   else h += '<div class="sc-r"><span class="sc-l">来そう</span><span class="sc-cs">' + threats.map(x => chip(x.id, dd.scout, "sc-scout")).join("") + '</span></div><div class="sc-r"><span class="sc-l">来た</span><span class="sc-cs">' + threats.map(x => chip(x.id, dd.came, "sc-came")).join("") + "</span></div>";
-  h += '<div class="sc-add"><input id="sc-new" placeholder="脅威を足す(例:家族がうるさい)"><button type="button" class="btn sm ghost" data-sc-add>足す</button></div>';
+  // 来そうな脅威の備え(防衛省の脅威の台帳で書いたもの)
+  const preps = threats.filter(x => (dd.scout || []).includes(x.id) && String(x.prep || "").trim());
+  if (preps.length) h += '<div class="sc-preps">' + preps.map(x => '<div class="sc-prep"><b>' + esc(x.name) + "の備え</b>" + String(x.prep).split("\n").filter(l => l.trim()).map(l => "<div>" + esc(l) + "</div>").join("") + "</div>").join("") + "</div>";
+  h += '<div class="sc-add"><input id="sc-new" placeholder="脅威を足す(例:家族がうるさい。備えは省アプリの防衛省で)"><button type="button" class="btn sm ghost" data-sc-add>足す</button></div>';
   if (misses.length) h += '<div class="sc-miss"><b>昨日できなかったタスク:何が邪魔した?</b>' + misses.map(m => { const n = m.t.def.name, hv = hitOf(n);
       return '<div class="sc-m"><span>' + nameHtml(n) + '</span><select data-sc-hit="' + esc(n) + '"><option value="">—</option>' + threats.map(x => '<option value="' + esc(x.id) + '"' + (hv && hv.threat === x.id ? " selected" : "") + ">" + esc(x.name) + "</option>").join("") + '<option value="none"' + (hv && hv.threat === "none" ? " selected" : "") + ">脅威ではない</option></select></div>"; }).join("") + "</div>";
   return h + "</details>";
