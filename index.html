@@ -797,7 +797,7 @@ body.tj-lock{overflow:hidden}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-21 r107";
+const APP_VERSION = "2026-10-22 r108";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -1833,10 +1833,13 @@ function computeGovernance(){
   keys.forEach(k => { out.series[k] = series[k].slice(from); out.val[k] = round(val[k]); out.grade[k] = grade(val[k]); });
   return out;
 }
-/* ───── 威信:偉業と約束の戦績で決まる格(グリコ式のEloレーティング) ─────
-   威信の動き = 速さ(記録の確かさから自動) × 重さ × (結果 − 期待)
-   重さ:偉業 = 規模 × 懸け具合 × 裏付け、約束 = 規模。期待 = 1 ÷ (1 + 10^((難しさ − 威信) ÷ 400))
-   威信は0から始まる(マイナスは、威信が損なわれている=荒れていることを表す)。難しさ = −400 × log10(見込み ÷ (1 − 見込み))。見込み:偉業は宣言した日までの結びついたタスクの実行の割合、約束はこれまで約束を守った割合(どちらも1件目を数えないよう、ラプラスの継起の規則で (済んだ数 + 1) ÷ (数 + 2)) */
+/* ───── 威信 = 実績 × 統治(%) × 信用(%) ─────
+   実績 = 成し遂げた偉業の重み + 守った約束の重み − 破った約束の重み(後から果たした約束は差し引かない)
+   偉業の重み = (規模 + 懸け具合) × 難しさ × 結果。規模 = 結びついたタスクの重み ÷ 全タスクの重み(行動の取り分)、懸け具合 = その偉業への熱量 ÷ 心が抱えている熱量(心の取り分、挑戦した期間の平均)
+   難しさ = 1 ÷ 届く見込み(気持ちの記録で付けた見込みの、挑戦した期間の平均)。見込みは、これまでの当たり具合で直す:× (成し遂げた割合 ÷ 付けた見込みの平均)、どちらも (数 + 1) ÷ (件数 + 2) の数え方
+   約束(作戦期の目標・RAID・ALERT)の重み = 結びついたタスクの重み ÷ 全タスクの重み(目標は「最初の一歩」、RAID・ALERT は作戦から作ったタスクとページに結びついたタスク)
+   信用 = 約束を期日に守れているか。統治と同じ株価式(50%から始まり、守れば 値 + (100 − 値) × 重み、破れば 値 − 値 × 重み)
+   表示の単位:重み 0.01(行動の1%)= 1 */
 const TIDE_DAYS = { "その日だけ": 1, "3日": 3, "1週間": 7, "1か月": 30 }, TIDE_SURE = { "はっきり": 1, "なんとなく": 0.6 }, TIDE_FRAC = { "少し": 0.25, "半分": 0.5, "ほとんど": 0.9 };
 function feelAt(entries, e, day){   // 時勢・偉業の記録が、その日に効いている大きさ(絶対値)。省アプリと同じ決まり
   if (e.deleted || e.type === "cancel" || day < e.date) return 0;
@@ -1848,66 +1851,77 @@ function feelAt(entries, e, day){   // 時勢・偉業の記録が、その日�
 function computePrestige(){
   const today = taskDay(), last = addDays(today, -1), ts = taskStates().filter(t => t.def && t.rep); if (!ts.length) return null;
   const W = {}; ts.forEach(t => { W[t.def.id] = Math.max(0.1, +t.def.weight || 1); }); const totalW = Object.values(W).reduce((a, b) => a + b, 0) || 1;
-  const byMin = tg => ts.filter(t => (t.def.ministries || []).some(m => (tg || []).includes(m)));
-  const shareOf = list => list.length ? list.reduce((a, t) => a + W[t.def.id], 0) / totalW : 1 / ts.length;
-  const laplace = (sum, n) => (sum + 1) / (n + 2);
+  const shareOf = list => list.reduce((a, t) => a + W[t.def.id], 0) / totalW, unit = 1 / ts.length;   // 結びつきがない約束は、タスク1つ分の重さ
+  const laplace = (sum, n) => (sum + 1) / (n + 2), r1 = v => Math.round(v * 10) / 10, r3 = v => Math.round(v * 1000) / 1000;
   const execBefore = (list, day) => { let s0 = 0, n = 0; (list.length ? list : ts).forEach(t => (t.rep.days || []).forEach(r => { if (r.date < day && r.ratio != null) { s0 += Math.min(1, +r.ratio || 0); n++; } })); return laplace(s0, n); };
-  const doneOn = (list, day) => (list.length ? list : ts).some(t => (t.rep.days || []).some(r => r.date === day && r.ratio != null && +r.ratio >= 1));
-  const matches = [];
-  // 偉業(省アプリの「偉業」。結果を付けて終えたもの)
+  // 統治の割合(日ごと)
+  const gov = computeGovernance() || { dates: [], series: {}, val: {} }, gdates = gov.dates || [], gser = (gov.series || {})["統治"] || [];
+  const govOn = d => { let v = null; for (let k = 0; k < gdates.length && gdates[k] <= d; k++) if (gser[k] != null) v = gser[k]; return v == null ? 50 : v; };
+  // 偉業
   const amb = state.ambition || { feats: [], entries: [] }, aes = (amb.entries || []).filter(e => !e.deleted), tes = ((state.tide || {}).entries || []).filter(e => !e.deleted);
   const held = day => tes.concat(aes).reduce((a, e) => { const f = feelAt(e.feat ? aes : tes, e, day); return a + (f ? f.size : 0); }, 0);
-  (amb.feats || []).filter(f => f.status === "終わり" && f.result != null && f.ended && f.ended <= last).forEach(f => {
-    const links = ts.filter(t => (f.links || []).includes(t.def.id)), mine = aes.filter(e => e.feat === f.id);
-    const p = execBefore(links, f.created || f.ended), scale = shareOf(links);
-    let sum = 0, n = 0; for (let d = f.created || f.ended; d <= f.ended; d = addDays(d, 1)) { const h = held(d); const own = mine.reduce((a, e) => { const v = feelAt(aes, e, d); return a + (v && v.plus ? v.size : 0); }, 0); sum += h > 0 ? own / h : 0; n++; }
-    const stake = n ? sum / n : 0, recDays = Array.from(new Set(mine.filter(e => e.type !== "cancel").map(e => e.date)));
-    const back = recDays.length ? recDays.filter(d => doneOn(links, d)).length / recDays.length : 0;
-    matches.push({ d: f.ended, kind: "偉業", name: f.name, s: +f.result, p, w: scale * stake * back, parts: { 規模: scale, 懸け具合: stake, 裏付け: back } });
-  });
-  // 約束:作戦期の目標・RAID・ALERT の期限
+  const stakeOver = (fid, from, to) => { const mine = aes.filter(e => e.feat === fid); let sum = 0, n = 0;
+    for (let d = from; d <= to; d = addDays(d, 1)) { const h = held(d); const own = mine.reduce((a, e) => { const v = feelAt(aes, e, d); return a + (v && v.plus ? v.size : 0); }, 0); sum += h > 0 ? own / h : 0; n++; } return n ? sum / n : 0; };
+  const chanceOver = (f, links, from, to) => { const rec = aes.filter(e => e.feat === f.id && e.chance != null && e.type !== "cancel").sort((a, b) => a.date < b.date ? -1 : 1);
+    if (!rec.length) return { avg: execBefore(links, from), own: false };
+    let sum = 0, n = 0; for (let d = from; d <= to; d = addDays(d, 1)) { let c = rec[0].chance; rec.forEach(e => { if (e.date <= d) c = e.chance; }); sum += c / 100; n++; }
+    return { avg: n ? sum / n : rec[0].chance / 100, own: true }; };
+  const finished = (amb.feats || []).filter(f => f.status === "終わり" && f.result != null && f.ended && f.ended <= last && !f.deleted).sort((a, b) => a.ended < b.ended ? -1 : 1);
+  // 当たり具合:自分で見込みを付けて終えた偉業だけで数える
+  const calibAt = day => { const prev = finished.filter(f => f.ended < day), info = prev.map(f => { const c = chanceOver(f, ts.filter(t => (f.links || []).includes(t.def.id)), f.created || f.ended, f.ended); return { res: Math.max(0, Math.min(1, +f.result)), ch: c.avg, own: c.own }; }).filter(x => x.own);
+    const actual = laplace(info.reduce((a, x) => a + x.res, 0), info.length), stated = (info.reduce((a, x) => a + x.ch, 0) + 0.5) / (info.length + 1);
+    return { factor: actual / stated, actual, stated, n: info.length }; };
+  const featParts = (f, to) => { const links = ts.filter(t => (f.links || []).includes(t.def.id)), from = f.created || to;
+    const scale = links.length ? shareOf(links) : 0, stake = stakeOver(f.id, from, to), ch = chanceOver(f, links, from, to), cal = calibAt(to);
+    const chance = Math.max(0.01, Math.min(1, ch.avg * cal.factor));
+    return { 規模: scale, 懸け具合: stake, 見込み: chance, 付けた見込み: ch.avg, 難しさ: 1 / chance, own: ch.own }; };
+  const events = [];
+  finished.forEach(f => { const p = featParts(f, f.ended), res = Math.max(0, Math.min(1, +f.result));
+    events.push({ d: f.ended, kind: "偉業", name: f.name, s: res, w: (p.規模 + p.懸け具合) * p.難しさ * res, parts: p }); });
+  // 約束
+  const linkedTo = page => { const ids = new Set(((page.actions || []).map(a => a.taskId).filter(Boolean)));
+    return ts.filter(t => ids.has(t.def.id) || (t.def.waves || []).some(w => String(w.url || "").includes("#page=" + page.id))); };
   const promises = [];
-  ((state.staff && state.staff.terms) || []).filter(tm => tm.issuedAt).forEach(tm => (tm.goals || []).forEach(g => { if (!g.due || g.due > last || !(+g.target > 0)) return;
-    const vals = (g.values || []).filter(v => !v.date || v.date <= g.due), actual = vals.length ? +vals[vals.length - 1].value : 0;
-    promises.push({ d: g.due, name: "作戦期の目標:" + (g.text || ""), s: Math.max(0, Math.min(1, actual / +g.target)), scale: shareOf(byMin(g.tags || (g.tag ? [g.tag] : []))) }); }));
-  ((state.pagesDoc && state.pagesDoc.pages) || []).filter(p => (p.kind === "RAID" || p.kind === "ALERT") && p.due && p.due <= last && !p.deleted).forEach(p => {
+  ((state.staff && state.staff.terms) || []).filter(tm => tm.issuedAt).forEach(tm => (tm.goals || []).forEach(g => { if (!g.due || !(+g.target > 0)) return;
+    const links = ts.filter(t => g.firstStep && t.def.name === g.firstStep.name), vals = (g.values || []).filter(v => v.date);
+    const byDue = vals.filter(v => v.date <= g.due), actual = byDue.length ? +byDue[byDue.length - 1].value : 0, late = vals.find(v => v.date > g.due && +v.value >= +g.target);
+    promises.push({ d: g.due, kind: "作戦期の目標", name: g.text || "", s: Math.max(0, Math.min(1, actual / +g.target)), w: links.length ? shareOf(links) : unit, late: late ? late.date : null, links: links.length }); }));
+  ((state.pagesDoc && state.pagesDoc.pages) || []).filter(p => (p.kind === "RAID" || p.kind === "ALERT") && p.due && !p.deleted).forEach(p => {
     const goal = p.kind === "RAID" ? ["制圧", "引き渡し済み"] : ["収束"], log = p.statusLog || [], ok = log.some(x => goal.includes(x.status) && x.date <= p.due);
-    const tg = Array.isArray(p.targets) && p.targets.length ? p.targets : (p.target ? [p.target] : []);
-    promises.push({ d: p.due, name: p.kind + ":" + (p.title || p.label || ""), s: ok ? 1 : (p.kind === "RAID" && +p.progress > 0 ? Math.min(1, +p.progress / 100) : 0), scale: shareOf(byMin(tg)) }); });
-  promises.sort((a, b) => a.d < b.d ? -1 : 1); let kept = 0, cnt = 0;
-  promises.forEach(x => { matches.push({ d: x.d, kind: "約束", name: x.name, s: x.s, p: laplace(kept, cnt), w: x.scale, parts: { 規模: x.scale } }); kept += x.s; cnt++; });
-  // グリコ式で順に格を動かす(始まりは 0・確かさ 350。350 と 400 はレーティングの決まった目盛り)
-  matches.sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : 0);
-  const q = Math.LN10 / 400; let r = 0, RD = 350; const hist = [], by = { 偉業: 0, 信用: 0 };
-  matches.forEach(m => {
-    const D = -400 * Math.log10(m.p / (1 - m.p)), E = 1 / (1 + Math.pow(10, (D - r) / 400)), d2 = 1 / (q * q * E * (1 - E));
-    const delta = m.w * q / (1 / (RD * RD) + 1 / d2) * (m.s - E); r += delta; RD = Math.sqrt(1 / (1 / (RD * RD) + m.w / d2));
-    m.E = Math.round(E * 1000) / 1000; m.delta = Math.round(delta * 10) / 10; m.after = Math.round(r * 10) / 10; by[m.kind === "偉業" ? "偉業" : "信用"] += delta; hist.push({ d: m.d, r: m.after });
-  });
-  // これからの勝負:今の威信で、成功したら・失敗したらどれだけ動くか(今日までの記録で計算)
-  const pending = [], swing = (p, w) => { const D = -400 * Math.log10(p / (1 - p)), E = 1 / (1 + Math.pow(10, (D - r) / 400)), d2 = 1 / (q * q * E * (1 - E)), k = w * q / (1 / (RD * RD) + 1 / d2);
-    return { E: Math.round(E * 1000) / 1000, win: Math.round(k * (1 - E) * 10) / 10, lose: Math.round(-k * E * 10) / 10 }; };
-  (amb.feats || []).filter(f => f.status !== "終わり" && !f.deleted).forEach(f => {
-    const links = ts.filter(t => (f.links || []).includes(t.def.id)), mine = aes.filter(e => e.feat === f.id), start = f.created || last;
-    let sum = 0, n = 0; for (let d = start; d <= last; d = addDays(d, 1)) { const h = held(d); const own = mine.reduce((a, e) => { const v = feelAt(aes, e, d); return a + (v && v.plus ? v.size : 0); }, 0); sum += h > 0 ? own / h : 0; n++; }
-    const stake = n ? sum / n : 0, recDays = Array.from(new Set(mine.filter(e => e.type !== "cancel").map(e => e.date))), back = recDays.length ? recDays.filter(d => doneOn(links, d)).length / recDays.length : 0;
-    const scale = shareOf(links), sw = swing(execBefore(links, start), scale * stake * back);
-    pending.push(Object.assign({ kind: "偉業", name: f.name, due: f.due || "", parts: { 規模: Math.round(scale * 1000) / 1000, 懸け具合: Math.round(stake * 1000) / 1000, 裏付け: Math.round(back * 1000) / 1000 } }, sw));
-  });
-  const pk = laplace(kept, cnt);
-  ((state.staff && state.staff.terms) || []).filter(tm => tm.issuedAt && !tm.closedAt).forEach(tm => (tm.goals || []).forEach(g => { if (!g.due || g.due <= last || !(+g.target > 0)) return;
-    pending.push(Object.assign({ kind: "約束", name: "作戦期の目標:" + (g.text || ""), due: g.due }, swing(pk, shareOf(byMin(g.tags || (g.tag ? [g.tag] : [])))))); }));
-  ((state.pagesDoc && state.pagesDoc.pages) || []).filter(p => (p.kind === "RAID" || p.kind === "ALERT") && p.due && p.due > last && !p.deleted && !["制圧", "引き渡し済み", "収束", "失敗", "中止"].includes(p.status)).forEach(p => {
-    const tg = Array.isArray(p.targets) && p.targets.length ? p.targets : (p.target ? [p.target] : []);
-    pending.push(Object.assign({ kind: "約束", name: p.kind + ":" + (p.title || p.label || ""), due: p.due }, swing(pk, shareOf(byMin(tg))))); });
+    const lateE = !ok && log.find(x => goal.includes(x.status) && x.date > p.due), links = linkedTo(p);
+    promises.push({ d: p.due, kind: p.kind, name: p.title || p.label || "", s: ok ? 1 : (p.kind === "RAID" && +p.progress > 0 ? Math.min(1, +p.progress / 100) : 0), w: links.length ? shareOf(links) : unit, late: lateE ? lateE.date : null, links: links.length }); });
+  promises.filter(x => x.d <= last).forEach(x => events.push(Object.assign({ kind0: "約束" }, x, { kind: x.kind })));
+  events.sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : 0);
+  // 日ごとに、実績・信用・威信を数える
+  const start = events.length ? events[0].d : last, first = gdates.length ? (gdates[0] < start ? gdates[0] : start) : start, hist = [];
+  let cred = 50, ei = 0, feat = 0, kept = 0, brokeList = [];
+  for (let d = first; d <= last; d = addDays(d, 1)) {
+    while (ei < events.length && events[ei].d <= d) { const x = events[ei++];
+      if (x.kind === "偉業") { feat += x.w; x.after = null; continue; }
+      kept += x.w * x.s; if (x.s < 1) brokeList.push(x);
+      cred = cred + (100 - cred) * x.w * x.s - cred * x.w * (1 - x.s); x.cred = r1(cred); }
+    const broke = brokeList.reduce((a, x) => a + (x.late && x.late <= d ? 0 : x.w * (1 - x.s)), 0), j = (feat + kept - broke) * 100, g = govOn(d);
+    hist.push({ d, v: r1(j * g / 100 * cred / 100), j: r1(j), g: r1(g), c: r1(cred) });
+  }
+  const now = hist[hist.length - 1] || { v: 0, j: 0, g: govOn(last), c: 50 };
+  const brokeNow = brokeList.reduce((a, x) => a + (x.late && x.late <= last ? 0 : x.w * (1 - x.s)), 0);
+  // これからの勝負:今の統治と信用のまま、成し遂げたら・守ったら/破ったら、威信がどれだけ動くか(およそ)
+  const k = now.g / 100 * now.c / 100, pending = [];
+  (amb.feats || []).filter(f => f.status !== "終わり" && !f.deleted).forEach(f => { const p = featParts(f, last), w = (p.規模 + p.懸け具合) * p.難しさ;
+    pending.push({ kind: "偉業", name: f.name, due: f.due || "", win: r1(w * 100 * k), lose: 0, parts: { 規模: r3(p.規模), 懸け具合: r3(p.懸け具合), 見込み: r3(p.見込み), 難しさ: Math.round(p.難しさ * 100) / 100 } }); });
+  promises.filter(x => x.d > last && x.s < 1).forEach(x => pending.push({ kind: x.kind, name: x.name, due: x.d, win: r1(x.w * 100 * k), lose: r1(-x.w * 100 * k), parts: { 重み: r3(x.w) } }));
   pending.sort((a, b) => b.win - a.win);
-  return { version: 1, generated: today, rating: Math.round(r * 10) / 10, rd: Math.round(RD * 10) / 10, history: hist, pending, byKind: { 偉業: Math.round(by.偉業 * 10) / 10, 信用: Math.round(by.信用 * 10) / 10 },
-    matches: matches.slice(-40).map(m => ({ d: m.d, kind: m.kind, name: m.name, s: Math.round(m.s * 100) / 100, p: Math.round(m.p * 1000) / 1000, E: m.E, w: Math.round(m.w * 1000) / 1000, delta: m.delta, after: m.after,
-      parts: Object.fromEntries(Object.entries(m.parts).map(([k, v]) => [k, Math.round(v * 1000) / 1000])) })) };
+  const cal = calibAt(today);
+  return { version: 2, generated: today, value: now.v, 実績: now.j, 統治: now.g, 信用: now.c,
+    parts: { 偉業: r1(feat * 100), 守った約束: r1(kept * 100), 破った約束: r1(-brokeNow * 100) },
+    calib: { n: cal.n, 付けた見込み: r3(cal.stated), 成し遂げた割合: r3(cal.actual) },
+    history: hist.slice(-180), pending,
+    items: events.slice(-60).map(x => ({ d: x.d, kind: x.kind, name: x.name, s: Math.round(x.s * 100) / 100, w: r1(x.w * 100), late: x.late || null, cred: x.cred != null ? x.cred : null,
+      parts: x.parts ? Object.fromEntries(Object.entries(x.parts).filter(([kk]) => kk !== "own").map(([kk, v]) => [kk, Math.round(v * 1000) / 1000])) : { 重み: r3(x.w) } })) };
 }
 async function savePrestige(){
   if (!state.conn) return; const out = computePrestige(); if (!out) return;
-  const key = out.rating + "|" + out.generated + "|" + out.matches.length; if (key === state.preSavedKey) return;
+  const key = out.value + "|" + out.generated + "|" + out.items.length + "|" + out.実績; if (key === state.preSavedKey) return;
   for (let i = 0; i < 3; i++) {
     try { state.preSha = await writeJson(PRESTIGE_PATH, out, state.preSha); state.preSavedKey = key; return; }
     catch (e) { if ((e.status === 409 || e.status === 422) && i < 2) { const r = await readJson(PRESTIGE_PATH); state.preSha = r.sha; continue; } return; }
