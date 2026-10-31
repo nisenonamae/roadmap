@@ -6,15 +6,40 @@
   "start_url": "/roadmap/",
   "scope": "/roadmap/",
   "display": "standalone",
-  "background_color": "#EEF1F0",
-  "theme_color": "#1D2430",
+  "background_color": "#F6F3EC",
+  "theme_color": "#F6F3EC",
   "orientation": "portrait",
   "lang": "ja",
   "icons": [
-    { "src": "/roadmap/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/roadmap/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/roadmap/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
-    { "src": "/roadmap/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
-    { "src": "/roadmap/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+    {
+      "src": "/roadmap/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/roadmap/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/roadmap/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/roadmap/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/roadmap/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
   ]
 }
