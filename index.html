@@ -790,7 +790,6 @@ nav.tabs button[aria-selected="true"]{box-shadow:inset 0 3px 0 var(--shu)}
 <nav class="tabs" role="tablist">
   <button role="tab" aria-selected="true" data-view="today">今日</button>
   <button role="tab" aria-selected="false" data-view="check">チェック</button>
-  <button role="tab" aria-selected="false" data-view="plan">計画</button>
   <button role="tab" aria-selected="false" data-view="tasks">タスク</button>
   <button role="tab" aria-selected="false" data-view="settings">設定</button>
   <button role="tab" aria-selected="false" data-view="connect">接続</button>
@@ -803,7 +802,7 @@ nav.tabs button[aria-selected="true"]{box-shadow:inset 0 3px 0 var(--shu)}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-10-31 r109";
+const APP_VERSION = "2026-11-06 r111";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -815,6 +814,7 @@ const TASKLOG_DIR = "roadmap/tasks/log";
 const APPLOG_DIR = "roadmap/tasks/applog";
 const CUTOVER_PATH = "roadmap/tasks/cutover.json";
 const STAFF_PATH = "roadmap/gov/staff.json";
+const NAISEI_PATH = "roadmap/gov/naisei.json";     // 内省院(省アプリ):毎日の内省時間と、その中身
 const SHIAN_PATH = "roadmap/shian/notes.json";
 const MINS_PATH = "roadmap/gov/ministries.json";
 const LENS_PATH = "roadmap/apps/lens/data.json";     // レンズ:今なっている人物(見るだけ)     // 省の名前(省アプリで直したもの)。画面にはタグではなく名前を出す
@@ -1978,7 +1978,7 @@ function nowMinutes(){
 function renderToday(){
   if (isHiddenView("view-today")) return;
   const sbBox = document.getElementById("staff-banner");
-  if (sbBox) sbBox.innerHTML = lensHtml() + alertsHtml() + staffBanner() + kenseiHtml() + remindersHtml() + flowRateHtml();
+  if (sbBox) sbBox.innerHTML = lensHtml() + alertsHtml() + staffBanner() + naiseiHtml() + kenseiHtml() + remindersHtml() + flowRateHtml();
   const doc = state.tasksDoc;
   const dateEl = document.getElementById("date");
   const notices = document.getElementById("notices");
@@ -2011,7 +2011,7 @@ function renderToday(){
   const nowMin = real ? nowMinutes() : null;
   const rp = lsGet(KEY_REPLAN, null), replanAt = real && rp && rp.date === doc.date ? rp.at : null;
   const dg = lsGet(KEY_DOING, null), doing = new Set(dg && dg.date === doc.date ? dg.names : []);
-  const plan = buildPlan(doc, state.settings, done, events, replanAt);
+  const plan = buildPlan(doc, state.settings, done, events.concat(naiseiEvents(doc.date)), replanAt);
   // 予定の終わりを過ぎても済んでいないもの(最中と言ったものは除く)
   const overdue = it => real && it.task && !it.isEvent && !it.task.done && it.end != null && it.end <= nowMin && !doing.has(it.task.name);
   let overdueN = 0;
@@ -2183,6 +2183,81 @@ function stopHtml(it, time, places){
     "</div></div></div>";
 }
 
+
+/* ───────── 内省時間(省の内省院で決めたもの)と、思案の To do ─────────
+   どちらもタスクではないので、要再設定にも集計にも入らない。
+   時刻のあるものは時間割に動かせない区間として入り、時刻のないものは「時間の指定なし」として今日の画面に出る。
+   内省は中身ごとに 済み/半分 をつけ、その時間の割合を実行率として「__naisei」に残す(省の内省院がグラフにする)。
+   思案の To do のチェックは、思案のデータ(notes.json)に書き戻す */
+const nsMinOf = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ""); return m ? +m[1] * 60 + +m[2] : null; };
+const nsHM = m => String(Math.floor(m / 60) % 24).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+const nsLabel = m => m >= 60 ? Math.floor(m / 60) + "時間" + (m % 60 ? m % 60 + "分" : "") : m + "分";
+function naiseiPlan(date){
+  const N = state.naisei; if (!N) return null;
+  const o = (N.dayOff || {})[date];
+  if (o && o.off) return null;
+  if (!(o && o.start) && !(N.days || [0, 1, 2, 3, 4, 5, 6]).includes(weekdayOf(date))) return null;
+  let min = Math.round((+N.activeHours || 16) * 60 * (+N.ratio || 0) / 100), start = (o && o.start) || N.start || "";
+  if (!N.ratio && nsMinOf(N.start) != null && nsMinOf(N.end) != null) min = nsMinOf(N.end) - nsMinOf(N.start);   // 前の形
+  const items = (N.items || []).map(it => ({ id: it.id, name: it.name, time: it.time || "", min: Math.round(min * (+it.ratio || 0) / 100) || +it.min || 0 }));
+  return { start: nsMinOf(start) != null ? start : "", min, items };
+}
+// 思案の To do(行軍表に出す印のあるもの)
+function shianCal(){ return (state.shian && state.shian.cal) || null; }
+function shianOn(it, d){ if (!it.date) return false; if (it.date === d) return true; if (!it.repeat || it.date > d) return false;
+  let x = it.date; for (let k = 0; k < 2000 && x < d; k++) x = it.repeat === "日" ? addDaysR(x, 1) : it.repeat === "週" ? addDaysR(x, 7) : addMonthsR(x, 1); return x === d; }
+function addDaysR(d, n){ const t = new Date(d + "T12:00:00Z"); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); }
+function addMonthsR(d, n){ const t = new Date(d + "T12:00:00Z"); t.setUTCMonth(t.getUTCMonth() + n); return t.toISOString().slice(0, 10); }
+const shianDone = (it, d) => it.repeat ? (it.doneDates || []).includes(d) : !!it.done;
+function shianToday(d){ const C = shianCal(); if (!C) return []; return (C.items || []).filter(it => it.todo && it.roadmap !== false && shianOn(it, d)); }
+function shianOverdue(d){ const C = shianCal(); if (!C) return []; return (C.items || []).filter(it => it.todo && it.roadmap !== false && !it.repeat && !it.done && it.date && it.date < d); }
+// 時間割に入れる区間
+function naiseiEvents(date){
+  const P = naiseiPlan(date), out = [], full = ORGANS.slice();
+  if (P && P.start) out.push({ id: "naisei-" + date, name: "内省時間", start: P.start, end: nsHM(nsMinOf(P.start) + Math.max(5, P.min)), place: ANYWHERE, organs: full, naisei: true });
+  else if (P) P.items.filter(it => nsMinOf(it.time) != null && it.min > 0).forEach(it => out.push({ id: "naisei-" + it.id + "-" + date, name: "内省:" + it.name, start: it.time, end: nsHM(nsMinOf(it.time) + it.min), place: ANYWHERE, organs: full, naisei: true }));
+  shianToday(date).filter(it => nsMinOf(it.time) != null && !shianDone(it, date)).forEach(it => out.push({ id: "shian-" + it.id + "-" + date, name: "思案:" + it.title, start: it.time,
+    end: nsMinOf(it.end) != null && nsMinOf(it.end) > nsMinOf(it.time) ? it.end : nsHM(nsMinOf(it.time) + 30), place: ANYWHERE, organs: full, shian: true }));
+  return out;
+}
+const RATIO_NEXT = { 0: 50, 50: 100, 100: 0 }, RATIO_LABEL = { 0: "○", 50: "半分", 100: "✓ 済み" };
+function naiseiRec(d){ return ((((state.appLogs[d.slice(0, 7)] || {})[d]) || {}).__naisei) || {}; }
+function naiseiRate(P, rec){ const its = rec.items || {}, tot = P.items.reduce((a, it) => a + (it.min || 0), 0) || P.items.length;
+  const got = P.items.reduce((a, it) => a + (it.min || (tot === P.items.length ? 1 : 0)) * (+its[it.id] || 0) / 100, 0); return tot ? Math.round(got / tot * 100) : 0; }
+function naiseiHtml(){
+  const d = taskDay(), P = naiseiPlan(d); let h = "";
+  if (P) {
+    const rec = naiseiRec(d), its = rec.items || {}, rate = rec.rate != null ? rec.rate : 0;
+    const timed = P.items.filter(it => nsMinOf(it.time) != null).sort((a, b) => nsMinOf(a.time) - nsMinOf(b.time)), untimed = P.items.filter(it => nsMinOf(it.time) == null);
+    const row = it => { const v = +its[it.id] || 0; return '<li><button type="button" class="nb-r r' + v + '" data-ns-item="' + esc(it.id) + '">' + RATIO_LABEL[v] + "</button>" + (it.time ? "<b>" + esc(it.time) + "</b> " : "") + esc(it.name) + "<small>(" + nsLabel(it.min) + ")</small></li>"; };
+    h += '<div class="naisei-box' + (rate >= 100 ? " done" : "") + '"><div class="nb-h"><b>内省時間</b><span>' + nsLabel(P.min) + (P.start ? "・" + esc(P.start) + "〜" + esc(nsHM(nsMinOf(P.start) + P.min)) : "") + "</span>" +
+      '<span class="nb-rate">実行率 <b>' + rate + "%</b></span></div>" +
+      (timed.length ? '<ul class="nb-items">' + timed.map(row).join("") + "</ul>" : "") +
+      (untimed.length ? '<div class="nb-sub">時間の指定なし</div><ul class="nb-items">' + untimed.map(row).join("") + "</ul>" : "") +
+      '<div class="nb-f">押すたびに ○ → 半分 → 済み。中身の時間の割合が実行率になる(省の内省院でグラフに)</div></div>';
+  }
+  const T = shianToday(d), O = shianOverdue(d);
+  if (T.length || O.length) {
+    const srow = (it, day, over) => '<li class="' + (shianDone(it, day) ? "sd" : "") + '"><button type="button" class="nb-r ' + (shianDone(it, day) ? "r100" : "r0") + '" data-shian-done="' + esc(it.id) + '" data-d="' + esc(day) + '">' + (shianDone(it, day) ? "✓" : "○") + "</button>" +
+      (it.time ? "<b>" + esc(it.time) + "</b> " : "") + esc(it.title) + (over ? '<small>(' + esc(it.date.slice(5).replace("-", "/")) + 'の分)</small><button type="button" class="nb-mini" data-shian-today="' + esc(it.id) + '">今日へ</button>' : "") + "</li>";
+    const timed = T.filter(it => nsMinOf(it.time) != null).sort((a, b) => nsMinOf(a.time) - nsMinOf(b.time)), untimed = T.filter(it => nsMinOf(it.time) == null);
+    h += '<div class="naisei-box shian"><div class="nb-h"><b>思案の To do</b><span>' + T.filter(it => !shianDone(it, d)).length + "件</span></div>" +
+      (O.length ? '<div class="nb-warn">思案の To do を確かめる(前の日にやらなかったもの ' + O.length + "件)</div><ul class=\"nb-items\">" + O.map(it => srow(it, it.date, true)).join("") + "</ul>" : "") +
+      (timed.length ? '<ul class="nb-items">' + timed.map(it => srow(it, d)).join("") + "</ul>" : "") +
+      (untimed.length ? '<div class="nb-sub">時間の指定なし</div><ul class="nb-items">' + untimed.map(it => srow(it, d)).join("") + "</ul>" : "") + "</div>";
+  }
+  return h;
+}
+// 思案のデータに書き戻す(いつも読み直してからかけるので、思案での変更を消さない)
+async function commitShian(mutate){
+  if (!state.conn) return false;
+  for (let k = 0; k < 3; k++) {
+    try { const r = await readJson(SHIAN_PATH); const doc = r.data || { version: 2, notes: [] }; doc.cal = doc.cal || { items: [] };
+      if (mutate(doc) === false) return false; await writeJson(SHIAN_PATH, doc, r.sha); state.shian = doc; renderToday(); return true; }
+    catch (e) { if ((e.status === 409 || e.status === 422) && k < 2) continue; tkStatus("思案に保存できませんでした:" + (e.message || e), true); return false; }
+  }
+  return false;
+}
 /* ───────── 用事 ───────── */
 
 // その日の用事。手で入れたものに、曜日で自動に入るよく使う用事を足す
@@ -4313,10 +4388,11 @@ async function loadAll(){
   st.classList.remove("err");
   st.textContent = "読み込んでいます…";
   try {
-    const [t, s, ev, pl, ps, sf, sh, pg0, tj] = await Promise.all([readJson(TASKS_PATH), readJson(SETTINGS_PATH), readJson(EVENTS_PATH),
+    const [t, s, ev, pl, ps, sf, sh, pg0, tj, nsx] = await Promise.all([readJson(TASKS_PATH), readJson(SETTINGS_PATH), readJson(EVENTS_PATH),
                                                   readJson(PLAN_PATH), readJson(PLAN_STATUS_PATH), readJson(STAFF_PATH).catch(() => ({})),
                                                   readJson(SHIAN_PATH).catch(() => ({})), readJson("roadmap/gov/pages.json").catch(() => ({})),
-                                                  readJson(TEJUN_PATH).catch(() => null)]);
+                                                  readJson(TEJUN_PATH).catch(() => null), readJson(NAISEI_PATH).catch(() => null)]);
+    if (nsx) state.naisei = nsx.data || null;
     state.pagesDoc = (pg0 && pg0.data) || null;
     if (tj) { state.tejun = tj.data || null; state.tjRunsState = ""; }     // 読めなかったときは前のものを使う
     state.staff = (sf && sf.data) || null;
@@ -4629,6 +4705,7 @@ function showToast(text, undo){
 // その画面が見えていないか(画面が無いときは描く)
 function isHiddenView(id){ const v = document.getElementById(id); return !!(v && v.hidden) && !window.__renderAll; }
 function showView(name){
+  if (name === "plan") name = "today";     // 計画のタブはなくした
   document.querySelectorAll(".view").forEach(v => v.hidden = (v.id !== "view-" + name));
   if (name === "today") renderToday();
   if (name === "plan") renderPlan();
@@ -4797,6 +4874,17 @@ function bind(){
   });
 
   document.getElementById("staff-banner").addEventListener("click", async e => {
+    const nsi = e.target.closest("[data-ns-item]");
+    if (nsi) { const d = taskDay(), P = naiseiPlan(d); if (!P) return; const cur = naiseiRec(d), its = Object.assign({}, cur.items || {}), id = nsi.dataset.nsItem; its[id] = RATIO_NEXT[+its[id] || 0];
+      if (!its[id]) delete its[id]; const rate = naiseiRate(P, { items: its });
+      await commitAppLog(d, () => setAppRecord(d, "__naisei", { items: Object.keys(its).length ? its : null, rate: Object.keys(its).length ? rate : null, at: nowHM(), done: null })); renderToday(); return; }
+    const sdn = e.target.closest("[data-shian-done]");
+    if (sdn) { const id = sdn.dataset.shianDone, day = sdn.dataset.d;
+      await commitShian(doc => { const it = (doc.cal.items || []).find(x => x.id === id); if (!it) return false;
+        if (it.repeat) { it.doneDates = it.doneDates || []; it.doneDates = it.doneDates.includes(day) ? it.doneDates.filter(x => x !== day) : it.doneDates.concat([day]).slice(-60); }
+        else { it.done = !it.done; it.doneAt = it.done ? taskDay() : null; if (it.done) it.seen = true; } }); return; }
+    const stt = e.target.closest("[data-shian-today]");
+    if (stt) { const id = stt.dataset.shianToday; await commitShian(doc => { const it = (doc.cal.items || []).find(x => x.id === id); if (!it) return false; it.date = taskDay(); it.carried = (it.carried || 0) + 1; }); return; }
     const kk = e.target.closest("[data-kk]");
     if (kk) { const [id, v] = kk.dataset.kk.split(":"); const reason = v === "ng" ? (window.prompt("なぜ破ったか(一言)", "") || "").trim() : ""; await kenseiKeep(id, v === "ok", reason); return; }
     const b = e.target.closest("[data-flow-ease]"); if (!b) return;
@@ -5530,7 +5618,30 @@ window.__roadmap = { computePrestige, savePrestige, computeGovernance, saveGover
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
 })();
 </script>
-<style>.se-row{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin:.5rem 0;font-size:.86rem}.se-btn{min-width:2.6rem;border:1px solid #bbb;border-radius:999px;background:#fff;padding:.1rem .7rem;font:inherit;cursor:pointer}.se-btn[aria-pressed="true"]{background:#1f2328;color:#fff;border-color:#1f2328}.se-vol{display:flex;align-items:center;gap:.3rem}.se-vol input{width:8rem}</style>
+<style>.se-row{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin:.5rem 0;font-size:.86rem}.se-btn{min-width:2.6rem;border:1px solid #bbb;border-radius:999px;background:#fff;padding:.1rem .7rem;font:inherit;cursor:pointer}.se-btn[aria-pressed="true"]{background:#1f2328;color:#fff;border-color:#1f2328}.se-vol{display:flex;align-items:center;gap:.3rem}.se-vol input{width:8rem}
+/* 内省時間 */
+.naisei-box{background:var(--sheet);border:1px solid var(--rule);border-left:4px solid #2F4F8A;border-radius:4px;padding:.6rem .8rem;margin:0 0 1rem}
+.naisei-box.done{border-left-color:#3D7A55;opacity:.85}
+.naisei-box .nb-h{display:flex;align-items:center;gap:.6rem}
+.naisei-box .nb-h span{color:var(--sub);font-variant-numeric:tabular-nums}
+.naisei-box .nb-tick{margin-left:auto;border:1px solid var(--rule);background:transparent;border-radius:999px;padding:.25rem .7rem;cursor:pointer;font-size:.85rem}
+.naisei-box .nb-tick.on{background:#3D7A55;color:#fff;border-color:#3D7A55}
+.naisei-box .nb-items{margin:.4rem 0 .2rem;padding-left:1.1rem;font-size:.88rem}
+.naisei-box .nb-items small{color:var(--sub);margin-left:.2rem}
+.naisei-box .ns-n{margin-left:.4rem;font-size:.72rem;padding:.05rem .35rem;border-radius:999px;background:#2F4F8A18;color:#2F4F8A}
+.naisei-box .nb-f{font-size:.72rem;color:var(--sub)}
+
+.naisei-box .nb-rate{margin-left:auto;font-size:.85rem}
+.naisei-box .nb-r{border:1px solid var(--rule);background:transparent;border-radius:999px;padding:.05rem .5rem;margin-right:.35rem;font-size:.75rem;cursor:pointer;min-width:2.6rem}
+.naisei-box .nb-r.r50{background:#F2C46B;border-color:#F2C46B}
+.naisei-box .nb-r.r100{background:#3D7A55;color:#fff;border-color:#3D7A55}
+.naisei-box .nb-items{list-style:none;padding-left:0} .naisei-box .nb-items li{margin:.2rem 0}
+.naisei-box .nb-sub{font-size:.75rem;color:var(--sub);margin-top:.3rem}
+.naisei-box.shian{border-left-color:#B5432F}
+.naisei-box li.sd{opacity:.6;text-decoration:line-through}
+.naisei-box .nb-warn{font-size:.82rem;color:#B5432F;margin:.3rem 0 0}
+.naisei-box .nb-mini{margin-left:.4rem;border:1px solid var(--rule);background:transparent;border-radius:4px;font-size:.72rem;padding:0 .35rem;cursor:pointer}
+</style>
 <script id="se-core">
 // ───────── 効果音(ブラウザの中で音を合成。音のファイルは使わない)─────────
 // 設定(入/切・音量)は 3つのアプリで共通(localStorage の se-on / se-vol)
