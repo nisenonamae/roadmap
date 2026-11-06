@@ -670,7 +670,10 @@ nav.tabs button[aria-selected="true"]{box-shadow:inset 0 3px 0 var(--shu)}
       <input id="tk-q" type="search" placeholder="名前で探す" style="flex:1 1 9rem;min-width:8rem;padding:.3rem .5rem;border:1px solid var(--rule);border-radius:3px;font:inherit;background:#fff">
       <select id="tk-min"><option value="">すべての省</option></select>
       <select id="tk-stat"><option value="">すべての状況</option></select>
+      <select id="tk-wave"><option value="">すべてのSTAGE・WAVE</option></select>
+      <button type="button" class="btn ghost" data-bulk-open>まとめてアーカイブ</button>
     </div>
+    <div id="tk-bulk"></div>
     <div class="tk-bar">
       <label>並べ方 <select id="tk-group"><option value="省">省ごと</option><option value="状況">状況ごと</option></select></label>
       <label>順番 <select id="tk-sort"><option value="name">名前順</option><option value="near">100%に近い順</option><option value="far">100%に遠い順</option></select></label>
@@ -802,7 +805,7 @@ nav.tabs button[aria-selected="true"]{box-shadow:inset 0 3px 0 var(--shu)}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-11-06 r115";
+const APP_VERSION = "2026-11-07 r116";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -3324,11 +3327,19 @@ function renderTasks(){
     if (!opts.includes(cur)) sel.value = "";
   };
   keep(fm, mins, minName); keep(fs, stats.sort((a, b) => (order[a] ?? 9) - (order[b] ?? 9)));
+  // STAGE・WAVE:省を選んでいれば、その省のタスクに結びついたものだけを並べる
+  const fw = document.getElementById("tk-wave"), wavesOf = t => (t.def.waves || []).map(waveLabel).filter(Boolean);
+  const wlist = Array.from(new Set(all.filter(t => !fm.value || (t.def.ministries || []).includes(fm.value)).flatMap(wavesOf)))
+    .sort((a, b) => a.localeCompare(b, "ja", { numeric: true }));
+  keep(fw, wlist.concat(["__none"]), o => o === "__none" ? "(結びつきなし)" : o);
   const hit = t => (!q || t.def.name.toLowerCase().includes(q) || (t.def.aliases || []).some(a => a.toLowerCase().includes(q))) &&
                    (!fm.value || (t.def.ministries || []).includes(fm.value)) &&
-                   (!fs.value || (t.waiting ? "待機中" : t.status) === fs.value);
+                   (!fs.value || (t.waiting ? "待機中" : t.status) === fs.value) &&
+                   (!fw.value || (fw.value === "__none" ? !wavesOf(t).length : wavesOf(t).includes(fw.value)));
   const list = all.filter(hit);
-  const filtering = !!(q || fm.value || fs.value);
+  const filtering = !!(q || fm.value || fs.value || fw.value);
+  state.tkFiltered = list;
+  renderBulk(list);
 
   const live = list.filter(t => LIVE.includes(t.status));
   const count = st => list.filter(t => t.status === st).length;
@@ -3859,6 +3870,56 @@ async function commitAppLog(day, mutate){
   return false;
 }
 
+// STAGE・WAVEの名前(文字のときも、{label} のときも、それが入れ子のときも)
+function waveLabel(w){
+  let x = w, n = 0;
+  while (x && typeof x === "object" && n++ < 5) x = x.label != null ? x.label : (x.key != null ? String(x.key).split("|").slice(1).join("|") : "");
+  x = String(x || "").trim(); return x === "undefined" ? "" : x; }
+// ───── まとめてアーカイブ:絞り込んだタスクを、チェックで選んでまとめてアーカイブする ─────
+function renderBulk(list){
+  const box = document.getElementById("tk-bulk"); if (!box) return;
+  const undo = state.lastBulk && state.lastBulk.date === taskDay()
+    ? '<div class="bulk-undo">' + state.lastBulk.ids.length + ' 件をアーカイブしました <button type="button" class="btn ghost" data-bulk-undo>さっきのまとめてアーカイブを戻す</button></div>' : "";
+  if (!state.bulkOpen) { box.innerHTML = undo; return; }
+  const can = t => actionsFor(t.status).includes("archive");
+  const rows = list.map(t => '<label class="bulk-row' + (can(t) ? "" : " off") + '"><input type="checkbox" data-bulk-id="' + esc(t.def.id) + '"' + (can(t) ? " checked" : " disabled") + ">" +
+    '<span class="bn">' + esc(t.def.name) + '</span><span class="bs">' + esc(t.waiting ? "待機中" : t.status) + '</span><span class="bw">' + esc(((t.def.ministries || []).map(minName).join("・")) + " " + ((t.def.waves || []).map(waveLabel).join(" "))) + "</span></label>").join("");
+  const n = list.filter(can).length;
+  box.innerHTML = undo + '<div class="bulk"><div class="bulk-h"><b>まとめてアーカイブ</b><span>今の絞り込みの ' + list.length + ' 件(アーカイブできるもの ' + n + ' 件)。外したいものはチェックを外す</span></div>' +
+    (list.length ? '<div class="bulk-tools"><button type="button" class="btn ghost" data-bulk-all="1">全部選ぶ</button><button type="button" class="btn ghost" data-bulk-all="0">全部外す</button></div><div class="bulk-list">' + rows + "</div>" : '<div class="empty">絞り込んだタスクがありません。</div>') +
+    '<div class="row"><button type="button" class="btn" data-bulk-go>選んだものをアーカイブする</button><button type="button" class="btn ghost" data-bulk-close>やめる</button><span class="status" id="bulk-status"></span></div></div>';
+}
+document.addEventListener("change", e => { if (e.target && e.target.id === "tk-wave") renderTasks(); });
+document.addEventListener("click", async e => {
+  const b = e.target.closest("[data-bulk-open],[data-bulk-close],[data-bulk-all],[data-bulk-go],[data-bulk-undo]"); if (!b) return;
+  if (b.matches("[data-bulk-open]")) { state.bulkOpen = !state.bulkOpen; renderTasks(); return; }
+  if (b.matches("[data-bulk-close]")) { state.bulkOpen = false; renderTasks(); return; }
+  if (b.matches("[data-bulk-all]")) { document.querySelectorAll("#tk-bulk input[data-bulk-id]:not(:disabled)").forEach(x => x.checked = b.dataset.bulkAll === "1"); return; }
+  const D = taskDay();
+  if (b.matches("[data-bulk-go]")) {
+    const ids = Array.from(document.querySelectorAll("#tk-bulk input[data-bulk-id]:checked")).map(x => x.dataset.bulkId);
+    if (!ids.length) { const st = document.getElementById("bulk-status"); if (st) st.textContent = "選ばれていません"; return; }
+    if (!confirm(ids.length + " 件のタスクをアーカイブしますか?(今日から。すぐあとなら戻せます)")) return;
+    await commitOverlay(() => {
+      for (const id of ids) {
+        const t = state.overlay.tasks[id] = Object.assign({}, state.overlay.tasks[id] || {});
+        t.events = (t.events || []).filter(x => x.date !== D).concat([{ date: D, status: "アーカイブ", bulk: true }]);
+      }
+    });
+    state.lastBulk = { ids, date: D }; state.bulkOpen = false; renderTasks(); tkStatus(ids.length + " 件をアーカイブしました。");
+    return;
+  }
+  if (b.matches("[data-bulk-undo]")) {
+    const L = state.lastBulk; if (!L) return;
+    await commitOverlay(() => {
+      for (const id of L.ids) {
+        const t = state.overlay.tasks[id]; if (!t) continue;
+        state.overlay.tasks[id] = Object.assign({}, t, { events: (t.events || []).filter(x => !(x.date === L.date && x.bulk && x.status === "アーカイブ")) });
+      }
+    });
+    tkStatus(L.ids.length + " 件のアーカイブを戻しました。"); state.lastBulk = null; renderTasks();
+  }
+});
 // 状況ごとに出す操作
 const ACTIONS = {
   pause:    ["休止する", "休止中"],
@@ -5681,6 +5742,15 @@ if (document.readyState === "loading") document.addEventListener("DOMContentLoad
 /* 今日は該当しない */
 .rec .q.na{background:#8f8a7e;color:#fff;border-color:#8f8a7e;font-weight:700}
 .rec.na .rn{opacity:.55}
+
+#tk-bulk .bulk{border:1px solid var(--rule);border-radius:6px;padding:.6rem .7rem;margin:.5rem 0;background:#fff}
+#tk-bulk .bulk-h{display:flex;gap:.6rem;flex-wrap:wrap;align-items:baseline;font-size:.85rem}#tk-bulk .bulk-h span{color:var(--sub);font-size:.78rem}
+#tk-bulk .bulk-tools{display:flex;gap:.4rem;margin:.4rem 0}
+#tk-bulk .bulk-list{max-height:22rem;overflow:auto;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);margin:.3rem 0}
+#tk-bulk .bulk-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:.1rem .5rem;align-items:center;padding:.3rem .2rem;border-bottom:1px dotted var(--rule);font-size:.84rem;cursor:pointer}
+#tk-bulk .bulk-row .bw{grid-column:2/4;font-size:.72rem;color:var(--sub)}#tk-bulk .bulk-row .bs{font-size:.75rem;color:var(--sub)}
+#tk-bulk .bulk-row.off{opacity:.5;cursor:default}
+#tk-bulk .bulk-undo{font-size:.82rem;margin:.4rem 0;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
 </style>
 <script id="se-core">
 // ───────── 効果音(ブラウザの中で音を合成。音のファイルは使わない)─────────
