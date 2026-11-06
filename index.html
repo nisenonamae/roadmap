@@ -802,7 +802,7 @@ nav.tabs button[aria-selected="true"]{box-shadow:inset 0 3px 0 var(--shu)}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-11-06 r113";
+const APP_VERSION = "2026-11-06 r115";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -3558,15 +3558,16 @@ function renderTodayRecords(list){
     (!fm || (t.def.ministries || []).includes(fm)) && (!fd || (fd === "done" ? isDone(t) : !isDone(t)));
   const filtering = !!(words.length || (mEl && mEl.value) || fd);
   // 済みにしても、その場に✓で残す(折りたたむのは今日のタブの行軍表だけ)
-  const open = today.filter(hitCk), fin = today.filter(isDone);
+  const isNA = t => t.check === "今日は該当しない";
+  const open = today.filter(hitCk), fin = today.filter(isDone), naN = today.filter(isNA).length;
   state.ckShown = open.map(t => t.def.id);
   let html = '<div class="rec-list"><h2>' + (yday ? "昨日(" + day.slice(5).replace("-", "/") + ")の記録" : "今日の記録") + '　<span style="font-size:.8rem;color:var(--sub);font-weight:400">' +
-             fin.length + " / " + today.length + (filtering ? "　絞り込み " + open.length + "件" : "") + "</span></h2>" +
+             fin.length + " / " + (today.length - naN) + (naN ? "(該当しない " + naN + ")" : "") + (filtering ? "　絞り込み " + open.length + "件" : "") + "</span></h2>" +
              (yday ? '<p class="notice" style="font-size:.84rem">昨日の記録を直しています。直すと、今日の累計・連続・状況もすぐに数え直されます。国力には明日の朝の計算から入ります。</p>' : "") +
              (open.length > 1 ? '<div class="ck-bulk"><span>' + (filtering ? "絞り込んだ " : "表示中の ") + "<b>" + open.length + "</b>件をまとめて</span>" +
                [["完了", "完了"], ["不実行", "不実行"], ["今日は該当しない", "該当しない"], ["", "付けていない状態に戻す"]].map(([v, l]) => '<button type="button" class="btn ghost sm" data-ck-bulk="' + esc(v) + '">' + l + "</button>").join("") + "</div>" : "");
   const recRow = t => {
-    const done = isDone(t), miss = t.check === "不実行";
+    const done = isDone(t), miss = t.check === "不実行", na = isNA(t);
     const sub = [t.check || "未着手"];
     if (mode !== "slot") sub.push(t.def.slot || "");
     if (mode === "prio" && isReach(t)) sub.push("今日やらないと落ちる");
@@ -3575,10 +3576,10 @@ function renderTodayRecords(list){
     { const rc = (t.row && t.row.rec) || {}; if (t.row && t.row.ratio != null && (rc.did != null && rc.did !== "" || rc.ratio != null && rc.ratio !== "")) sub.push("実行率 " + Math.round(t.row.ratio * 1000) / 10 + "%"); }
     const pos = yday ? null : cyclePos(t);
     if (t.row && t.row.prevBooking) sub.push("予約:" + t.row.prevBooking);
-    return '<div class="rec" data-recrow="' + esc(t.def.id) + '"><div class="rn">' + (yday ? nameHtml(t.def.name) : tjNameHtml(t, t.def.name)) + "<small>" + esc(sub.filter(Boolean).join("　")) + "</small>" +
+    return '<div class="rec' + (na ? " na" : "") + '" data-recrow="' + esc(t.def.id) + '"><div class="rn">' + (yday ? nameHtml(t.def.name) : tjNameHtml(t, t.def.name)) + "<small>" + esc(sub.filter(Boolean).join("　")) + "</small>" +
       (pos ? '<button type="button" class="cyc-pos" data-tjopen="' + esc(t.def.id) + '" aria-label="サイクルの現在地と今日の手順">' + cycleChipHtml(pos) + "</button>" : "") + "</div>" +
-      '<button type="button" class="q' + (done ? " on" : miss ? " ng" : "") + '" data-quick="' + esc(t.def.id) +
-      '" aria-label="' + esc(t.def.name) + (done ? "の完了を取り消す" : "を完了にする") + '">' + (done ? "✓" : miss ? "✕" : "○") + "</button>" +
+      '<button type="button" class="q' + (done ? " on" : miss ? " ng" : na ? " na" : "") + '" data-quick="' + esc(t.def.id) +
+      '" aria-label="' + esc(t.def.name) + (done ? "を今日は該当しないにする" : na ? "を未実行にする" : miss ? "の記録を消す" : "を完了にする") + '">' + (done ? "✓" : miss ? "✕" : na ? "―" : "○") + "</button>" +
       '<button type="button" class="more" data-record="' + esc(t.def.id) + '">記録</button></div>';
   };
   const byName = (a, b) => a.def.name.localeCompare(b.def.name, "ja");
@@ -5003,6 +5004,7 @@ function bind(){
     const q = e.target.closest("[data-quick]");
     const r = e.target.closest("[data-record]");
     const today = checkDay();
+
     if (q) {
       const id = q.dataset.quick;
       const t0 = taskStates().find(x => x.def.id === id);
@@ -5010,7 +5012,10 @@ function bind(){
       if (!t || !t.row) return;
       const on = !window.TaskEngine.DONE.has(t.check);
       const before = (((state.appLogs[today.slice(0, 7)] || {})[today] || {})[id] || {}).check || null;
-      if (!on) { await commitAppLog(today, () => setAppRecord(today, id, { check: uncheckValue(today, t) })); return; }
+      // 押すたびに 白 → 実行 → 今日は該当しない → 未実行 → 白
+      if (window.TaskEngine.DONE.has(t.check)) { await commitAppLog(today, () => setAppRecord(today, id, { check: "今日は該当しない" })); return; }
+      if (t.check === "今日は該当しない") { await commitAppLog(today, () => setAppRecord(today, id, { check: "不実行" })); return; }
+      if (t.check === "不実行") { await commitAppLog(today, () => setAppRecord(today, id, { check: uncheckValue(today, t) })); return; }
       await commitAppLog(today, () => setAppRecord(today, id, { check: "完了" }));
       showToast("「" + t.def.name + "」を完了にしました", () => {
         flashTargetId = id;
@@ -5672,6 +5677,10 @@ if (document.readyState === "loading") document.addEventListener("DOMContentLoad
 .naisei-box .nb-items li{display:flex;align-items:center;gap:.25rem}
 .naisei-box input[type=number]{width:3.4rem;padding:.1rem .25rem;border:1px solid var(--rule);border-radius:4px;background:transparent;font:inherit;font-size:.8rem;text-align:right}
 .naisei-box .nb-tot{font-size:.8rem;margin:.35rem 0 .1rem;color:var(--sub)} .naisei-box .nb-tot small{margin-left:.3rem}
+
+/* 今日は該当しない */
+.rec .q.na{background:#8f8a7e;color:#fff;border-color:#8f8a7e;font-weight:700}
+.rec.na .rn{opacity:.55}
 </style>
 <script id="se-core">
 // ───────── 効果音(ブラウザの中で音を合成。音のファイルは使わない)─────────
