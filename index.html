@@ -802,7 +802,7 @@ nav.tabs button[aria-selected="true"]{box-shadow:inset 0 3px 0 var(--shu)}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-11-06 r111";
+const APP_VERSION = "2026-11-06 r113";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -2192,11 +2192,13 @@ function stopHtml(it, time, places){
 const nsMinOf = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ""); return m ? +m[1] * 60 + +m[2] : null; };
 const nsHM = m => String(Math.floor(m / 60) % 24).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
 const nsLabel = m => m >= 60 ? Math.floor(m / 60) + "時間" + (m % 60 ? m % 60 + "分" : "") : m + "分";
+// その日に有効だった曜日の設定(設定を変えた日から新しい設定)
+function nsDaysAt(N, date){ const h = (N.daysHist || []).filter(x => x.from <= date).sort((a, b) => a.from < b.from ? -1 : 1); return h.length ? h[h.length - 1].days : (N.days || [0, 1, 2, 3, 4, 5, 6]); }
 function naiseiPlan(date){
   const N = state.naisei; if (!N) return null;
   const o = (N.dayOff || {})[date];
   if (o && o.off) return null;
-  if (!(o && o.start) && !(N.days || [0, 1, 2, 3, 4, 5, 6]).includes(weekdayOf(date))) return null;
+  if (!(o && o.start) && !nsDaysAt(N, date).includes(weekdayOf(date))) return null;
   let min = Math.round((+N.activeHours || 16) * 60 * (+N.ratio || 0) / 100), start = (o && o.start) || N.start || "";
   if (!N.ratio && nsMinOf(N.start) != null && nsMinOf(N.end) != null) min = nsMinOf(N.end) - nsMinOf(N.start);   // 前の形
   const items = (N.items || []).map(it => ({ id: it.id, name: it.name, time: it.time || "", min: Math.round(min * (+it.ratio || 0) / 100) || +it.min || 0 }));
@@ -2222,19 +2224,29 @@ function naiseiEvents(date){
 }
 const RATIO_NEXT = { 0: 50, 50: 100, 100: 0 }, RATIO_LABEL = { 0: "○", 50: "半分", 100: "✓ 済み" };
 function naiseiRec(d){ return ((((state.appLogs[d.slice(0, 7)] || {})[d]) || {}).__naisei) || {}; }
-function naiseiRate(P, rec){ const its = rec.items || {}, tot = P.items.reduce((a, it) => a + (it.min || 0), 0) || P.items.length;
-  const got = P.items.reduce((a, it) => a + (it.min || (tot === P.items.length ? 1 : 0)) * (+its[it.id] || 0) / 100, 0); return tot ? Math.round(got / tot * 100) : 0; }
+// 中身ごとにやった分(分)。済みなら予定の分ぜんぶ
+function naiseiDoneMin(it, rec){ const mins = rec.mins || {}, its = rec.items || {}; if (mins[it.id] != null) return Math.min(+mins[it.id], it.min || +mins[it.id]); return (it.min || 0) * (+its[it.id] || 0) / 100; }
+function naiseiRate(P, rec){
+  const tot = P.items.reduce((a, it) => a + (it.min || 0), 0) || P.min;
+  const per = Object.keys(rec.mins || {}).length || Object.keys(rec.items || {}).length;
+  if (!per && rec.total != null) return P.min ? Math.min(100, Math.round(+rec.total / P.min * 100)) : 0;   // ぜんぶで◯分
+  const got = P.items.reduce((a, it) => a + naiseiDoneMin(it, rec), 0); return tot ? Math.min(100, Math.round(got / tot * 100)) : 0; }
 function naiseiHtml(){
   const d = taskDay(), P = naiseiPlan(d); let h = "";
   if (P) {
-    const rec = naiseiRec(d), its = rec.items || {}, rate = rec.rate != null ? rec.rate : 0;
+    const rec = naiseiRec(d), its = rec.items || {}, mins = rec.mins || {}, has = !!(rec.items || rec.mins || rec.total != null), rate = has ? naiseiRate(P, rec) : 0;
+    if (has && rec.rate !== rate && !naiseiFixing) { naiseiFixing = true; setTimeout(async () => { try { await commitAppLog(d, () => setAppRecord(d, "__naisei", { rate })); } finally { naiseiFixing = false; } }, 0); }   // 内訳を変えたら、今の内訳で計算し直して保存
+    const doneAll = Math.round(P.items.reduce((a, it) => a + naiseiDoneMin(it, rec), 0));
     const timed = P.items.filter(it => nsMinOf(it.time) != null).sort((a, b) => nsMinOf(a.time) - nsMinOf(b.time)), untimed = P.items.filter(it => nsMinOf(it.time) == null);
-    const row = it => { const v = +its[it.id] || 0; return '<li><button type="button" class="nb-r r' + v + '" data-ns-item="' + esc(it.id) + '">' + RATIO_LABEL[v] + "</button>" + (it.time ? "<b>" + esc(it.time) + "</b> " : "") + esc(it.name) + "<small>(" + nsLabel(it.min) + ")</small></li>"; };
+    const row = it => { const full = (+its[it.id] || 0) >= 100 || (mins[it.id] != null && +mins[it.id] >= it.min), part = !full && mins[it.id] != null && +mins[it.id] > 0;
+      return '<li><button type="button" class="nb-r ' + (full ? "r100" : part ? "r50" : "r0") + '" data-ns-full="' + esc(it.id) + '">' + (full ? "✓ 済み" : "○") + "</button>" + (it.time ? "<b>" + esc(it.time) + "</b> " : "") + esc(it.name) +
+        '<span class="nb-min"><input type="number" min="0" step="1" inputmode="numeric" data-ns-min="' + esc(it.id) + '" value="' + (mins[it.id] != null ? esc(String(mins[it.id])) : full ? it.min : "") + '" placeholder="0">/' + it.min + "分</span></li>"; };
     h += '<div class="naisei-box' + (rate >= 100 ? " done" : "") + '"><div class="nb-h"><b>内省時間</b><span>' + nsLabel(P.min) + (P.start ? "・" + esc(P.start) + "〜" + esc(nsHM(nsMinOf(P.start) + P.min)) : "") + "</span>" +
       '<span class="nb-rate">実行率 <b>' + rate + "%</b></span></div>" +
+      '<div class="nb-tot">ぜんぶで <input type="number" min="0" step="1" inputmode="numeric" data-ns-total value="' + (rec.total != null && !Object.keys(mins).length && !Object.keys(its).length ? esc(String(rec.total)) : "") + '" placeholder="' + doneAll + '"> / ' + P.min + "分やった<small>(中身を分けずにやったとき)</small></div>" +
       (timed.length ? '<ul class="nb-items">' + timed.map(row).join("") + "</ul>" : "") +
       (untimed.length ? '<div class="nb-sub">時間の指定なし</div><ul class="nb-items">' + untimed.map(row).join("") + "</ul>" : "") +
-      '<div class="nb-f">押すたびに ○ → 半分 → 済み。中身の時間の割合が実行率になる(省の内省院でグラフに)</div></div>';
+      '<div class="nb-f">○ を押すと済み。途中で終えたら、やった分(分)を入れる。やった分 ÷ 予定の分 が実行率(省の内省院でグラフに)</div></div>';
   }
   const T = shianToday(d), O = shianOverdue(d);
   if (T.length || O.length) {
@@ -2247,6 +2259,12 @@ function naiseiHtml(){
       (untimed.length ? '<div class="nb-sub">時間の指定なし</div><ul class="nb-items">' + untimed.map(it => srow(it, d)).join("") + "</ul>" : "") + "</div>";
   }
   return h;
+}
+let naiseiFixing = false;
+async function naiseiSave(d, P, its, mins, total){
+  const rec = { items: Object.keys(its).length ? its : null, mins: Object.keys(mins).length ? mins : null, total: total, at: nowHM(), done: null };
+  const any = rec.items || rec.mins || rec.total != null; rec.rate = any ? naiseiRate(P, { items: its, mins, total }) : null;
+  await commitAppLog(d, () => setAppRecord(d, "__naisei", rec)); renderToday();
 }
 // 思案のデータに書き戻す(いつも読み直してからかけるので、思案での変更を消さない)
 async function commitShian(mutate){
@@ -4873,11 +4891,19 @@ function bind(){
     if (box.scrollIntoView) box.scrollIntoView({ block: "nearest" });
   });
 
+  // 内省:やった分(分)を入れる
+  document.getElementById("staff-banner").addEventListener("change", async e => {
+    const t = e.target, d = taskDay(), P = naiseiPlan(d); if (!P) return;
+    if (t.dataset.nsMin != null) { const cur = naiseiRec(d), its = Object.assign({}, cur.items || {}), mins = Object.assign({}, cur.mins || {}), id = t.dataset.nsMin, v = t.value.trim();
+      delete its[id]; if (v === "") delete mins[id]; else mins[id] = Math.max(0, Math.round(+v || 0)); await naiseiSave(d, P, its, mins, null); }
+    if (t.hasAttribute("data-ns-total")) { const v = t.value.trim(); await naiseiSave(d, P, {}, {}, v === "" ? null : Math.max(0, Math.round(+v || 0))); }
+  });
   document.getElementById("staff-banner").addEventListener("click", async e => {
-    const nsi = e.target.closest("[data-ns-item]");
-    if (nsi) { const d = taskDay(), P = naiseiPlan(d); if (!P) return; const cur = naiseiRec(d), its = Object.assign({}, cur.items || {}), id = nsi.dataset.nsItem; its[id] = RATIO_NEXT[+its[id] || 0];
-      if (!its[id]) delete its[id]; const rate = naiseiRate(P, { items: its });
-      await commitAppLog(d, () => setAppRecord(d, "__naisei", { items: Object.keys(its).length ? its : null, rate: Object.keys(its).length ? rate : null, at: nowHM(), done: null })); renderToday(); return; }
+    const nsf = e.target.closest("[data-ns-full]");
+    if (nsf) { const d = taskDay(), P = naiseiPlan(d); if (!P) return; const cur = naiseiRec(d), its = Object.assign({}, cur.items || {}), mins = Object.assign({}, cur.mins || {}), id = nsf.dataset.nsFull, it = P.items.find(x => x.id === id); if (!it) return;
+      const full = (+its[id] || 0) >= 100 || (mins[id] != null && +mins[id] >= it.min);
+      if (full) { delete its[id]; delete mins[id]; } else { its[id] = 100; mins[id] = it.min; }
+      await naiseiSave(d, P, its, mins, null); return; }
     const sdn = e.target.closest("[data-shian-done]");
     if (sdn) { const id = sdn.dataset.shianDone, day = sdn.dataset.d;
       await commitShian(doc => { const it = (doc.cal.items || []).find(x => x.id === id); if (!it) return false;
@@ -5641,6 +5667,11 @@ if (document.readyState === "loading") document.addEventListener("DOMContentLoad
 .naisei-box li.sd{opacity:.6;text-decoration:line-through}
 .naisei-box .nb-warn{font-size:.82rem;color:#B5432F;margin:.3rem 0 0}
 .naisei-box .nb-mini{margin-left:.4rem;border:1px solid var(--rule);background:transparent;border-radius:4px;font-size:.72rem;padding:0 .35rem;cursor:pointer}
+
+.naisei-box .nb-min{margin-left:auto;font-size:.78rem;color:var(--sub);white-space:nowrap}
+.naisei-box .nb-items li{display:flex;align-items:center;gap:.25rem}
+.naisei-box input[type=number]{width:3.4rem;padding:.1rem .25rem;border:1px solid var(--rule);border-radius:4px;background:transparent;font:inherit;font-size:.8rem;text-align:right}
+.naisei-box .nb-tot{font-size:.8rem;margin:.35rem 0 .1rem;color:var(--sub)} .naisei-box .nb-tot small{margin-left:.3rem}
 </style>
 <script id="se-core">
 // ───────── 効果音(ブラウザの中で音を合成。音のファイルは使わない)─────────
