@@ -106,7 +106,11 @@
   }
 
   // 手で入れた状況の変更を1つ効かせる。要再設定から新規に戻す(立て直す)ときは、累計・連続・世代内累計を0から数え直す
+  const GROWTH = new Set(["新規", "進行中", "定着", "熟達", "要再設定"]);
   function applyEvent(st, e) {
+    if ("ondemand" in e) { st.od = !!e.ondemand; st.legacyOd = false; }
+    if (e.status === "随時") { st.od = true; st.legacyOd = true; if (!GROWTH.has(st.status)) st.status = "新規"; return; }   // 前の「随時」:印を付けて、育ちはそのまま(育ちの無い状況なら新規から)
+    if (e.status && st.legacyOd && e.status === "進行中" && e.resume) { st.od = false; st.legacyOd = false; }        // 前の「通常に戻す」
     if (e.status) {
       if (e.status === "新規" && st.status === "要再設定") { st.total = 0; st.streak = 0; st.genTotal = 0; st.miss = 0; }
       st.status = e.status;
@@ -124,8 +128,10 @@
   */
   function replay(def, logFor, until) {
     const ini = def.initial || {};
+    const iniOd = !!def.ondemand || ini.status === "随時";
     let st = {
-      status: ini.status || "新規",
+      od: iniOd, legacyOd: ini.status === "随時",
+      status: ini.status === "随時" ? "新規" : (ini.status || "新規"),
       total: +ini.total || 0, streak: +ini.streak || 0, best: +ini.best || 0, miss: +ini.miss || 0,
       lastDone: ini.lastDone || null, bank: +ini.bank || 0, prevBooking: ini.prevBooking || "",
       genTotal: ini.genTotal != null ? +ini.genTotal : (+ini.total || 0),
@@ -195,8 +201,8 @@
 
       let check = rec.check, bankCovers = false;
       if (!check) {
-        if (AUTO_DONE.has(st.status)) check = "完了";
-        else if (st.status === "随時") check = "今日は該当しない";
+        if (st.od || st.status === "随時") check = "今日は該当しない";   // 随時は、記録が無ければ出番なし(定着・熟達でも自動では完了にしない)
+        else if (AUTO_DONE.has(st.status)) check = "完了";
         else if (quota > 0 && st.bank >= quota) { check = "完了"; bankCovers = true; }
         else if (quota > 0 && st.bank > 0) check = "進行中";
         else check = "未着手";
@@ -206,7 +212,7 @@
       if (!rec.check && !bankCovers && ratio !== null && (rec.did != null && rec.did !== "" || rec.ratio != null && rec.ratio !== "")) check = ratio >= 1 ? "完了" : ratio > 0 ? "進行中" : check;
 
       days.push({
-        date: day, status: st.status, check, gen, genTotal: st.genTotal,
+        date: day, status: st.status, od: !!st.od, check, gen, genTotal: st.genTotal,
         total: st.total, streak: st.streak, best: st.best, miss: st.miss, lastDone: st.lastDone,
         bank: quota > 0 ? st.bank : null, prevBooking: st.prevBooking, rec, ratio, goal: goal || null, exp: st.exp, tries: st.tries,
       });
@@ -221,6 +227,7 @@
       // 1回だけのタスク(RAIDの「1回だけ」の作戦):1回済ませたら達成済み。済ませるまでは毎日出し、要再設定には落とさない
       const once = def.once || (def.interval || "").trim() === "1回";
       st = {
+        od: st.od, legacyOd: st.legacyOd,
         status: once ? (done ? "達成済み" : st.status) : nextStatus(st.status, check, total, miss, st.streak, ratio),
         total, streak, best, miss: once ? 0 : miss, lastDone,
         genTotal: r9(st.genTotal + rr), exp: r9((st.exp || 0) + rr), tries: (st.tries || 0) + (rr > 0 ? 1 : 0),
