@@ -812,7 +812,7 @@ nav.tabs button[aria-selected="true"]{box-shadow:inset 0 3px 0 var(--shu)}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-11-09 r122";
+const APP_VERSION = "2026-11-09 r123";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -1172,7 +1172,7 @@ function classify(tasksDoc, doneLocal){
   const out = { schedulable: [], done: [], reset: [], ondemand: [] };
   for (const t of (tasksDoc && tasksDoc.tasks) || []) {
     if (t.status === "要再設定") { out.reset.push(t); continue; }
-    if (t.status === "随時") { out.ondemand.push(t); continue; }
+    if (isOd(t) && !(DONE.includes(t.check) || doneLocal.has(t.name))) { out.ondemand.push(t); continue; }
     if (SKIP.includes(t.status)) continue;
     // 済みにしたものも行軍表に残す。間違えて押しても戻せるように。
     const done = doneLocal.has(t.name) || (DONE.includes(t.check) && !AUTO.includes(t.status));
@@ -2869,6 +2869,7 @@ async function taskIdFor(name, date){
 
 // タスクごとに、記録をたどって今日の状態を出す。結果は描画のあいだだけ覚えておく
 let taskCache = { key: null, list: [], bump: 0 };
+const isOd = t => !!(t && (t.od || t.ondemand || t.status === "随時"));
 function taskStates(){
   const defs = state.taskDefs;
   if (!defs || !window.TaskEngine) return [];
@@ -2887,7 +2888,7 @@ function taskStates(){
     const wait = window.TaskEngine.waitingOn ? window.TaskEngine.waitingOn(def, today) : null;
     return {
       raw, def, rep, row,
-      status: s.status,
+      status: s.status, od: !!(s.od || s.status === "随時"),
       waiting: wait,                 // STAGE・WAVEが進行中でないため、今日は効力の無いタスク(記録の状況はそのまま)
       gen: row ? row.gen : rep.gen,
       genTotal: s.genTotal, total: s.total, streak: s.streak, best: s.best, miss: s.miss, lastDone: s.lastDone,
@@ -3270,10 +3271,10 @@ function condProgress(c){
   if (c.type === "manual") return { manual: true, text: c.text, met: !!c.done };
   const t = taskStates().find(x => x.def.name === c.task || (x.def.aliases || []).includes(c.task));
   if (!t) return { text: "「" + c.task + "」", missing: true, met: false };
-  const who = "「" + t.def.name + "」";
+  const who = "「" + t.def.name + "」", tid = t.def.id;
   if (c.metric === "total" || c.metric === "streak") {
     const label = c.metric === "total" ? "累計" : "連続", cur = c.metric === "total" ? (t.total || 0) : (t.streak || 0);
-    return { text: who + "が" + label + c.value + "回", label, cur, goal: +c.value, met: cur >= +c.value };
+    return { tid, text: who + "が" + label + c.value + "回", label, cur, goal: +c.value, met: cur >= +c.value };
   }
   const goalR = ST_RANK[c.value] ?? 99, curR = ST_RANK[t.status] ?? -1, text = who + "が" + c.value;
   if (curR >= goalR) return { text, met: true, status: t.status, final: c.value };
@@ -3281,8 +3282,11 @@ function condProgress(c){
   const step = ST_LADDER().find(s => ST_RANK[s[0]] === curR + 1);
   if (!step) return { text, met: false, final: c.value, status: t.status };
   const cur = step[1] === "累計" ? (t.total || 0) : (t.streak || 0);
-  return { text, met: false, final: c.value, step: step[0], via: step[0] !== c.value, label: step[1], cur, goal: step[2], status: t.status };
+  return { tid, text, met: false, final: c.value, step: step[0], via: step[0] !== c.value, label: step[1], cur, goal: step[2], status: t.status };
 }
+// そのタスク自身が、次の段に上がるまでの数(新規→進行中は累計、進行中→定着・定着→熟達は連続)
+function ownStep(t){ const curR = ST_RANK[t.status]; if (curR == null || t.status === "要再設定") return null; const step = ST_LADDER().find(s => ST_RANK[s[0]] === curR + 1); if (!step) return null;
+  const cur = step[1] === "累計" ? Math.floor(t.total || 0) : (t.streak || 0); return { step: step[0], label: step[1], cur: Math.min(cur, step[2]), goal: step[2] }; }
 // 状況の段の並び(今の段と、目指している段がわかるように)
 function ladderHtml(cp){
   const order = ["新規", "進行中", "定着", "熟達"], fin = order.indexOf(cp.final);
@@ -3601,7 +3605,7 @@ function renderTodayRecords(list){
              (open.length > 1 ? '<div class="ck-bulk"><span>' + (filtering ? "絞り込んだ " : "表示中の ") + "<b>" + open.length + "</b>件をまとめて</span>" +
                [["完了", "完了"], ["不実行", "不実行"], ["今日は該当しない", "該当しない"], ["", "付けていない状態に戻す"]].map(([v, l]) => '<button type="button" class="btn ghost sm" data-ck-bulk="' + esc(v) + '">' + l + "</button>").join("") + "</div>" : "");
   const recRow = t => {
-    const done = isDone(t), miss = t.check === "不実行", na = isNA(t), od = t.status === "随時";
+    const done = isDone(t), miss = t.check === "不実行", na = isNA(t), od = isOd(t);
     const sub = [t.check || "未着手"];
     if (mode !== "slot") sub.push(t.def.slot || "");
     if (mode === "prio" && isReach(t)) sub.push("今日やらないと落ちる");
@@ -3667,10 +3671,11 @@ const waitText = t => t.waiting && t.waiting.length ? t.waiting.map(p => p.statu
 function taskRowHtml(t){
   const meta = t.waiting
     ? ['<span class="chip s-待機中" title="' + esc(waitText(t)) + '">待機中</span>', '<span class="wait-why">' + esc(waitText(t)) + "(" + esc(t.status) + "のまま)</span>"]
-    : ['<span class="chip s-' + esc(t.status) + '">' + esc(t.status) + "</span>"];
-  const cs0 = condSummary(t.def);
+    : ['<span class="chip s-' + esc(t.status) + '">' + esc(t.status) + "</span>"].concat(isOd(t) ? ['<span class="chip s-随時" title="出番が来たときだけ">随時</span>'] : []);
+  const cs0 = condSummary(t.def), own = ownStep(t);
+  if (own && !t.waiting) meta.push('<span class="csum own">' + own.step + "まで " + own.label + " " + own.cur + "/" + own.goal + ' <span class="bar"><i style="width:' + Math.min(100, Math.round(own.cur / own.goal * 100)) + '%"></i></span></span>');
   if (cs0) {
-    meta.push('<span class="csum">' + esc(cs0.u.label) + " クリア条件 " + cs0.met + "/" + cs0.n + (cs0.next ? "　" + condLineHtml(cs0.next, true) : "") + "</span>");
+    meta.push('<span class="csum">' + esc(cs0.u.label) + " クリア条件 " + cs0.met + "/" + cs0.n + (cs0.next && cs0.next.tid === t.def.id && !own ? "　" + condLineHtml(cs0.next, true) : "") + "</span>");
   } else if (isCompletion(t)) {
     const pct = Math.max(0, Math.min(100, Math.round(t.progress || 0)));
     meta.push("<span>進捗 " + pct + '% <span class="bar"><i style="width:' + pct + '%"></i></span></span>');
@@ -3744,7 +3749,7 @@ function renderTaskDetail(){
   for (let i = 13; i >= 0; i--) {
     const d = E.addDays(today, -i);
     const row = byDate.get(d);
-    const [cls, mark] = row ? (t.status === "随時" && row.check === "今日は該当しない" ? ["od", "z"] : (CHECK_MARK[row.check] || ["ex", "?"])) : ["no", "　"];
+    const [cls, mark] = row ? ((row.od || isOd(t)) && row.check === "今日は該当しない" ? ["od", "z"] : (CHECK_MARK[row.check] || ["ex", "?"])) : ["no", "　"];
     strip += '<span class="' + cls + '" title="' + esc(d + " " + (row ? row.check : "行なし")) + '">' + mark + "</span>";
     dates += "<span>" + (+d.slice(8)) + "</span>";
   }
@@ -3950,7 +3955,8 @@ const ACTIONS = {
   rebuild:  ["立て直す(新規に戻す)", "新規"],
   trial:    ["実験にする", "実験"],
   trialEnd: ["実験を終える", "実験終了"],
-  ondemand: ["随時にする", "随時"],
+  ondemand: ["随時にする(出番が来たときだけ)", null],
+  offdemand: ["随時をやめる(毎日のタスクに戻す)", null],
   normal:   ["通常に戻す", "進行中"],
   hall:     ["殿堂入りにする", "殿堂入り"],
   demote:   ["降格する(熟達へ)", "熟達"],
@@ -3958,9 +3964,9 @@ const ACTIONS = {
   archive:  ["アーカイブする", "アーカイブ"],
   revive:   ["新規として戻す", "新規"],
 };
-function actionsFor(status){
-  if (["新規", "進行中", "定着", "熟達"].includes(status)) return ["pause", "trial", "ondemand", "hall", "achieved", "archive"];
-  if (status === "要再設定") return ["rebuild", "pause", "archive"];
+function actionsFor(status, od){
+  if (["新規", "進行中", "定着", "熟達"].includes(status)) return ["pause", "trial", od ? "offdemand" : "ondemand", "hall", "achieved", "archive"];
+  if (status === "要再設定") return ["rebuild", od ? "offdemand" : "ondemand", "pause", "archive"];
   if (status === "休止中") return ["resume", "archive"];
   if (status === "実験") return ["trialEnd", "normal", "archive"];
   if (status === "随時") return ["normal", "pause", "archive"];
@@ -4071,11 +4077,11 @@ function settingsHtml(t){
       '<p class="note" style="font-size:.78rem;color:var(--sub)">1回やり忘れたらイエローカード、直せば消せる。2枚たまるとレッドカードで熟達へ降格。</p>' +
       '<div class="opts"><button type="button" data-card-add>やり忘れた</button>' + (cards ? '<button type="button" data-card-fix>直した(1枚消す)</button>' : "") + "</div>"
     : "";
-  const acts = actionsFor(t.status).map(a =>
+  const acts = actionsFor(t.status, isOd(t)).map(a =>
     '<button type="button" data-act="' + a + '">' + esc(ACTIONS[a][0]) + "</button>").join("");
   const d = t.def;
   return '<details class="more" style="margin-top:1rem"' + (state.taskMode === "settings" ? " open" : "") + '><summary>タスクの設定を変える</summary>' +
-    "<h3>状況(今は" + esc(t.status) + ")</h3>" +
+    "<h3>状況(今は" + esc(t.status) + (isOd(t) ? "・随時" : "") + ")</h3>" +
     '<div class="opts">' + acts + "</div>" + hallBox + demoteBox + cardBox +
     (actionsFor(t.status).includes("pause") ? '<div class="f" style="max-width:12rem"><label for="tk-resume">休止するときの再開日(空欄なら決めない)</label><input id="tk-resume" type="date"></div>' : "") +
     "<h3>世代(今は世代" + t.gen + ")</h3>" +
@@ -4190,7 +4196,7 @@ function reconcileTasksDoc(){
   live.forEach(t => {
     if (t.waiting || !t.row || have.has(t.def.name) || (t.def.aliases || []).some(a => have.has(a))) return;
     if (!["新規", "進行中", "定着", "熟達", "随時", "殿堂入り", "実験"].includes(t.status)) return;
-    doc.tasks.push({ name: t.def.name, slot: t.def.slot || "", ministries: t.def.ministries || [], status: t.status, check: t.check || "未着手", miss: t.miss || 0, reach: false, live: true });
+    doc.tasks.push({ ondemand: isOd(t), name: t.def.name, slot: t.def.slot || "", ministries: t.def.ministries || [], status: t.status, check: t.check || "未着手", miss: t.miss || 0, reach: false, live: true });
   });
 }
 
@@ -4225,7 +4231,7 @@ function renderSettings(){
       if (t.status === "要再設定") return 3;
       if (set) return 2;
       const doneToday = DONE.includes(t.check) && !AUTO.includes(t.status);
-      return (t.status === "随時" || doneToday) ? 1 : 0;
+      return (isOd(t) || doneToday) ? 1 : 0;
     };
     const sorted = tasks.slice().sort((a, b) =>
       (rank(a) - rank(b)) || a.name.localeCompare(b.name, "ja"));
@@ -4233,7 +4239,7 @@ function renderSettings(){
     // 続けられるのは、今日これからやるタスクだけ。
     // 同じ場所でできるものを先に出す。踏み台はたいてい同じ場所だから。
     const chainable = today0.filter(t =>
-      t.status !== "要再設定" && t.status !== "随時" &&
+      t.status !== "要再設定" && !isOd(t) &&
       !(DONE.includes(t.check) && !AUTO.includes(t.status)));
     // 続ける先の候補:今日これからやるタスク(同じ場所 → 場所が違う)と、今日の時刻表に無いタスクに分けて並べる
     const nextOpts = (self, cur) => {
@@ -5193,6 +5199,10 @@ function bind(){
     if (act) {
       const id = state.taskOpen; if (!id) return;
       const a = act.dataset.act, status = ACTIONS[a][1], D = taskDay();
+      if (a === "ondemand" || a === "offdemand") { state.taskMode = "settings";
+        await commitOverlay(() => { const t = state.overlay.tasks[id] = Object.assign({}, state.overlay.tasks[id] || {});
+          t.events = (t.events || []).filter(x => !(x.date === D && "ondemand" in x)).concat([{ date: D, ondemand: a === "ondemand" }]); });
+        return; }
       const resume = a === "pause" ? (document.getElementById("tk-resume") || {}).value || "" : "";
       if (resume && resume <= D) {
         const st = document.getElementById("tk-status"); st.classList.add("err"); st.textContent = "再開日は明日以降にしてください。"; return;
@@ -5200,7 +5210,7 @@ function bind(){
       state.taskMode = "settings";
       await commitOverlay(() => {
         const t = state.overlay.tasks[id] = Object.assign({}, state.overlay.tasks[id] || {});
-        const evs = (t.events || []).filter(x => x.date !== D && !(x.resume && x.fromPause === D));
+        const evs = (t.events || []).filter(x => (x.date !== D || "ondemand" in x) && !(x.resume && x.fromPause === D));
         const ev = { date: D, status };
         if (a === "rebuild" || a === "revive") ev.set = { miss: 0 };
         if (a === "resume" || a === "normal") ev.resume = true;
