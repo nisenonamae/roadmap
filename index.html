@@ -66,7 +66,7 @@ button,input,select{font:inherit;color:inherit}
 .stop .name{font-weight:700;font-size:1rem;line-height:1.45;word-break:break-word}
 .stop .meta{display:flex;flex-wrap:wrap;gap:.35rem .7rem;font-size:.8rem;color:var(--sub);margin-top:.15rem}
 .stop .meta .pl{color:var(--c)}
-.stop .meta .reach{color:var(--reach);font-weight:700}
+.stop .meta .reach{color:var(--reach);font-weight:700}.stop .meta .prereach{color:#B07A1F;font-weight:700}
 .stop .meta .unset{color:var(--sub);text-decoration:underline dotted}
 .stop .nagara{margin-top:.35rem;padding-left:.7rem;border-left:2px dotted var(--rule);font-size:.88rem}
 .stop .nagara div{line-height:1.5}
@@ -812,7 +812,7 @@ nav.tabs button[aria-selected="true"]{box-shadow:inset 0 3px 0 var(--shu)}
 /* ───────── 定数 ───────── */
 
 // アプリの版。新しいものを置いたら変える。接続タブに出るので、届いたか確かめられる
-const APP_VERSION = "2026-11-09 r123";
+const APP_VERSION = "2026-11-12 r125";
 
 const TASKS_PATH = "roadmap/tasks.json";
 const SETTINGS_PATH = "roadmap/settings.json";
@@ -2127,6 +2127,7 @@ function renderToday(){
 
 // 取り消して戻ってきた行を光らせ、そこまで画面を動かす
 let flashTarget = null;
+const TICK = { wait: new Map(), busy: new Set() };   // ○を続けて押したとき用:済みにする前の待ち・保存中
 function flashIn(root, sel, attr, rowSel){
   if (!flashTarget) return;
   const el = Array.from(root.querySelectorAll(sel)).find(b => b.getAttribute(attr) === flashTarget);
@@ -2175,7 +2176,7 @@ function stopHtml(it, time, places){
   } else {
     meta.push("<span>" + dur(c.min) + "</span>");
     if (c.mode) meta.push("<span>" + esc(c.mode) + "</span>");
-    if (it.task.reach) meta.push('<span class="reach">今日やらないと落ちる</span>');
+    if (it.task.reach) meta.push('<span class="reach">今日やらないと要再設定に落ちる</span>'); else if (it.task.preReach) meta.push('<span class="prereach">今日やらないと明日リーチ</span>');
     const tk = taskByName(it.task.name), pos = cyclePos(tk);
     if (pos) meta.push('<button type="button" class="cyc-pos" data-tjopen="' + esc(tk.def.id) + '" aria-label="サイクルの現在地と今日の手順">' + cycleChipHtml(pos) + "</button>");
     if (!c.configured) meta.push('<span class="unset">未設定</span>');
@@ -3553,7 +3554,12 @@ function renderAudit(){
 }
 
 // 優先度。行軍表と同じ物差し:重み × 省の重要度 × 手で付けた優先度 × リーチなら倍率
-function isReach(t){ return (t.status === "新規" && t.miss >= 1) || (t.status === "進行中" && t.miss >= 2); }
+function dropAt(t){ const R = (window.TaskEngine && window.TaskEngine.RULES) || { DROP_NEW_AT: 2, DROP_ACTIVE_AT: 3 }; return t.status === "新規" ? R.DROP_NEW_AT : t.status === "進行中" ? R.DROP_ACTIVE_AT : null; }
+function reachDoneToday(t){ return DONE.includes(t.check) || isNA(t) || isOd(t) || !!t.waiting; }
+// 今日やらないと要再設定に落ちる
+function isReach(t){ const at = dropAt(t); return at != null && !reachDoneToday(t) && (+t.miss || 0) + 1 >= at - 1e-9; }
+// 今日やらないと、明日がリーチになる
+function isPreReach(t){ const at = dropAt(t); return at != null && !reachDoneToday(t) && !isReach(t) && (+t.miss || 0) + 2 >= at - 1e-9; }
 function prioScore(t){
   const w = ((state.tasksDoc && state.tasksDoc.weights) || {});
   const mw = Math.max(1, ...(t.def.ministries || []).map(m => +w[m] || 0));
@@ -3608,7 +3614,7 @@ function renderTodayRecords(list){
     const done = isDone(t), miss = t.check === "不実行", na = isNA(t), od = isOd(t);
     const sub = [t.check || "未着手"];
     if (mode !== "slot") sub.push(t.def.slot || "");
-    if (mode === "prio" && isReach(t)) sub.push("今日やらないと落ちる");
+    if (isReach(t)) sub.push("今日やらないと要再設定に落ちる"); else if (isPreReach(t)) sub.push("今日やらないと明日リーチ");
     if (mode === "settle") sub.push(t.status + " 連続" + t.streak);
     if (isCompletion(t)) sub.push("進捗 " + Math.round(t.progress || 0) + "%");
     { const rc = (t.row && t.row.rec) || {}; if (t.row && t.row.ratio != null && (rc.did != null && rc.did !== "" || rc.ratio != null && rc.ratio !== "")) sub.push("実行率 " + Math.round(t.row.ratio * 1000) / 10 + "%"); }
@@ -3863,39 +3869,38 @@ function tkStatus(text, err){
   document.querySelectorAll(".tkst").forEach(st => { st.classList.toggle("err", !!err); st.textContent = text; });
 }
 
-async function commitAppLog(day, mutate){
+/* チェックの保存:画面はすぐ変え、保存は月ごとに1列に並べる。
+   続けて押したものは少し待ってまとめて1回で保存し、保存は同時に1つだけ。
+   ほかの端末が先に書いていたときは、読み直してから、まだ保存していない変更を全部、押した順にかけ直す */
+const APQ = {};
+function commitAppLog(day, mutate){
   const m = day.slice(0, 7);
-  const path = APPLOG_DIR + "/" + m + ".json";
-  const status = tkStatus;
   mutate();
   renderTasks(); renderToday();
-  if (!state.conn) return false;
+  if (!state.conn) return Promise.resolve(false);
+  const q = APQ[m] = APQ[m] || { pend: [], waiters: [], running: false, timer: null, journal: [] };
+  q.journal.push(mutate); if (q.journal.length > 600) q.journal.splice(0, q.journal.length - 600);   // この端末で押したもの(読み直したらかけ直す)
+  q.pend.push(mutate);
+  return new Promise(res => { q.waiters.push(res); clearTimeout(q.timer); q.timer = setTimeout(() => flushAppLog(m), 900); });
+}
+async function flushAppLog(m){
+  const q = APQ[m]; if (!q || q.running) return; q.running = true; clearTimeout(q.timer);
+  const path = APPLOG_DIR + "/" + m + ".json", status = tkStatus, batch = q.pend.splice(0), waiters = q.waiters.splice(0); let ok = false, err = null, reread = false;
   status("保存しています…");
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      state.appLogShas[m] = await writeJson(path, state.appLogs[m] || {}, state.appLogShas[m] || null);
-      lsSet(KEY_CACHE, cachePayload());
-      status("保存しました");
-      return true;
-    } catch (e) {
-      let err = e;
-      if ((e.status === 409 || e.status === 422) && attempt < 2) {
-        try {
-          const fresh = await readJson(path);
-          state.appLogs[m] = fresh.data || {};
-          state.appLogShas[m] = fresh.sha;
-          mutate();
-          taskCache.bump++; taskCache.key = null;
-          renderTasks(); renderToday();
-          continue;
-        } catch (e2) { err = e2; }
-      }
-      lsSet(KEY_CACHE, cachePayload());
-      status(err.status ? err.message : "通信できませんでした。つながったら開き直してください。", true);
-      return false;
-    }
-  }
-  return false;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try { state.appLogShas[m] = await writeJson(path, state.appLogs[m] || {}, state.appLogShas[m] || null); ok = true; break; }
+    catch (e) { err = e;
+      if ((e.status === 409 || e.status === 422) && attempt < 4) {
+        // 続けて書くと GitHub が 409 を返すことがある。読み直した中身は少し古いことがあるので、
+        // この端末で押したものを全部、押した順にかけ直す(もう入っているものは変わらない)
+        await new Promise(r => setTimeout(r, 600 * (attempt + 1)));
+        try { const fresh = await readJson(path); state.appLogs[m] = fresh.data || {}; state.appLogShas[m] = fresh.sha; q.journal.forEach(f => f()); reread = true; continue; } catch (e2) { err = e2; } }
+      break; } }
+  if (reread) { taskCache.bump++; taskCache.key = null; renderTasks(); renderToday(); }
+  lsSet(KEY_CACHE, cachePayload());
+  if (ok) status("保存しました"); else status(err && err.status ? err.message : "通信できませんでした。つながったら開き直してください。", true);
+  q.running = false; waiters.forEach(w => w(ok));
+  if (q.pend.length) q.timer = setTimeout(() => flushAppLog(m), 300);
 }
 
 // STAGE・WAVEの名前(文字のときも、{label} のときも、それが入れ子のときも)
@@ -4196,7 +4201,7 @@ function reconcileTasksDoc(){
   live.forEach(t => {
     if (t.waiting || !t.row || have.has(t.def.name) || (t.def.aliases || []).some(a => have.has(a))) return;
     if (!["新規", "進行中", "定着", "熟達", "随時", "殿堂入り", "実験"].includes(t.status)) return;
-    doc.tasks.push({ ondemand: isOd(t), name: t.def.name, slot: t.def.slot || "", ministries: t.def.ministries || [], status: t.status, check: t.check || "未着手", miss: t.miss || 0, reach: false, live: true });
+    doc.tasks.push({ ondemand: isOd(t), name: t.def.name, slot: t.def.slot || "", ministries: t.def.ministries || [], status: t.status, check: t.check || "未着手", miss: t.miss || 0, reach: isReach(t), preReach: isPreReach(t), live: true });
   });
 }
 
@@ -4800,6 +4805,7 @@ function flowsChanged(){ markDirty(); renderFlows(); }
 /* ───────── 取り消しの表示 ───────── */
 
 let toastTimer = null, toastUndo = null;
+function hideToast(){ const el = document.getElementById("toast"); if (el) el.hidden = true; toastUndo = null; clearTimeout(toastTimer); }
 function showToast(text, undo){
   const el = document.getElementById("toast");
   document.getElementById("toast-text").textContent = text;
@@ -4862,7 +4868,7 @@ function bind(){
         const a2 = Object.assign({}, avRec(date, id).av || {}); a2.urges = Math.max(0, (a2.urges || 1) - 1); commitAppLog(date, () => setAppRecord(date, id, { av: a2 })); });
       return; }
     const ttb = e.target.closest("[data-tt-set]"); if (ttb) { askDayTime([ttb.dataset.ttSet]); return; }
-    const dn = e.target.closest("[data-done]"); if (dn) { const ws = timedByIt(dn.dataset.done); if (ws.length) setTimeout(() => askDayTime(ws), 50); }
+    const dn = e.target.closest("[data-done]"); if (dn && !TICK.wait.has(dn.dataset.done) && !TICK.busy.has(dn.dataset.done)) { const ws = timedByIt(dn.dataset.done); if (ws.length) setTimeout(() => askDayTime(ws), 50); }
     const tf = e.target.closest("[data-trig-fire], [data-trig-reset]");
     if (tf) { const date = (state.tasksDoc || {}).date || taskDay(), v = lsGet(KEY_TRIG, null), fired = v && v.date === date ? v.fired || {} : {};
       if (tf.dataset.trigFire) fired[tf.dataset.trigFire] = nowMinutes(); else delete fired[tf.dataset.trigReset];
@@ -4872,25 +4878,32 @@ function bind(){
     const u = e.target.closest("[data-undo]");
     if (!d && !u) return;
     const name = d ? d.dataset.done : u.dataset.undo;
+    // 続けて押したとき:済みにする少しの間なら、それを取り消す。保存しているあいだは何もしない
+    TICK.wait = TICK.wait || new Map(); TICK.busy = TICK.busy || new Set();
+    if (TICK.busy.has(name)) return;
+    if (TICK.wait.has(name)) { const w = TICK.wait.get(name); clearTimeout(w.timer); TICK.wait.delete(name); const row0 = d && d.closest(".stop"); if (row0) row0.classList.remove("pending"); hideToast(); return; }
     const tk = taskByName(name);
     const restore = () => { flashTarget = name; };
+    const save = fn => { TICK.busy.add(name); return Promise.resolve().then(fn).catch(() => {}).then(() => { TICK.busy.delete(name); }); };
     if (tk && tk.row) {
       const today = taskDay(), id = tk.def.id;
       const before = (((state.appLogs[today.slice(0, 7)] || {})[today] || {})[id] || {}).check || null;
-      if (u) { restore(); commitAppLog(today, () => setAppRecord(today, id, { check: uncheckValue(today, tk) })); return; }
+      if (u) { restore(); save(() => commitAppLog(today, () => setAppRecord(today, id, { check: uncheckValue(today, tk) }))); return; }
       // いったん緑の✓にして一呼吸おいてから、済みの折りたたみへ移す
       const row = d.closest(".stop"); if (row) row.classList.add("pending");
-      const timer = setTimeout(() => commitAppLog(today, () => setAppRecord(today, id, { check: "完了" })), DONE_DELAY());
+      const timer = setTimeout(() => { TICK.wait.delete(name); save(() => commitAppLog(today, () => setAppRecord(today, id, { check: "完了" }))); }, DONE_DELAY());
+      TICK.wait.set(name, { timer });
       showToast("「" + name + "」を完了にしました", () => {
-        clearTimeout(timer); restore();
-        commitAppLog(today, () => setAppRecord(today, id, { check: before }));
+        clearTimeout(timer); TICK.wait.delete(name); restore();
+        save(() => commitAppLog(today, () => setAppRecord(today, id, { check: before })));
       });
       return;
     }
-    if (u) { restore(); commitEvents(() => setDone(doc.date, name, false)); return; }
+    if (u) { restore(); save(() => commitEvents(() => setDone(doc.date, name, false))); return; }
     const row = d.closest(".stop"); if (row) row.classList.add("pending");
-    const timer = setTimeout(() => commitEvents(() => setDone(doc.date, name, true)), DONE_DELAY());
-    showToast("「" + name + "」を済みにしました", () => { clearTimeout(timer); restore(); commitEvents(() => setDone(doc.date, name, false)); });
+    const timer = setTimeout(() => { TICK.wait.delete(name); save(() => commitEvents(() => setDone(doc.date, name, true))); }, DONE_DELAY());
+    TICK.wait.set(name, { timer });
+    showToast("「" + name + "」を済みにしました", () => { clearTimeout(timer); TICK.wait.delete(name); restore(); save(() => commitEvents(() => setDone(doc.date, name, false))); });
   });
 
   // タスク
@@ -5103,10 +5116,10 @@ function bind(){
       const on = !window.TaskEngine.DONE.has(t.check);
       const before = (((state.appLogs[today.slice(0, 7)] || {})[today] || {})[id] || {}).check || null;
       // 押すたびに 白 → 実行 → 今日は該当しない → 未実行 → 白
-      if (window.TaskEngine.DONE.has(t.check)) { await commitAppLog(today, () => setAppRecord(today, id, { check: "今日は該当しない" })); return; }
-      if (t.check === "今日は該当しない") { await commitAppLog(today, () => setAppRecord(today, id, { check: "不実行" })); return; }
-      if (t.check === "不実行") { await commitAppLog(today, () => setAppRecord(today, id, { check: uncheckValue(today, t) })); return; }
-      await commitAppLog(today, () => setAppRecord(today, id, { check: "完了" }));
+      if (window.TaskEngine.DONE.has(t.check)) { commitAppLog(today, () => setAppRecord(today, id, { check: "今日は該当しない" })); return; }
+      if (t.check === "今日は該当しない") { commitAppLog(today, () => setAppRecord(today, id, { check: "不実行" })); return; }
+      if (t.check === "不実行") { const v = uncheckValue(today, t); commitAppLog(today, () => setAppRecord(today, id, { check: v })); return; }
+      commitAppLog(today, () => setAppRecord(today, id, { check: "完了" }));
       showToast("「" + t.def.name + "」を完了にしました", () => {
         flashTargetId = id;
         commitAppLog(today, () => setAppRecord(today, id, { check: before }));
